@@ -1,0 +1,14 @@
+# Registry of every pipeline this repo defines. Each entry
+# below becomes an invocable target for `sparkwing run <name>`
+# (or the human shortcut `wing <name>`).
+#
+# Add an entry by running:
+#   sparkwing pipeline new --name <name>
+#
+# (Default template is minimal; pass --template build-test-deploy
+# for a build/test/deploy DAG.)
+pipelines:
+
+  - name: release-modules
+    entrypoint: ReleaseModules
+    group: Release

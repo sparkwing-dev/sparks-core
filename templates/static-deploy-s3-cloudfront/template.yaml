@@ -1,0 +1,35 @@
+name: static-deploy-s3-cloudfront
+description: |
+  Build a Next.js (or any static-output) app and sync to S3 +
+  CloudFront with cache invalidation. Mirrors the rangz-web /
+  moonborn-web / sparkwing-product pattern: Next static export in a
+  Docker build container, S3 sync with `--delete`, CloudFront
+  invalidation on the resulting deploy.
+parameters:
+  - name: bucket
+    type: string
+    required: true
+    description: Target S3 bucket (e.g. kikd-prod-mysite-website)
+  - name: distribution
+    type: string
+    required: true
+    description: CloudFront distribution ID (e.g. E2AIZJK5YLB0YN)
+  - name: url
+    type: string
+    description: Deployed site URL; logged after a successful deploy.
+    default: https://example.com
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `wing`.
+    default: deploy
+  - name: site-cache
+    type: string
+    description: |
+      Per-site .next/cache volume name. Lets the cluster runner reuse
+      Next's incremental build cache between pipeline runs. Empty
+      disables; pick something like `<project>-next` for parity with
+      existing consumer repos.
+    default: ""
+applicability:
+  cloud: [aws]
+  category: static-site-deploy

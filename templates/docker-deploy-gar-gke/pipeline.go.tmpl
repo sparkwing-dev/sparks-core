@@ -1,0 +1,108 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// docker-deploy-gar-gke`. Edit freely -- nothing here re-runs.
+//
+// GCP mirror of docker-deploy-ecr-eks. Uses raw bash until a
+// sparks-core/gar + GKE-aware DockerDeploy lands; the shape mirrors
+// the AWS path so the future port is a struct-field swap.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} is a build/test/deploy pipeline targeting GAR + GKE.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build, push to GAR, gitops-deploy to GKE"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Builds Docker image {{.image}}, pushes to GAR ({{.gar}}), and deploys via gitops to GKE namespace {{.namespace}}."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "wing {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
+	{{ if .test_cmd }}test := sparkwing.Job(plan, "test", sparkwing.JobFn(p.test))
+	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build)).Needs(test){{ else }}build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build)){{ end }}
+	push := sparkwing.Job(plan, "push", sparkwing.JobFn(p.push)).Needs(build)
+	sparkwing.Job(plan, "deploy", sparkwing.JobFn(p.deploy)).Needs(push)
+	return nil
+}
+
+{{ if .test_cmd }}func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	return err
+}
+{{ end }}
+func ({{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tag := buildTag()
+	_, err := sparkwing.Exec(ctx, "docker", "build",
+		"-t", {{quote .image}}+":"+tag,
+		"-f", "Dockerfile", ".").Run()
+	return err
+}
+
+func ({{pascal .pipeline_name}}) push(ctx context.Context) error {
+	tag := buildTag()
+	if _, err := sparkwing.Exec(ctx, "gcloud", "auth", "configure-docker",
+		"--quiet").Run(); err != nil {
+		return err
+	}
+	full := {{quote .gar}}+"/"+{{quote .image}}+":"+tag
+	if _, err := sparkwing.Exec(ctx, "docker", "tag",
+		{{quote .image}}+":"+tag, full).Run(); err != nil {
+		return err
+	}
+	_, err := sparkwing.Exec(ctx, "docker", "push", full).Run()
+	return err
+}
+
+// deploy bumps the gitops repo's kustomize image tag and commits.
+// The ArgoCD sync that picks up the commit lives outside this
+// pipeline; clusters with auto-sync enabled apply on next reconcile.
+func ({{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	tag := buildTag()
+	full := {{quote .gar}}+"/"+{{quote .image}}+":"+tag
+	tmp := "/tmp/gitops-{{.app_name}}-" + tag
+	if _, err := sparkwing.Exec(ctx, "git", "clone", "--depth=1",
+		{{quote .gitops_repo}}, tmp).Run(); err != nil {
+		return err
+	}
+	defer sparkwing.Exec(ctx, "rm", "-rf", tmp).Run() //nolint:errcheck
+	if _, err := sparkwing.Bash(ctx, fmt.Sprintf(
+		`cd %s/%s && kustomize edit set image %s=%s`,
+		tmp, {{quote .gitops_path}}, {{quote .image}}, full)).Run(); err != nil {
+		return err
+	}
+	commitMsg := fmt.Sprintf("bump {{.image}} to %s", tag)
+	if _, err := sparkwing.Bash(ctx, fmt.Sprintf(
+		`cd %s && git add -A && git commit -m %q && git push`,
+		tmp, commitMsg)).Run(); err != nil {
+		return err
+	}
+	sparkwing.Info(ctx, "deployed {{.image}} %s to {{.namespace}}", tag)
+	return nil
+}
+
+// buildTag returns a deterministic tag for this run. Production
+// pipelines normally use the git SHA + branch + prod alias; this
+// template starts with a UTC timestamp so the rendered code compiles
+// without a SDK dep on the git helper. Swap to ComputeTags for the
+// canonical multi-tag shape.
+func buildTag() string {
+	return time.Now().UTC().Format("20060102-150405")
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

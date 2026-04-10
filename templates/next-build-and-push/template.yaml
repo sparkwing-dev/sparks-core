@@ -1,0 +1,22 @@
+name: next-build-and-push
+description: |
+  Build a Next.js static export and upload the artifact tarball
+  (out.tar.gz) to a target store. No deploy step. Useful when the
+  deploy is gated (manual approval, separate environment promotion)
+  and you want CI to produce the artifact ahead of time.
+parameters:
+  - name: artifact-bucket
+    type: string
+    required: true
+    description: S3 bucket / GCS bucket to upload the artifact tarball to
+  - name: artifact-prefix
+    type: string
+    description: Prefix within the bucket. Defaults to "artifacts/{image}/{sha}".
+    default: artifacts
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `wing`.
+    default: build
+applicability:
+  cloud: [aws, gcp]
+  category: build-only

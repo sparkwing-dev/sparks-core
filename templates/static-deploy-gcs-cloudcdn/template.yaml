@@ -1,0 +1,31 @@
+name: static-deploy-gcs-cloudcdn
+description: |
+  Build a Next.js (or any static-output) app and sync to a Google
+  Cloud Storage bucket fronted by Cloud CDN. Multi-cloud parity for
+  static-deploy-s3-cloudfront -- same shape, GCP backends. Useful for
+  teams that want to ship the marketing-site shape on GCP without
+  inventing the pattern from scratch.
+parameters:
+  - name: bucket
+    type: string
+    required: true
+    description: Target GCS bucket (e.g. mysite-prod-website)
+  - name: url-map
+    type: string
+    required: true
+    description: Cloud CDN URL map name for cache invalidation
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: url
+    type: string
+    description: Deployed site URL; logged after a successful deploy.
+    default: https://example.com
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `wing`.
+    default: deploy
+applicability:
+  cloud: [gcp]
+  category: static-site-deploy

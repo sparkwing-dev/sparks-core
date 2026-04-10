@@ -1,0 +1,42 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// static-deploy-s3-cloudfront`. Edit freely -- nothing here re-runs.
+//
+// This pipeline mirrors the rangz-web / moonborn-web / sparkwing-product
+// shape: a Next.js static export, S3 sync, CloudFront invalidation.
+// It uses sparks-core's StaticDeploy + NextJSBuild so the
+// Docker-build-container + cache-volume + env-prefix forwarding logic
+// lives in one tested upstream place.
+package jobs
+
+import (
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/pipelines"
+)
+
+// {{pascal .pipeline_name}} wraps sparks-core StaticDeploy with this
+// repo's config. The outer type gives the dashboard a consumer-named
+// entrypoint instead of the shared "StaticDeploy" label.
+type {{pascal .pipeline_name}} struct{ pipelines.StaticDeploy }
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		sd := pipelines.StaticDeploy{
+			// Forward NEXT_PUBLIC_* env vars into the build container so
+			// next.config.* can read them at compile time. Add prefixes
+			// here as your site grows.
+			BuildEnvPrefixes: []string{"NEXT_PUBLIC_", "NEXT_EXPORT"},
+			BuildExtraEnv:    map[string]string{"NEXT_EXPORT": "1"},
+			Bucket:           {{quote .bucket}},
+			CloudFrontID:     {{quote .distribution}},
+			URL:              {{quote .url}},
+			Delete:           true,
+		}
+		// NextJSBuild applies the cluster-vs-laptop branching for the
+		// build phase: cluster runs use a docker build container with
+		// the shared sparks-npm cache + an optional per-site .next
+		// cache; laptop runs build on the host with no Docker.
+		pipelines.NextJSBuild{SiteCache: {{quote .site_cache}}}.Apply(&sd)
+		return &{{pascal .pipeline_name}}{StaticDeploy: sd}
+	})
+}

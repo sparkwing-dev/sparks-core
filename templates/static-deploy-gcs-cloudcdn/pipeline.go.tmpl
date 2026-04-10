@@ -1,0 +1,72 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// static-deploy-gcs-cloudcdn`. Edit freely -- nothing here re-runs.
+//
+// GCP mirror of static-deploy-s3-cloudfront. Uses gsutil + gcloud
+// directly because sparks-core today targets AWS for the static-deploy
+// path; lifting this into a `sparks-core/gcs` package once a few teams
+// are running it would consolidate the build-container + chunk-ref
+// verification logic the AWS path already has.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} is a GCS + Cloud CDN deploy.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build static site and deploy to GCS + Cloud CDN"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Builds the Next.js static export, syncs to GCS bucket {{.bucket}} via gsutil rsync -d, and invalidates Cloud CDN URL map {{.url_map}}."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "wing {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
+	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build))
+	sync := sparkwing.Job(plan, "sync", sparkwing.JobFn(p.sync)).Needs(build)
+	sparkwing.Job(plan, "invalidate", sparkwing.JobFn(p.invalidate)).Needs(sync)
+	return nil
+}
+
+// build runs the Next.js static export. Swap to `npm ci && npm run build`
+// when the runner has a clean node_modules.
+func ({{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, `NEXT_EXPORT=1 npm install && NEXT_EXPORT=1 npm run build`).Run()
+	return err
+}
+
+// sync uses gsutil rsync -d so removed files leave the bucket. The
+// AWS sibling does the same with `aws s3 sync --delete`.
+func ({{pascal .pipeline_name}}) sync(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "gsutil", "-m", "rsync", "-d", "-r",
+		"out/", "gs://"+{{quote .bucket}}+"/").Run()
+	return err
+}
+
+// invalidate clears Cloud CDN cache for /*. Targets the configured
+// URL map; swap to a more granular path when daily traffic warrants.
+func ({{pascal .pipeline_name}}) invalidate(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "gcloud", "compute", "url-maps", "invalidate-cdn-cache",
+		{{quote .url_map}},
+		"--path", "/*",
+		"--project", {{quote .project}},
+		"--async").Run()
+	if err == nil {
+		sparkwing.Info(ctx, "deployed to %s", {{quote .url}})
+	}
+	return err
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

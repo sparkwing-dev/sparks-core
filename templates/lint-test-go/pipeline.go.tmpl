@@ -1,0 +1,61 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// lint-test-go`. Edit freely -- nothing here re-runs.
+//
+// Smallest useful template: gofmt + go vet + go test in parallel.
+// No external concerns, useful as a first read for the SDK shape.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} runs gofmt -l (failing on diffs), go vet, and
+// go test in a parallel three-node DAG. Each step is independent --
+// failures don't stop peers, so a CI run surfaces every problem in
+// one pass.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Go CI hygiene: gofmt + vet + test"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Runs gofmt -l, go vet, and go test in parallel. Targets Go {{.go_version}}+. Each step is independent so a single run surfaces every problem at once."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "wing {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
+	sparkwing.Job(plan, "gofmt", sparkwing.JobFn(p.gofmt))
+	sparkwing.Job(plan, "vet", sparkwing.JobFn(p.vet))
+	sparkwing.Job(plan, "test", sparkwing.JobFn(p.test))
+	return nil
+}
+
+// gofmt fails when any tracked .go file isn't already formatted. The
+// `[ -z "$(gofmt -l .)" ]` guard makes the failure obvious -- gofmt -l
+// itself exits 0 even on diffs.
+func ({{pascal .pipeline_name}}) gofmt(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, `[ -z "$(gofmt -l .)" ] || (gofmt -l . && exit 1)`).Run()
+	return err
+}
+
+func ({{pascal .pipeline_name}}) vet(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "go", "vet", "./...").Run()
+	return err
+}
+
+func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "go", "test", {{quote .test_args}}).Run()
+	return err
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

@@ -1,0 +1,64 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// next-build-and-push`. Edit freely -- nothing here re-runs.
+//
+// Build-only flavor of the static-deploy templates. Produces an
+// out.tar.gz artifact and uploads it; the deploy step lives elsewhere
+// (typically a separate pipeline gated on manual approval).
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} builds a Next.js static export and uploads
+// the resulting tarball to an artifact bucket.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build Next.js static export, upload artifact tarball"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Builds the Next.js static export and uploads out.tar.gz to s3://{{.artifact_bucket}}/{{.artifact_prefix}}/. No deploy step -- ship the tarball, gate the deploy."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "wing {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
+	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build))
+	pack := sparkwing.Job(plan, "tarball", sparkwing.JobFn(p.tarball)).Needs(build)
+	sparkwing.Job(plan, "upload", sparkwing.JobFn(p.upload)).Needs(pack)
+	return nil
+}
+
+func ({{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, `NEXT_EXPORT=1 npm install && NEXT_EXPORT=1 npm run build`).Run()
+	return err
+}
+
+func ({{pascal .pipeline_name}}) tarball(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "tar", "-czf", "out.tar.gz", "-C", "out", ".").Run()
+	return err
+}
+
+func ({{pascal .pipeline_name}}) upload(ctx context.Context) error {
+	key := fmt.Sprintf("%s/%s.tar.gz", {{quote .artifact_prefix}}, time.Now().UTC().Format("20060102-150405"))
+	dest := "s3://" + {{quote .artifact_bucket}} + "/" + key
+	if _, err := sparkwing.Exec(ctx, "aws", "s3", "cp", "out.tar.gz", dest).Run(); err != nil {
+		return err
+	}
+	sparkwing.Info(ctx, "uploaded artifact: %s", dest)
+	return nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

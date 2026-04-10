@@ -1,0 +1,9 @@
+# Throwaway Claude Code scratch scripts
+.claude-scratch/
+
+# Workspace-side state (per-module go.sum files are tracked, but the
+# workspace's own sum file is materialized on demand).
+go.work.sum
+
+# sparkwing: cached pipeline binary, regenerated on each `wing` invocation
+.sparkwing/sparkwing-pipeline

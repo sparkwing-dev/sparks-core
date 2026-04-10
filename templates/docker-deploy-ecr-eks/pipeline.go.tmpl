@@ -1,0 +1,34 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// docker-deploy-ecr-eks`. Edit freely -- nothing here re-runs.
+//
+// Mirrors the moonborn-ws build-test-deploy shape: sparks-core's
+// DockerDeploy carries every knob (test, build, push, gitops bump,
+// ArgoCD sync); the outer struct exists so the dashboard surfaces a
+// consumer-named entry point rather than the generic "DockerDeploy".
+package jobs
+
+import (
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/pipelines"
+)
+
+// {{pascal .pipeline_name}} wires {{.image}}'s build + deploy knobs into
+// sparks-core's DockerDeploy pipeline.
+type {{pascal .pipeline_name}} struct{ pipelines.DockerDeploy }
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{
+			DockerDeploy: pipelines.DockerDeploy{
+				Image:      {{quote .image}},
+				ECR:        {{quote .ecr}},
+				GitopsRepo: {{quote .gitops_repo}},
+				GitopsPath: {{quote .gitops_path}},
+				AppName:    {{quote .app_name}},
+				Namespace:  {{quote .namespace}},
+				TestCmd:    {{quote .test_cmd}},
+			},
+		}
+	})
+}

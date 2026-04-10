@@ -1,0 +1,43 @@
+name: docker-deploy-ecr-eks
+description: |
+  Build a Docker image, push to ECR, and deploy via gitops to EKS
+  (or kubectl/kind on local). Mirrors the moonborn-ws / okbot
+  build-test-deploy pattern: tests run before build, image gets
+  multi-tag (sha + branch + prod), gitops bumps kustomize, ArgoCD
+  syncs.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. moonborn-ws)
+  - name: ecr
+    type: string
+    required: true
+    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+  - name: gitops-repo
+    type: string
+    required: true
+    description: SSH URL of the gitops repo (e.g. git@github.com:org/gitops.git)
+  - name: gitops-path
+    type: string
+    required: true
+    description: Path within the gitops repo (e.g. moonborn/ws)
+  - name: app-name
+    type: string
+    required: true
+    description: ArgoCD application name
+  - name: namespace
+    type: string
+    required: true
+    description: Kubernetes namespace
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `wing`.
+    default: build-test-deploy
+  - name: test-cmd
+    type: string
+    description: Pre-build test command. Empty disables the test step.
+    default: go test ./...
+applicability:
+  cloud: [aws]
+  category: docker-deploy

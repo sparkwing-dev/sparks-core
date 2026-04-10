@@ -1,0 +1,4 @@
+github.com/sparkwing-dev/sparkwing v1.1.0 h1:hiNDJ92WaIYABD8k773Bhgd1rHYYK+oOZa5oYuvjOfU=
+github.com/sparkwing-dev/sparkwing v1.1.0/go.mod h1:TVRcswjpZ4CT5Cgr8DUwMTwhERjk5fVsFl+O5ufR4H4=
+golang.org/x/mod v0.35.0 h1:Ww1D637e6Pg+Zb2KrWfHQUnH2dQRLBQyAtpr/haaJeM=
+golang.org/x/mod v0.35.0/go.mod h1:+GwiRhIInF8wPm+4AoT6L0FA1QWAad3OMdTRx4tFYlU=

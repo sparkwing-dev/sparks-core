@@ -1,0 +1,57 @@
+{
+  "name": "sparks-core",
+  "description": "Multi-module monorepo of pipeline libraries for sparkwing - each module versioned independently",
+  "author": "sparkwing",
+  "modules": [
+    {
+      "path": "step",
+      "module": "github.com/sparkwing-dev/sparks-core/step",
+      "description": "Shared step-banner + error-wrapped shell helpers used across the other modules"
+    },
+    {
+      "path": "aws",
+      "module": "github.com/sparkwing-dev/sparks-core/aws",
+      "description": "AWS profile-flag resolution and IRSA detection"
+    },
+    {
+      "path": "docker",
+      "module": "github.com/sparkwing-dev/sparks-core/docker",
+      "description": "Docker build, push, multi-registry tagging, ECR auth, registry detection"
+    },
+    {
+      "path": "s3",
+      "module": "github.com/sparkwing-dev/sparks-core/s3",
+      "description": "S3 static-site deployment with cache-header conventions"
+    },
+    {
+      "path": "kube",
+      "module": "github.com/sparkwing-dev/sparks-core/kube",
+      "description": "Kubernetes deploy helpers (kubectl, kustomize)"
+    },
+    {
+      "path": "gitops",
+      "module": "github.com/sparkwing-dev/sparks-core/gitops",
+      "description": "GitOps deployment with kustomize patching, retry, and ArgoCD sync"
+    },
+    {
+      "path": "deploy",
+      "module": "github.com/sparkwing-dev/sparks-core/deploy",
+      "description": "Deploy orchestrator: routes to gitops+ArgoCD (cluster) or kubectl (local)"
+    },
+    {
+      "path": "checks",
+      "module": "github.com/sparkwing-dev/sparks-core/checks",
+      "description": "Pre-commit checks: formatting, linting, trailing newlines"
+    },
+    {
+      "path": "pipelines",
+      "module": "github.com/sparkwing-dev/sparks-core/pipelines",
+      "description": "High-level pipeline primitives: DockerDeploy, StaticDeploy, NextJSBuild"
+    },
+    {
+      "path": "templates",
+      "module": "github.com/sparkwing-dev/sparks-core/templates",
+      "description": "Curated pipeline template registry: deterministic starters consumed by sparkwing pipeline new --template"
+    }
+  ]
+}

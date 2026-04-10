@@ -1,0 +1,8 @@
+github.com/sparkwing-dev/sparks-core/step v0.2.0 h1:br5KdS+fTypuBC5VIamU/1yUGJMRYtwtgojIfyoroao=
+github.com/sparkwing-dev/sparks-core/step v0.2.0/go.mod h1:PquRcmXMRW1hUk7Kvqe7eog2KJ7gZVBE6eUOMvJHpBM=
+github.com/sparkwing-dev/sparkwing v1.1.0 h1:hiNDJ92WaIYABD8k773Bhgd1rHYYK+oOZa5oYuvjOfU=
+github.com/sparkwing-dev/sparkwing v1.1.0/go.mod h1:TVRcswjpZ4CT5Cgr8DUwMTwhERjk5fVsFl+O5ufR4H4=
+github.com/sparkwing-dev/sparkwing-sdk v0.0.1 h1:3/84IEFHwZ3BYm+UlK4dvK6BhjeUc6k4mFpdaXCsbMs=
+github.com/sparkwing-dev/sparkwing-sdk v0.0.1/go.mod h1:f8A1ycgYnFA55JUHMdFcHXVSjF6ICCs9ktLr0IGu1N4=
+golang.org/x/mod v0.35.0 h1:Ww1D637e6Pg+Zb2KrWfHQUnH2dQRLBQyAtpr/haaJeM=
+golang.org/x/mod v0.35.0/go.mod h1:+GwiRhIInF8wPm+4AoT6L0FA1QWAad3OMdTRx4tFYlU=

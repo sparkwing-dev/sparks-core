@@ -1,0 +1,22 @@
+name: lint-test-go
+description: |
+  CI hygiene gate for Go projects: gofmt, go vet, go test. The
+  smallest useful template -- a good first read for people learning
+  the SDK shape since it has zero external concerns (no clouds, no
+  registries, no gitops).
+parameters:
+  - name: go-version
+    type: string
+    description: Go version banner (informational; real version pinned in go.mod)
+    default: "1.26"
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `wing`.
+    default: lint-test
+  - name: test-args
+    type: string
+    description: Additional args appended to `go test`.
+    default: ./...
+applicability:
+  cloud: []
+  category: ci-hygiene
