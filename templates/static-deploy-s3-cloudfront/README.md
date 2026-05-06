@@ -11,7 +11,7 @@ CloudFront. The rendered pipeline:
 4. Issues a CloudFront cache invalidation for `/*`.
 
 This is the simplified canonical version of patterns running today in
-rangz-web, moonborn-web, and sparkwing-product. It uses
+multiple consumer sites. It uses
 `pipelines.StaticDeploy` + `pipelines.NextJSBuild` from sparks-core, so
 the heavy lifting (Docker build container, env-var prefix forwarding,
 cache volumes) lives in one tested place.
@@ -49,5 +49,5 @@ Edit the rendered `.sparkwing/jobs/<name>.go` to:
 - Add `Excludes` if a separate pipeline ships artifacts to the same
   bucket (e.g. `releases/*` for a CLI binary tarball).
 - Add a `.Cache(...)` modifier if you want skip-on-noop behavior --
-  doc-only commits won't redeploy. See moonborn-web's `BuildDeploy`
+  doc-only commits won't redeploy. See the consumer app's `BuildDeploy`
   for an example.

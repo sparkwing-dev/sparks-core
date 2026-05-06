@@ -1,15 +1,15 @@
 name: static-deploy-s3-cloudfront
 description: |
   Build a Next.js (or any static-output) app and sync to S3 +
-  CloudFront with cache invalidation. Mirrors the rangz-web /
-  moonborn-web / sparkwing-product pattern: Next static export in a
+  CloudFront with cache invalidation. Mirrors the webapp /
+  webapp / mysite pattern: Next static export in a
   Docker build container, S3 sync with `--delete`, CloudFront
   invalidation on the resulting deploy.
 parameters:
   - name: bucket
     type: string
     required: true
-    description: Target S3 bucket (e.g. kikd-prod-mysite-website)
+    description: Target S3 bucket (e.g. myorg-mysite-website)
   - name: distribution
     type: string
     required: true

@@ -88,7 +88,7 @@ func runGoTest(ctx context.Context, label string, flags []string, pkgs []string)
 // directory prefix that contains its own go.mod (i.e., a separate Go
 // module). If so, returns (dir, rewrittenPkgs) where each pattern has
 // its dir prefix stripped. For example:
-// ["./okbot-go/..."] -> ("okbot-go", ["./..."]).
+// ["./myapp/..."] -> ("myapp", ["./..."]).
 // If the patterns don't share a single module-root prefix, returns
 // ("", pkgs) unchanged.
 //

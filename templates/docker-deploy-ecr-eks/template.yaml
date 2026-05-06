@@ -1,7 +1,7 @@
 name: docker-deploy-ecr-eks
 description: |
   Build a Docker image, push to ECR, and deploy via gitops to EKS
-  (or kubectl/kind on local). Mirrors the moonborn-ws / okbot
+  (or kubectl/kind on local). Mirrors the consumer apps
   build-test-deploy pattern: tests run before build, image gets
   multi-tag (sha + branch + prod), gitops bumps kustomize, ArgoCD
   syncs.
@@ -9,7 +9,7 @@ parameters:
   - name: image
     type: string
     required: true
-    description: Image name (e.g. moonborn-ws)
+    description: Image name (e.g. myapp)
   - name: ecr
     type: string
     required: true
@@ -21,7 +21,7 @@ parameters:
   - name: gitops-path
     type: string
     required: true
-    description: Path within the gitops repo (e.g. moonborn/ws)
+    description: Path within the gitops repo (e.g. myorg/myapp)
   - name: app-name
     type: string
     required: true

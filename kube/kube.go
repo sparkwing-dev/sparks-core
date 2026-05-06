@@ -54,7 +54,7 @@ type KindKustomizeConfig struct {
 // rollout status on each mapped deployment that actually exists.
 //
 // Images should match what `kind load docker-image` pushed into the
-// cluster -- short names like "okbot-go" (not registry-prefixed).
+// cluster -- short names like "myapp" (not registry-prefixed).
 func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 	if cfg.Namespace == "" {
 		cfg.Namespace = "default"

@@ -45,7 +45,7 @@ import (
 type DockerDeploy struct {
 	sparkwing.Base
 
-	// Image is the image name (e.g. "moonborn-ws").
+	// Image is the image name (e.g. "myapp").
 	Image string
 	// Dockerfile is the path to the Dockerfile. Defaults to "Dockerfile".
 	Dockerfile string
@@ -57,7 +57,7 @@ type DockerDeploy struct {
 	// GitopsRepo is the SSH URL for the gitops repo.
 	GitopsRepo string
 	// GitopsPath is the path within the gitops repo (e.g.
-	// "moonborn/ws").
+	// "myorg/myapp").
 	GitopsPath string
 	// AppName is the ArgoCD application name.
 	AppName string

@@ -8,7 +8,7 @@ import (
 
 // DefaultProfile is used when no AWS_PROFILE is set and we are not
 // running under IRSA.
-const DefaultProfile = "kikd-prod"
+const DefaultProfile = "default"
 
 // ProfileFlag returns " --profile <name>" for local dev, or "" when
 // running under IRSA (IAM Roles for Service Accounts). The default

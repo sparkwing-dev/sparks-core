@@ -1,7 +1,7 @@
 # docker-deploy-ecr-eks
 
 Build a Docker image, push to ECR, and deploy via gitops to EKS. The
-canonical pattern from moonborn-ws / okbot.
+canonical pattern from consumer apps.
 
 The rendered pipeline:
 
@@ -50,5 +50,5 @@ separate gitops repo.
 
 If your repo is multi-language, swap `TestCmd` to the right invocation
 (`bundle exec rspec`, `npm test`, etc.). For multi-app monorepos that
-build several images, look at okbot's `BuildDeploy` for a pattern that
+build several images, look at the consumer app's `BuildDeploy` for a pattern that
 fans out per-app build nodes in parallel before a single deploy step.

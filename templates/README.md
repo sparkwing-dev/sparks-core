@@ -52,4 +52,4 @@ YAML directly.
 
 The template body should be **the simplified canonical version of
 what already works in production**. Pull from real consumer repos
-(rangz-web, moonborn-ws, etc.) rather than inventing shapes.
+(consumer pipelines) rather than inventing shapes.

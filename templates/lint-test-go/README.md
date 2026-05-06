@@ -33,5 +33,5 @@ each step is independent so the parallel-DAG mechanics are visible.
 ## After rendering
 
 Add staticcheck or golangci-lint as additional nodes if your project
-uses them; the pre-commit pipelines in sparkwing-platform / rangz-web
+uses them; the pre-commit pipelines in consumer pipelines
 have examples of the wider Go-lint set.

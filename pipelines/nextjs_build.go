@@ -29,7 +29,7 @@ import "github.com/sparkwing-dev/sparkwing/sparkwing"
 //	sparks.NextJSBuild{SiteCache: "my-site-next"}.Apply(&sd)
 type NextJSBuild struct {
 	// SiteCache is the per-site .next/cache volume name (e.g.,
-	// "rangz-next"). Mounted at /work/.next/cache on cluster runs.
+	// "myapp-next"). Mounted at /work/.next/cache on cluster runs.
 	// Empty disables the per-site Next cache (builds still work,
 	// just no incremental rebuild speedup between pipeline runs).
 	SiteCache string
