@@ -88,7 +88,7 @@ type DockerDeploy struct {
 // outer struct and call into DockerDeploy.Run / its sub-helpers
 // directly instead of embedding.
 func (d *DockerDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	sparkwing.Job(plan, run.Pipeline, sparkwing.JobFn(d.Run))
+	sparkwing.Job(plan, run.Pipeline, d.Run)
 	return nil
 }
 

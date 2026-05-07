@@ -126,7 +126,7 @@ type StaticDeploy struct {
 // outer struct and call into StaticDeploy.Run or .BuildOnly directly
 // instead of embedding.
 func (s *StaticDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	sparkwing.Job(plan, run.Pipeline, sparkwing.JobFn(s.Run))
+	sparkwing.Job(plan, run.Pipeline, s.Run)
 	return nil
 }
 

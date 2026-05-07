@@ -14,3 +14,5 @@ use (
 	./step
 	./templates
 )
+
+replace github.com/sparkwing-dev/sparkwing => /Users/koreygambill/code/sparkwing
