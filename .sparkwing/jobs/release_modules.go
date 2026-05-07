@@ -49,12 +49,11 @@ type ReleaseModulesJob struct {
 	In ReleaseModulesInputs
 }
 
-func (j *ReleaseModulesJob) Work() *sw.Work {
-	w := sw.NewWork()
-	clean := w.Step("verify-clean-tree", j.verifyClean)
-	tag := w.Step("create-tags", j.createTags).Needs(clean)
-	w.Step("push-tags", j.pushTags).Needs(tag)
-	return w
+func (j *ReleaseModulesJob) Work(w *sw.Work) (*sw.WorkStep, error) {
+	clean := sw.Step(w, "verify-clean-tree", j.verifyClean)
+	tag := sw.Step(w, "create-tags", j.createTags).Needs(clean)
+	sw.Step(w, "push-tags", j.pushTags).Needs(tag)
+	return nil, nil
 }
 
 var versionRE = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
