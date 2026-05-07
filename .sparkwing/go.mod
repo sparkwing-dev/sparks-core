@@ -2,7 +2,7 @@ module sparks-core-pipelines
 
 go 1.26.0
 
-require github.com/sparkwing-dev/sparkwing v1.3.1
+require github.com/sparkwing-dev/sparkwing v0.2.1
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect

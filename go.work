@@ -15,4 +15,22 @@ use (
 	./templates
 )
 
-replace github.com/sparkwing-dev/sparkwing => /Users/koreygambill/code/sparkwing
+replace github.com/sparkwing-dev/sparks-core/aws v0.23.0 => ./aws
+
+replace github.com/sparkwing-dev/sparks-core/checks v0.23.0 => ./checks
+
+replace github.com/sparkwing-dev/sparks-core/deploy v0.23.0 => ./deploy
+
+replace github.com/sparkwing-dev/sparks-core/docker v0.23.0 => ./docker
+
+replace github.com/sparkwing-dev/sparks-core/gitops v0.23.0 => ./gitops
+
+replace github.com/sparkwing-dev/sparks-core/kube v0.23.0 => ./kube
+
+replace github.com/sparkwing-dev/sparks-core/pipelines v0.23.0 => ./pipelines
+
+replace github.com/sparkwing-dev/sparks-core/s3 v0.23.0 => ./s3
+
+replace github.com/sparkwing-dev/sparks-core/step v0.23.0 => ./step
+
+replace github.com/sparkwing-dev/sparks-core/templates v0.23.0 => ./templates
