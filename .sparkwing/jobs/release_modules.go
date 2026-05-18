@@ -9,11 +9,11 @@ import (
 	sw "github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// ReleaseModulesInputs are the typed CLI flags for `wing release-modules`.
+// ReleaseModulesInputs are the typed CLI flags for `sparkwing run release-modules`.
 //
-// Note: --dry-run is reserved by `sparkwing run` (IMP-014) and would be
-// intercepted before reaching this pipeline, so we use --preview for the
-// "show what would happen" mode.
+// Note: --dry-run is reserved by `sparkwing run` and would be intercepted
+// before reaching this pipeline, so we use --preview for the "show what
+// would happen" mode.
 type ReleaseModulesInputs struct {
 	Version string `flag:"version" desc:"Semver tag (e.g. v0.1.0) applied to root + each module" default:"v0.1.0"`
 	Preview bool   `flag:"preview" desc:"Print the tags that would be created and pushed, without doing it"`
@@ -34,8 +34,8 @@ to origin. The repo root is intentionally not tagged.`
 
 func (ReleaseModules) Examples() []sw.Example {
 	return []sw.Example{
-		{Comment: "Cut a v0.1.0 baseline release", Command: "wing release-modules --version v0.1.0"},
-		{Comment: "Preview without creating or pushing tags", Command: "wing release-modules --version v0.2.0 --preview"},
+		{Comment: "Cut a v0.1.0 baseline release", Command: "sparkwing run release-modules --version v0.1.0"},
+		{Comment: "Preview without creating or pushing tags", Command: "sparkwing run release-modules --version v0.2.0 --preview"},
 	}
 }
 

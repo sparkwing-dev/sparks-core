@@ -70,7 +70,7 @@ Discipline:
 
 ## Releasing
 
-The release dance is automated by sparkwing's `wing release-sparks`
+The release dance is automated by sparkwing's `release-sparks`
 pipeline (lives in the sparkwing repo). It:
 
 1. Detects which modules have changed since their last `<module>/v*` tag.
@@ -85,13 +85,13 @@ pipeline (lives in the sparkwing repo). It:
 Manual single-module release:
 
 ```
-wing release-sparks --module pipelines --version v0.2.0
+sparkwing run release-sparks --module pipelines --version v0.2.0
 ```
 
 Or auto-detect everything that changed:
 
 ```
-wing release-sparks --all
+sparkwing run release-sparks --all
 ```
 
 Per-module CHANGELOG entries are required — the release pipeline

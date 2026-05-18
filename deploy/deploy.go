@@ -38,12 +38,12 @@ type Config struct {
 //     ArgoCD.
 //
 // The routing decision is based on cfg.Local and the SPARKWING_KIND_CLUSTER
-// env var set by wing, not on whether the code is running inside a
+// env var set by sparkwing, not on whether the code is running inside a
 // cluster. Laptop deploys to prod go through gitops.
 func Run(ctx context.Context, cfg Config) error {
 	// SPARKWING_KIND_CLUSTER flips deploys into local-kubectl mode
 	// without requiring each consumer pipeline to set cfg.Local
-	// manually. wing sets this env var when --on resolves to a kind
+	// manually. sparkwing sets this env var when --on resolves to a kind
 	// profile, so any pipeline running against a kind cluster lands
 	// here even if the pipeline was written for a prod-only gitops
 	// flow.

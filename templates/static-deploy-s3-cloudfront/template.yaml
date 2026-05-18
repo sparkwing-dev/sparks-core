@@ -20,7 +20,7 @@ parameters:
     default: https://example.com
   - name: pipeline-name
     type: string
-    description: Pipeline registration name -- the verb users type after `wing`.
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: deploy
   - name: site-cache
     type: string

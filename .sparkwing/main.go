@@ -1,6 +1,6 @@
 // Command sparks-core-pipelines is this repo's local pipeline runner.
 // It re-exports orchestrator.Main, which dispatches based on argv:
-// `wing <pipeline>` invokes the pipeline; `sparkwing pipeline ...`
+// `sparkwing run <pipeline>` invokes the pipeline; `sparkwing pipeline ...`
 // is the agent/operator surface.
 package main
 

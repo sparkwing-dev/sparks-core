@@ -28,7 +28,7 @@ func ({{pascal .pipeline_name}}) Help() string {
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 	return []sparkwing.Example{
-		{Comment: "Run locally", Command: "wing {{.pipeline_name}}"},
+		{Comment: "Run locally", Command: "sparkwing run {{.pipeline_name}}"},
 	}
 }
 

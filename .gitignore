@@ -5,5 +5,5 @@
 # workspace's own sum file is materialized on demand).
 go.work.sum
 
-# sparkwing: cached pipeline binary, regenerated on each `wing` invocation
+# sparkwing: cached pipeline binary, regenerated on each pipeline run
 .sparkwing/sparkwing-pipeline

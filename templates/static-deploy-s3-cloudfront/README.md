@@ -37,7 +37,7 @@ toolchain, swap `BuildCmd` after rendering.
 | `bucket` | yes | - | Target S3 bucket |
 | `distribution` | yes | - | CloudFront distribution ID |
 | `url` | no | `https://example.com` | Deployed URL (logged on success) |
-| `pipeline-name` | no | `deploy` | Verb users type after `wing` |
+| `pipeline-name` | no | `deploy` | Verb users type after `sparkwing run` |
 | `site-cache` | no | - | Per-site `.next/cache` Docker volume name |
 
 ## After rendering

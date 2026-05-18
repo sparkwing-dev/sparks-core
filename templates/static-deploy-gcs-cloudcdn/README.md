@@ -31,7 +31,7 @@ costs you a re-render rather than a rewrite.
 | `url-map` | yes | - | Cloud CDN URL map for cache invalidation |
 | `project` | yes | - | GCP project ID |
 | `url` | no | `https://example.com` | Deployed URL (logged on success) |
-| `pipeline-name` | no | `deploy` | Verb users type after `wing` |
+| `pipeline-name` | no | `deploy` | Verb users type after `sparkwing run` |
 
 ## Note on sparks-core coverage
 

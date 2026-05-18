@@ -27,7 +27,7 @@ each step is independent so the parallel-DAG mechanics are visible.
 | Name | Required | Default | Description |
 |---|---|---|---|
 | `go-version` | no | `1.26` | Banner version (real version is pinned in go.mod) |
-| `pipeline-name` | no | `lint-test` | Verb users type after `wing` |
+| `pipeline-name` | no | `lint-test` | Verb users type after `sparkwing run` |
 | `test-args` | no | `./...` | Extra args appended to `go test` |
 
 ## After rendering

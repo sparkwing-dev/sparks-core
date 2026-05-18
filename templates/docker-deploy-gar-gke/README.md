@@ -32,7 +32,7 @@ parity if a sibling project uses `docker-deploy-ecr-eks`.
 | `gitops-path` | yes | - | Path within gitops repo |
 | `app-name` | yes | - | ArgoCD application name |
 | `namespace` | yes | - | Kubernetes namespace |
-| `pipeline-name` | no | `build-test-deploy` | Verb users type after `wing` |
+| `pipeline-name` | no | `build-test-deploy` | Verb users type after `sparkwing run` |
 | `test-cmd` | no | `go test ./...` | Pre-build test command (empty disables) |
 
 ## Note on sparks-core coverage

@@ -30,4 +30,4 @@ The rendered pipeline:
 |---|---|---|---|
 | `artifact-bucket` | yes | - | Target S3/GCS bucket for the tarball |
 | `artifact-prefix` | no | `artifacts` | Bucket prefix for artifact uploads |
-| `pipeline-name` | no | `build` | Verb users type after `wing` |
+| `pipeline-name` | no | `build` | Verb users type after `sparkwing run` |

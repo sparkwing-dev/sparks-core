@@ -15,7 +15,7 @@ parameters:
     default: artifacts
   - name: pipeline-name
     type: string
-    description: Pipeline registration name -- the verb users type after `wing`.
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: build
 applicability:
   cloud: [aws, gcp]

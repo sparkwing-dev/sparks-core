@@ -30,7 +30,7 @@ parameters:
     description: Kubernetes namespace
   - name: pipeline-name
     type: string
-    description: Pipeline registration name -- the verb users type after `wing`.
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: build-test-deploy
   - name: test-cmd
     type: string
