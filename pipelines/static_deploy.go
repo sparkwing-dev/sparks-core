@@ -94,7 +94,11 @@ type StaticDeploy struct {
 	OutDir string
 
 	// AWSProfile is the profile used for aws CLI invocations.
-	// Defaults to aws.DefaultProfile.
+	// Required - callers must pass an explicit profile name. Empty
+	// AWSProfile fails Run() with an error rather than silently
+	// falling back to the literal "default" profile, which has
+	// surprised consumers when the local AWS config doesn't have
+	// kikd creds (or any creds) under that name.
 	AWSProfile string
 
 	// CloudFrontID, when set, triggers a cache invalidation against
@@ -133,6 +137,9 @@ func (s *StaticDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing
 // Run executes build (optional) + S3 sync (+ CloudFront invalidation
 // when configured).
 func (s *StaticDeploy) Run(ctx context.Context) error {
+	if s.AWSProfile == "" {
+		return fmt.Errorf("StaticDeploy: AWSProfile is required")
+	}
 	if s.OutDir == "" {
 		s.OutDir = "out"
 	}

@@ -62,7 +62,7 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 		cfg.OutDir = "out"
 	}
 	if cfg.AWSProfile == "" {
-		cfg.AWSProfile = aws.DefaultProfile
+		return res, fmt.Errorf("s3: AWSProfile required")
 	}
 	profileArgs := aws.ProfileArgs(cfg.AWSProfile)
 	// Excludes get re-applied on every sync pass; if they only
