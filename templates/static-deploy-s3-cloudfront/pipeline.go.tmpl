@@ -32,10 +32,12 @@ func init() {
 			URL:              {{quote .url}},
 			Delete:           true,
 		}
-		// NextJSBuild applies the cluster-vs-laptop branching for the
-		// build phase: cluster runs use a docker build container with
-		// the shared sparks-npm cache + an optional per-site .next
-		// cache; laptop runs build on the host with no Docker.
+		// NextJSBuild applies the build phase. Strategy defaults to
+		// "container" — docker build with the shared sparks-npm cache
+		// + an optional per-site .next cache. Set Strategy: "host" to
+		// opt into the laptop fast-path (npm install on the host,
+		// no docker). Typically wired from a typed Config field per
+		// target.
 		pipelines.NextJSBuild{SiteCache: {{quote .site_cache}}}.Apply(&sd)
 		return &{{pascal .pipeline_name}}{StaticDeploy: sd}
 	})
