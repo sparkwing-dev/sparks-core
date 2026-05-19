@@ -9,4 +9,3 @@
 pipelines:
   - name: release-modules
     entrypoint: ReleaseModules
-    group: Release
