@@ -5,9 +5,9 @@
 package main
 
 import (
-	"github.com/sparkwing-dev/sparkwing/orchestrator"
+	"github.com/sparkwing-dev/sparkwing/pkg/runner"
 
 	_ "sparks-core-pipelines/jobs"
 )
 
-func main() { orchestrator.Main() }
+func main() { runner.Main() }
