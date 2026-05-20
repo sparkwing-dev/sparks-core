@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	sw "github.com/sparkwing-dev/sparkwing/sparkwing"
 )
@@ -58,6 +59,23 @@ func (j *ReleaseModulesJob) Work(w *sw.Work) (*sw.WorkStep, error) {
 
 var versionRE = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
+// refusePostV0 hard-blocks any version >= v1.0.0. While sparks-core
+// is pre-1.0, every release ships under v0.x.y; stepping to v1.0.0+
+// commits the API surface of every module in spark.json, which is
+// a decision that must be made deliberately. Removing this gate is
+// the unlock: edit refusePostV0 (or its caller in tagNames) when
+// the time comes.
+func refusePostV0(version string) error {
+	rest := strings.TrimPrefix(version, "v")
+	parts := strings.SplitN(rest, ".", 2)
+	if len(parts) < 1 || parts[0] != "0" {
+		return fmt.Errorf("release-modules: version %q is v1.0.0+ but sparks-core is locked to v0.x. "+
+			"Bumping to v1+ commits the API surface of every spark.json module; "+
+			"if that's intentional, remove the pre-1.0 lock in .sparkwing/jobs/release_modules.go and resubmit", version)
+	}
+	return nil
+}
+
 type sparkManifest struct {
 	Modules []struct {
 		Path string `json:"path"`
@@ -67,6 +85,9 @@ type sparkManifest struct {
 func (j *ReleaseModulesJob) tagNames() ([]string, error) {
 	if !versionRE.MatchString(j.In.Version) {
 		return nil, fmt.Errorf("invalid version %q: want vMAJOR.MINOR.PATCH (e.g. v0.1.0)", j.In.Version)
+	}
+	if err := refusePostV0(j.In.Version); err != nil {
+		return nil, err
 	}
 	data, err := sw.ReadFile("spark.json")
 	if err != nil {
