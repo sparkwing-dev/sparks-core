@@ -41,7 +41,8 @@ func ECRLogin(ctx context.Context, registry, awsProfile string) error {
 		// them safely. PROFILE_FLAG is intentionally unquoted so its
 		// " --profile <name>" expansion word-splits into two argv
 		// tokens (or vanishes when empty).
-		if _, err := sparkwing.Bash(ctx,
+		if _, err := sparkwing.Bash(
+			ctx,
 			`aws ecr get-login-password --region "$REGION"${PROFILE_FLAG} | docker login --username AWS --password-stdin "$REGISTRY"`,
 		).
 			Env("REGION", region).

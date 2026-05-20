@@ -6,6 +6,7 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func GoFmt(ctx context.Context) error {
 				sparkwing.Info(ctx, "  needs formatting: %s", f)
 			}
 		}
-		return fmt.Errorf("files need formatting - run: gofmt -w .")
+		return errors.New("files need formatting; run gofmt -w")
 	})
 }
 
@@ -66,7 +67,7 @@ func GoTest(ctx context.Context, pkgs ...string) error {
 	return runGoTest(ctx, "tests", nil, pkgs)
 }
 
-func runGoTest(ctx context.Context, label string, flags []string, pkgs []string) error {
+func runGoTest(ctx context.Context, label string, flags, pkgs []string) error {
 	if len(pkgs) == 0 {
 		pkgs = []string{"./..."}
 	}

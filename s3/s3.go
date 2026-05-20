@@ -86,7 +86,8 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	if cfg.Delete {
 		assetArgs = append(assetArgs, "--delete")
 	}
-	assetArgs = append(assetArgs,
+	assetArgs = append(
+		assetArgs,
 		"--cache-control", "public, max-age=31536000, immutable",
 		"--exclude", "*.html",
 	)
@@ -115,7 +116,8 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	// `no-cache`, and the deploy already invalidates CloudFront.
 	htmlArgs := []string{"s3", "cp", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 	htmlArgs = append(htmlArgs, profileArgs...)
-	htmlArgs = append(htmlArgs,
+	htmlArgs = append(
+		htmlArgs,
 		"--recursive",
 		"--cache-control", "no-cache, no-store, must-revalidate",
 		"--exclude", "*",
@@ -136,7 +138,8 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	if cfg.Delete {
 		htmlSyncArgs := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 		htmlSyncArgs = append(htmlSyncArgs, profileArgs...)
-		htmlSyncArgs = append(htmlSyncArgs,
+		htmlSyncArgs = append(
+			htmlSyncArgs,
 			"--delete",
 			"--exclude", "*",
 			"--include", "*.html",
@@ -168,7 +171,7 @@ func countUploads(stdout string) int {
 
 func countFiles(dir string) int {
 	n := 0
-	filepath.Walk(dir, func(_ string, info os.FileInfo, _ error) error {
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, _ error) error {
 		if info != nil && !info.IsDir() {
 			n++
 		}

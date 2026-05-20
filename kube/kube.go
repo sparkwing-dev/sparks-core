@@ -80,7 +80,8 @@ func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 			if !ok {
 				continue
 			}
-			out, _ := sparkwing.Exec(ctx, "kubectl",
+			out, _ := sparkwing.Exec(
+				ctx, "kubectl",
 				"--context", kubeCtx,
 				"get", deploy,
 				"-n", cfg.Namespace,
@@ -272,8 +273,8 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 			sparkwing.Info(ctx, "  %s -> %s", img, cfg.Tag)
 		}
 
-		if err := os.WriteFile(kustomizePath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("write kustomization.yaml: %v", err)
+		if err := os.WriteFile(kustomizePath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("write kustomization.yaml: %w", err)
 		}
 
 		kustomizeDir := filepath.Dir(kustomizePath)

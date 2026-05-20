@@ -67,8 +67,8 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 
 	err = step.Run(ctx, "deploy (gitops)", func(ctx context.Context) error {
 		tmpDir := filepath.Join(os.TempDir(), "sparkwing-gitops-deploy")
-		os.RemoveAll(tmpDir)
-		defer os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }()
 
 		// Set GIT_SSH_COMMAND for this Deploy invocation. Clone routes
 		// through gitcache when available; the SSH key is needed for the
@@ -107,7 +107,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 
 			data, err := os.ReadFile(kustomizePath)
 			if err != nil {
-				return fmt.Errorf("read kustomization.yaml: %v", err)
+				return fmt.Errorf("read kustomization.yaml: %w", err)
 			}
 
 			content := string(data)
@@ -128,8 +128,8 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 				sparkwing.Info(ctx, "  %s -> %s", img, cfg.Tag)
 			}
 
-			if err := os.WriteFile(kustomizePath, []byte(content), 0644); err != nil {
-				return fmt.Errorf("write kustomization.yaml: %v", err)
+			if err := os.WriteFile(kustomizePath, []byte(content), 0o644); err != nil {
+				return fmt.Errorf("write kustomization.yaml: %w", err)
 			}
 
 			for relPath, patches := range cfg.FilePatches {
@@ -143,7 +143,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 				for key, value := range patches {
 					pContent = patchYAMLValue(ctx, pContent, key, value)
 				}
-				if err := os.WriteFile(patchPath, []byte(pContent), 0644); err != nil {
+				if err := os.WriteFile(patchPath, []byte(pContent), 0o644); err != nil {
 					sparkwing.Info(ctx, "warning: file patch write %s: %v", relPath, err)
 				}
 			}
@@ -157,7 +157,8 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 			}
 
 			changed = true
-			if err := step.Exec(ctx, "git", "-C", tmpDir,
+			if err := step.Exec(
+				ctx, "git", "-C", tmpDir,
 				"-c", "user.name=sparkwing",
 				"-c", "user.email=sparkwing@noreply",
 				"commit", "-m", cfg.CommitMsg,
@@ -333,14 +334,14 @@ func argocdConfig(ctx context.Context) (server, token string) {
 		if err != nil || resp.StatusCode != http.StatusOK {
 			sparkwing.Info(ctx, "argocd: in-cluster server not reachable at %s", server)
 			server = ""
-			return
+			return server, token
 		}
 		resp.Body.Close()
 		sparkwing.Info(ctx, "argocd: using in-cluster server %s", server)
 	} else {
 		sparkwing.Info(ctx, "argocd: using server %s", server)
 	}
-	return
+	return server, token
 }
 
 type argocdApp struct {
@@ -437,7 +438,9 @@ func shortRev(r string) string {
 func sshCommandValue() string {
 	if _, err := os.Stat("/etc/ssh-key/id_ed25519"); err == nil {
 		sshDir := "/tmp/ssh-keys"
-		os.MkdirAll(sshDir, 0o700)
+		if err := os.MkdirAll(sshDir, 0o700); err != nil {
+			return ""
+		}
 		for _, name := range []string{"id_ed25519", "known_hosts"} {
 			data, err := os.ReadFile("/etc/ssh-key/" + name)
 			if err != nil {
@@ -446,7 +449,9 @@ func sshCommandValue() string {
 			if len(data) > 0 && data[len(data)-1] != '\n' {
 				data = append(data, '\n')
 			}
-			os.WriteFile(sshDir+"/"+name, data, 0o600)
+			if err := os.WriteFile(sshDir+"/"+name, data, 0o600); err != nil {
+				return ""
+			}
 		}
 		return fmt.Sprintf("ssh -i %s/id_ed25519 -o UserKnownHostsFile=%s/known_hosts -o StrictHostKeyChecking=yes", sshDir, sshDir)
 	}
@@ -475,9 +480,9 @@ func setSSHEnv(ctx context.Context) func() {
 	}
 	return func() {
 		if hadPrev {
-			os.Setenv("GIT_SSH_COMMAND", prev)
+			_ = os.Setenv("GIT_SSH_COMMAND", prev)
 		} else {
-			os.Unsetenv("GIT_SSH_COMMAND")
+			_ = os.Unsetenv("GIT_SSH_COMMAND")
 		}
 	}
 }
