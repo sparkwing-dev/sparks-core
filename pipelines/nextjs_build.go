@@ -5,10 +5,10 @@ import "fmt"
 // NextJSBuild configures the build phase of a StaticDeploy for a
 // Next.js static-export site. Strategy picks between two build modes:
 //
-//   - "container" (default) — strict path: docker build with `npm ci`,
+//   - "container" (default) -- strict path: docker build with `npm ci`,
 //     the shared sparks-npm download cache, and an optional per-site
 //     .next/cache volume. The right choice for reproducible CI/CD.
-//   - "host" — fast path: a native `npm install && npm run build` on
+//   - "host" -- fast path: a native `npm install && npm run build` on
 //     the runner. No docker, no cache volumes. The right choice for
 //     laptop dev targets where speed matters more than reproducibility.
 //

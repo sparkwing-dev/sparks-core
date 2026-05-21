@@ -65,7 +65,7 @@ Discipline:
   developers.
 - Local development uses `go.work` at the repo root: every module is
   declared via `use ./<name>` and a workspace-level `replace` shadows
-  sibling versions. The workspace file is dev-only — consumers never
+  sibling versions. The workspace file is dev-only -- consumers never
   see it.
 
 ## Releasing
@@ -94,7 +94,7 @@ Or auto-detect everything that changed:
 sparkwing run release-sparks --all
 ```
 
-Per-module CHANGELOG entries are required — the release pipeline
+Per-module CHANGELOG entries are required -- the release pipeline
 refuses to ship a module without a matching `[<version>]` heading in
 that module's `CHANGELOG.md`.
 

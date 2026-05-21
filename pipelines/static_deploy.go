@@ -178,7 +178,7 @@ func (s *StaticDeploy) Run(ctx context.Context) error {
 	// be unreachable now that the HTML phase uses `aws s3 cp
 	// --recursive` (unconditional upload of every local HTML file).
 	// If it does fire, it means the AWS CLI returned 0 success but
-	// no `copy:` lines — a bug in the CLI or shell capture path, not
+	// no `copy:` lines -- a bug in the CLI or shell capture path, not
 	// a build problem. Still worth surfacing so we don't ship a
 	// silent partial deploy.
 	if syncRes.AssetUploads > 0 && syncRes.HTMLUploads == 0 {

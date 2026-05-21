@@ -15,7 +15,7 @@ multi-module repo conventions).
   field on `NextJSBuild` (`"container"` default, `"host"` for the laptop
   fast-path). Existing callers using `NextJSBuild{...}.Apply(&sd)` continue
   to compile and behave as the previous cluster path (container build);
-  laptop fast-path becomes opt-in via `Strategy: "host"` — typically wired
+  laptop fast-path becomes opt-in via `Strategy: "host"` -- typically wired
   from a typed `Config` field per pipeline target. `Apply` panics on an
   unknown strategy value (programmer error; surfaces at registration).
 

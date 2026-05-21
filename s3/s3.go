@@ -25,7 +25,7 @@ type StaticSiteConfig struct {
 	// and the HTML pass only deletes HTML orphans. (Implementation:
 	// asset pass uses `aws s3 sync --delete`; HTML pass always uses
 	// `aws s3 cp --recursive` for upload, then a separate
-	// `aws s3 sync --delete` purely for orphan removal — see the
+	// `aws s3 sync --delete` purely for orphan removal -- see the
 	// comment in DeployStaticSite for why HTML can't use sync for
 	// upload.)
 	Delete bool
@@ -39,7 +39,7 @@ type StaticSiteConfig struct {
 }
 
 // SyncResult reports per-pass upload counts so callers can detect
-// suspicious deploys (e.g. asset uploads with zero HTML uploads —
+// suspicious deploys (e.g. asset uploads with zero HTML uploads --
 // see ISS-034).
 type SyncResult struct {
 	AssetUploads int
@@ -110,7 +110,7 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	//     swap whose old/new lengths happen to match.
 	// When both signals match, `sync` silently skips the HTML pass
 	// while the asset pass `--delete`s the chunks the live HTML
-	// still references — the ISS-034 failure mode. `cp --recursive`
+	// still references -- the ISS-034 failure mode. `cp --recursive`
 	// uploads unconditionally, eliminating the comparison entirely.
 	// Cost is negligible: HTML is small text, headers are
 	// `no-cache`, and the deploy already invalidates CloudFront.

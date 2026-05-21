@@ -77,7 +77,6 @@ func (p *PrePush) run(ctx context.Context) error {
 		sparkwing.Info(ctx, "version freshness: current")
 	}
 
-
 	// 3. Full golangci-lint sweep on .sparkwing/ (if a config is
 	// present there; falls back to a no-op message otherwise).
 	if _, err := sparkwing.Bash(ctx, "cd .sparkwing && golangci-lint run ./...").Run(); err != nil {

@@ -56,7 +56,7 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 		t.Fatalf("read sentinel: %v", err)
 	}
 	if string(got) != "1" {
-		t.Fatalf("NEXT_EXPORT in subprocess = %q, want %q — BuildExtraEnv was dropped", string(got), "1")
+		t.Fatalf("NEXT_EXPORT in subprocess = %q, want %q -- BuildExtraEnv was dropped", string(got), "1")
 	}
 }
 
@@ -153,8 +153,8 @@ func TestExtractStaticRefs_DedupesAndScopes(t *testing.T) {
 	html := `<script src="/_next/static/chunks/a.js"></script>` +
 		`<script src="/_next/static/chunks/a.js"></script>` + // dup
 		`<link href="/_next/static/css/x.css">` +
-		`<a href="/about">route — should be ignored</a>` +
-		`<a href="https://cdn.example.com/foo.js">external — ignored</a>`
+		`<a href="/about">route -- should be ignored</a>` +
+		`<a href="https://cdn.example.com/foo.js">external -- ignored</a>`
 	got := extractStaticRefs(html)
 	want := []string{
 		"/_next/static/chunks/a.js",

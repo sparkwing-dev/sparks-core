@@ -65,7 +65,7 @@ func verifyHTMLChunkRefs(outDir string) error {
 			preview = preview[:max]
 		}
 		return fmt.Errorf(
-			"static-deploy: %d HTML asset reference(s) missing from %s — "+
+			"static-deploy: %d HTML asset reference(s) missing from %s -- "+
 				"the build emitted HTML pointing at files it did not produce, "+
 				"likely a Next.js `output: \"export\"` config that did not engage. "+
 				"First: %s",
