@@ -6,26 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
-
-// recordingLogger is a minimal sparkwing.Logger that captures every
-// emitted record so tests can assert on Log() / Logf() output without
-// pulling in any orchestrator machinery.
-type recordingLogger struct {
-	records []sparkwing.LogRecord
-}
-
-func (r *recordingLogger) Log(level, msg string)        {}
-func (r *recordingLogger) Emit(rec sparkwing.LogRecord) { r.records = append(r.records, rec) }
-func (r *recordingLogger) joinedMsgs() string {
-	parts := make([]string, len(r.records))
-	for i, rec := range r.records {
-		parts[i] = rec.Level + ":" + rec.Msg
-	}
-	return strings.Join(parts, "\n")
-}
 
 // TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv is the ISS-033
 // regression test: a host-mode build (BuildImage="") must inject
@@ -46,7 +27,7 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 		},
 	}
 
-	ctx := sparkwing.WithLogger(context.Background(), &recordingLogger{})
+	ctx := context.Background()
 	if err := sd.BuildOnly(ctx); err != nil {
 		t.Fatalf("BuildOnly: %v", err)
 	}

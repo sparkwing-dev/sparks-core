@@ -3,7 +3,7 @@ module sparks-core-pipelines
 go 1.26.3
 
 require (
-	github.com/sparkwing-dev/sparkwing v0.3.0
+	github.com/sparkwing-dev/sparkwing v0.4.0
 	golang.org/x/mod v0.35.0
 )
 
