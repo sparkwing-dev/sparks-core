@@ -56,6 +56,17 @@ func (p *PrePush) run(ctx context.Context) error {
 		sparkwing.Info(ctx, "no-replace check: clean")
 	}
 
+	// 1a. No committed go.work / go.work.sum. Workspaces are a
+	// local-only convenience; they can't be resolved by the Go module
+	// proxy and silently override the published versions for anyone
+	// who clones the repo. Same rule as `replace`: fine locally, never
+	// in main.
+	if err := checkNoCommittedGoWorkFiles(ctx); err != nil {
+		failures = append(failures, err.Error())
+	} else {
+		sparkwing.Info(ctx, "no-go.work check: clean")
+	}
+
 	// 1b. `go mod tidy` drift: running tidy should produce no diff. A
 	// non-tidy go.mod is a near-certain sign that a recent `go get`
 	// wasn't followed by tidy. We swallow tidy's own error (it can fail
@@ -148,6 +159,30 @@ func checkNoReplaceDirectivesInCommittedGoMods(ctx context.Context) error {
 	files := strings.Split(out, "\n")
 	return fmt.Errorf(
 		"refusing to push: %d committed go.mod file(s) contain `replace` lines (remove the replace and pin a released tag):\n    %s",
+		len(files), strings.Join(files, "\n    "),
+	)
+}
+
+// checkNoCommittedGoWorkFiles refuses to let a workspace file ship.
+// `go.work` and `go.work.sum` are local-iteration scaffolding (they
+// point at relative paths on the developer's machine) and break
+// builds for anyone who clones the repo. The matching gitignore
+// patterns should prevent these from ever being staged, but the
+// check is belt-and-suspenders.
+func checkNoCommittedGoWorkFiles(ctx context.Context) error {
+	out, err := sparkwing.Bash(ctx,
+		`git ls-files | grep -E '(^|/)go\.work(\.sum)?$' || true`,
+	).String()
+	if err != nil {
+		return fmt.Errorf("scan go.work files: %w", err)
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil
+	}
+	files := strings.Split(out, "\n")
+	return fmt.Errorf(
+		"refusing to push: %d committed go.work file(s) (remove + add to .gitignore):\n    %s",
 		len(files), strings.Join(files, "\n    "),
 	)
 }
