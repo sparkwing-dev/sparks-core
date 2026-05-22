@@ -79,7 +79,13 @@ func allModuleDirs() ([]string, error) {
 // tidyAllModules runs `go mod tidy` in every module and fails if
 // any produced a diff against HEAD. tidy itself can fail in
 // workspaces with unreleased local siblings; swallow it and rely
-// on the diff as the signal.
+// on the captured diff as the signal.
+//
+// Capture-output check rather than `git diff --quiet`: the latter's
+// exit code has been observed to occasionally report dirty under
+// sparkwing.Bash even when the tree is clean. Combining tidy + diff
+// into one bash invocation also avoids any chance of the diff
+// observing pre-tidy state.
 func tidyAllModules(ctx context.Context) error {
 	dirs, err := allModuleDirs()
 	if err != nil {
@@ -91,10 +97,12 @@ func tidyAllModules(ctx context.Context) error {
 		if rel == "" {
 			rel = "."
 		}
-		_, _ = sparkwing.Bash(ctx, fmt.Sprintf(`go -C %q mod tidy 2>/dev/null || true`, rel)).Run()
-		if _, err := sparkwing.Bash(ctx,
-			fmt.Sprintf(`git diff --quiet -- %q %q`, filepath.Join(rel, "go.mod"), filepath.Join(rel, "go.sum")),
-		).Run(); err != nil {
+		cmd := fmt.Sprintf(
+			`go -C %q mod tidy 2>/dev/null || true; git diff --no-color -- %q %q`,
+			rel, filepath.Join(rel, "go.mod"), filepath.Join(rel, "go.sum"),
+		)
+		out, _ := sparkwing.Bash(ctx, cmd).String()
+		if strings.TrimSpace(out) != "" {
 			dirty = append(dirty, rel)
 		}
 	}
