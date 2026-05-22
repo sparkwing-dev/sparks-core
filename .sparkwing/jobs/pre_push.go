@@ -124,7 +124,8 @@ func govulncheckAllModules(ctx context.Context) error {
 
 // forEachModuleDir runs cmd in each module directory and aggregates
 // failures so the caller sees every offending module in one report
-// instead of just the first.
+// instead of just the first. Modules with no Go packages (e.g. a
+// monorepo root that only carries the go.work) are skipped silently.
 func forEachModuleDir(ctx context.Context, label, cmd string) error {
 	dirs, err := allModuleDirs()
 	if err != nil {
@@ -136,6 +137,9 @@ func forEachModuleDir(ctx context.Context, label, cmd string) error {
 		if rel == "" {
 			rel = "."
 		}
+		if empty, err := moduleHasNoPackages(ctx, rel); err == nil && empty {
+			continue
+		}
 		if _, err := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && %s`, rel, cmd)).Run(); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", rel, err))
 		}
@@ -145,6 +149,27 @@ func forEachModuleDir(ctx context.Context, label, cmd string) error {
 			label, len(failures), strings.Join(failures, "\n  - "))
 	}
 	return nil
+}
+
+// moduleHasNoPackages reports whether `go list ./...` from dir
+// matches zero packages. Empty modules legitimately exist in
+// monorepo roots (a parent go.mod that only carries module metadata)
+// and should not fail per-module checks.
+func moduleHasNoPackages(ctx context.Context, dir string) (bool, error) {
+	out, err := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && go list ./... 2>&1 || true`, dir)).String()
+	if err != nil {
+		return false, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return true, nil
+	}
+	// `go list` prints "matched no packages" to stderr; with 2>&1 it
+	// lands in stdout. Treat that as the empty signal.
+	if strings.Contains(out, "matched no packages") {
+		return true, nil
+	}
+	return false, nil
 }
 
 func checkVersionFreshness(ctx context.Context) error {

@@ -274,9 +274,14 @@ func semverMajor(v string) (int, bool) {
 // versions above the cap are filtered out so the returned "latest"
 // is the highest tag the consumer should actually pin to, not the
 // highest tag the proxy happens to know about.
+//
+// GOWORK=off forces the proxy lookup. Inside a Go workspace, sibling
+// modules are local-replaced and `go list -m -versions` returns no
+// tags for them; we want the proxy's authoritative version list so
+// the freshness check works in monorepo + workspace layouts.
 func latestReleasedVersion(ctx context.Context, modulePath, fromModFile string) (string, error) {
 	dir := filepath.Dir(fromModFile)
-	out, err := captureCmd(ctx, dir, "go", "list", "-m", "-versions", modulePath)
+	out, err := captureCmdEnv(ctx, dir, []string{"GOWORK=off"}, "go", "list", "-m", "-versions", modulePath)
 	if err != nil {
 		return "", err
 	}
@@ -323,8 +328,18 @@ func captureGit(ctx context.Context, dir string, args ...string) (string, error)
 }
 
 func captureCmd(ctx context.Context, dir, name string, args ...string) (string, error) {
+	return captureCmdEnv(ctx, dir, nil, name, args...)
+}
+
+// captureCmdEnv runs cmd with the parent env plus extraEnv appended.
+// Use it when the command needs an env override (e.g. GOWORK=off
+// to bypass workspace mode for proxy queries).
+func captureCmdEnv(ctx context.Context, dir string, extraEnv []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 	out, err := cmd.Output()
 	return string(out), err
 }
