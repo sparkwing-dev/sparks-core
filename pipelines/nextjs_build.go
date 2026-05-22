@@ -72,6 +72,10 @@ func (b NextJSBuild) Apply(sd *StaticDeploy) {
 			sd.BuildCacheVolumes[b.SiteCache] = "/work/.next/cache"
 		}
 	default:
-		panic(fmt.Sprintf("pipelines.NextJSBuild: unknown strategy %q (want \"host\" or \"container\")", b.Strategy))
+		// Strategy is validated at construction-time; anything other than
+		// "host" / "container" is a programmer error the caller can't
+		// recover from. Hard-fail rather than carry a half-configured Job
+		// into dispatch.
+		panic(fmt.Sprintf("pipelines.NextJSBuild: unknown strategy %q (want \"host\" or \"container\")", b.Strategy)) //nolint:forbidigo // construction-time programmer error
 	}
 }
