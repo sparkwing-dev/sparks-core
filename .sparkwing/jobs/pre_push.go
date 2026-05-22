@@ -3,35 +3,36 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// PrePush gates pushes to main with the slower checks that don't
-// belong in pre-commit: full golangci-lint, `go test -race`, the
-// version-freshness check against the sparkwing ecosystem, and a
-// hard ban on any `replace` directive in a committed `go.mod`.
+// PrePush gates pushes to main. Each check runs as its own parallel
+// Work step so failures surface independently in the dashboard.
 //
-// Push-to-main means this pipeline is the last gate before code is
-// shared, so it's stricter than a typical PR-time check.
+// sparks-core is a multi-module monorepo: lint, test, vuln, and
+// tidy run against every go.mod discovered under the repo root
+// (excluding vendor / node_modules / .git). The non-module checks
+// (replace ban, go.work ban, version freshness, shellcheck,
+// markdownlint) run once at the repo level.
 //
 // Wire it to git: declare `pre_push:` in pipelines.yaml and run
 // `sparkwing pipeline hooks install`. Tooling assumed on PATH:
-// golangci-lint, staticcheck (called by golangci-lint), govulncheck.
+// golangci-lint, shellcheck, markdownlint-cli2.
 type PrePush struct{ sparkwing.Base }
 
 func (PrePush) ShortHelp() string {
-	return "Pre-push gate: lint, test -race, vuln, freshness, no replace directives"
+	return "Pre-push gate: lint, test -race, vuln, freshness, no replace, no go.work"
 }
 
 func (PrePush) Help() string {
-	return "Final gate before main. Runs the full golangci-lint set, " +
-		"`go test -race ./...`, `govulncheck ./...`, the " +
-		"sparkwing-ecosystem version-freshness check (deps must be at " +
-		"the latest released tag, or replaced with a not-behind local " +
-		"path), and refuses to push if any committed go.mod contains " +
-		"a `replace` line."
+	return "Final gate before main. Each check runs as its own Work step. " +
+		"Per-module checks (golangci-lint, `go test -race`, govulncheck, " +
+		"`go mod tidy` drift) iterate every go.mod under the repo. Repo-" +
+		"level checks: no `replace` lines, no committed go.work / go.work.sum, " +
+		"sparkwing-ecosystem version-freshness, shellcheck, markdownlint."
 }
 
 func (PrePush) Examples() []sparkwing.Example {
@@ -41,103 +42,123 @@ func (PrePush) Examples() []sparkwing.Example {
 }
 
 func (p *PrePush) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, rc sparkwing.RunContext) error {
-	sparkwing.Job(plan, rc.Pipeline, p.run)
+	sparkwing.Job(plan, rc.Pipeline, p)
 	return nil
 }
 
-func (p *PrePush) run(ctx context.Context) error {
-	var failures []string
+// Work declares one step per check so they dispatch in parallel and
+// surface independently in the dashboard. No Needs() edges -- the
+// checks are mutually independent.
+func (p *PrePush) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	sparkwing.Step(w, "no-replace", checkNoReplaceDirectivesInCommittedGoMods)
+	sparkwing.Step(w, "no-go-work", checkNoCommittedGoWorkFiles)
+	sparkwing.Step(w, "tidy", tidyAllModules)
+	sparkwing.Step(w, "version-freshness", checkVersionFreshness)
+	sparkwing.Step(w, "golangci-lint", lintAllModules)
+	sparkwing.Step(w, "test-race", testRaceAllModules)
+	sparkwing.Step(w, "govulncheck", govulncheckAllModules)
+	sparkwing.Step(w, "shellcheck", runShellcheck)
+	sparkwing.Step(w, "markdownlint", runMarkdownlint)
+	return nil, nil
+}
 
-	// 1. No `replace` directives in any committed go.mod. Replace is
-	// fine locally during iteration; it must NEVER reach main.
-	if err := checkNoReplaceDirectivesInCommittedGoMods(ctx); err != nil {
-		failures = append(failures, err.Error())
-	} else {
-		sparkwing.Info(ctx, "no-replace check: clean")
+// allModuleDirs returns the directories containing each tracked
+// go.mod under the repo, sorted for deterministic output.
+func allModuleDirs() ([]string, error) {
+	mods, err := findGoModFiles(sparkwing.WorkDir())
+	if err != nil {
+		return nil, err
 	}
-
-	// 1a. No committed go.work / go.work.sum. Workspaces are a
-	// local-only convenience; they can't be resolved by the Go module
-	// proxy and silently override the published versions for anyone
-	// who clones the repo. Same rule as `replace`: fine locally, never
-	// in main.
-	if err := checkNoCommittedGoWorkFiles(ctx); err != nil {
-		failures = append(failures, err.Error())
-	} else {
-		sparkwing.Info(ctx, "no-go.work check: clean")
+	dirs := make([]string, 0, len(mods))
+	for _, m := range mods {
+		dirs = append(dirs, filepath.Dir(m))
 	}
+	return dirs, nil
+}
 
-	// 1b. `go mod tidy` drift: running tidy should produce no diff. A
-	// non-tidy go.mod is a near-certain sign that a recent `go get`
-	// wasn't followed by tidy. We swallow tidy's own error (it can fail
-	// in workspaces with unreleased local sibling modules); the actual
-	// signal is `git diff --quiet` against go.mod/go.sum after tidy ran.
-	if _, err := sparkwing.Bash(ctx,
-		`go -C .sparkwing mod tidy 2>/dev/null || true; git diff --quiet -- .sparkwing/go.mod .sparkwing/go.sum`,
-	).Run(); err != nil {
-		failures = append(failures, "go mod tidy drift: run `go -C .sparkwing mod tidy` and commit the result")
-	} else {
-		sparkwing.Info(ctx, "go mod tidy: no drift")
+// tidyAllModules runs `go mod tidy` in every module and fails if
+// any produced a diff against HEAD. tidy itself can fail in
+// workspaces with unreleased local siblings; swallow it and rely
+// on the diff as the signal.
+func tidyAllModules(ctx context.Context) error {
+	dirs, err := allModuleDirs()
+	if err != nil {
+		return err
 	}
-
-	// 2. Version freshness: every sparkwing-ecosystem dep must be at
-	// the latest released tag (or a not-behind local replace).
-	if err := CheckVersionsFreshness(ctx, sparkwing.WorkDir()); err != nil {
-		failures = append(failures, err.Error())
-	} else {
-		sparkwing.Info(ctx, "version freshness: current")
+	var dirty []string
+	for _, dir := range dirs {
+		rel, _ := filepath.Rel(sparkwing.WorkDir(), dir)
+		if rel == "" {
+			rel = "."
+		}
+		_, _ = sparkwing.Bash(ctx, fmt.Sprintf(`go -C %q mod tidy 2>/dev/null || true`, rel)).Run()
+		if _, err := sparkwing.Bash(ctx,
+			fmt.Sprintf(`git diff --quiet -- %q %q`, filepath.Join(rel, "go.mod"), filepath.Join(rel, "go.sum")),
+		).Run(); err != nil {
+			dirty = append(dirty, rel)
+		}
 	}
-
-	// 3. Full golangci-lint sweep on .sparkwing/ (if a config is
-	// present there; falls back to a no-op message otherwise).
-	if _, err := sparkwing.Bash(ctx, "cd .sparkwing && golangci-lint run ./...").Run(); err != nil {
-		failures = append(failures, fmt.Sprintf("golangci-lint: %v", err))
-	} else {
-		sparkwing.Info(ctx, "golangci-lint: clean")
-	}
-
-	// 4. Test suite with the race detector.
-	if _, err := sparkwing.Bash(ctx, "go -C .sparkwing test -race ./...").Run(); err != nil {
-		failures = append(failures, fmt.Sprintf("go test -race: %v", err))
-	} else {
-		sparkwing.Info(ctx, "go test -race: passed")
-	}
-
-	// 5. Known-vulnerabilities scan.
-	//
-	// `go run` compiles govulncheck against the current toolchain so
-	// the scan reports against the actual stdlib version the project
-	// builds with. The standalone `govulncheck` binary on PATH is
-	// frozen to whatever Go version installed it, which produces stale
-	// false-positives after a system Go upgrade.
-	if _, err := sparkwing.Bash(ctx, "cd .sparkwing && go run golang.org/x/vuln/cmd/govulncheck@latest ./...").Run(); err != nil {
-		failures = append(failures, fmt.Sprintf("govulncheck: %v", err))
-	} else {
-		sparkwing.Info(ctx, "govulncheck: clean")
-	}
-
-	// 6. Shell-script gate. bin/check-shell.sh discovers every tracked
-	// .sh + bash-shebanged file and runs shellcheck on it. No-op when
-	// the repo has no shell scripts.
-	if _, err := sparkwing.Bash(ctx, "bash bin/check-shell.sh").Run(); err != nil {
-		failures = append(failures, fmt.Sprintf("shellcheck: %v", err))
-	} else {
-		sparkwing.Info(ctx, "shellcheck: clean")
-	}
-
-	// 7. Markdown lint. .markdownlint-cli2.yaml selects which files
-	// to check; CHANGELOG.md is exempt (the changelog-style gate
-	// owns that surface).
-	if _, err := sparkwing.Bash(ctx, "markdownlint-cli2").Run(); err != nil {
-		failures = append(failures, fmt.Sprintf("markdownlint: %v", err))
-	} else {
-		sparkwing.Info(ctx, "markdownlint: clean")
-	}
-
-	if len(failures) > 0 {
-		return fmt.Errorf("%d pre-push check(s) failed:\n  - %s", len(failures), strings.Join(failures, "\n  - "))
+	if len(dirty) > 0 {
+		return fmt.Errorf("`go mod tidy` produced a diff in %d module(s); run it locally and commit:\n    %s",
+			len(dirty), strings.Join(dirty, "\n    "))
 	}
 	return nil
+}
+
+func lintAllModules(ctx context.Context) error {
+	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run ./...")
+}
+
+func testRaceAllModules(ctx context.Context) error {
+	return forEachModuleDir(ctx, "go test -race", "go test -race ./...")
+}
+
+// govulncheckAllModules compiles govulncheck against the current
+// toolchain so the scan reports against the actual stdlib version
+// the project builds with. A standalone `govulncheck` on PATH is
+// frozen to the Go version that installed it and produces stale
+// false-positives after a system Go upgrade.
+func govulncheckAllModules(ctx context.Context) error {
+	return forEachModuleDir(ctx, "govulncheck", "go run golang.org/x/vuln/cmd/govulncheck@latest ./...")
+}
+
+// forEachModuleDir runs cmd in each module directory and aggregates
+// failures so the caller sees every offending module in one report
+// instead of just the first.
+func forEachModuleDir(ctx context.Context, label, cmd string) error {
+	dirs, err := allModuleDirs()
+	if err != nil {
+		return err
+	}
+	var failures []string
+	for _, dir := range dirs {
+		rel, _ := filepath.Rel(sparkwing.WorkDir(), dir)
+		if rel == "" {
+			rel = "."
+		}
+		if _, err := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && %s`, rel, cmd)).Run(); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", rel, err))
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("%s failed in %d module(s):\n  - %s",
+			label, len(failures), strings.Join(failures, "\n  - "))
+	}
+	return nil
+}
+
+func checkVersionFreshness(ctx context.Context) error {
+	return CheckVersionsFreshness(ctx, sparkwing.WorkDir())
+}
+
+func runShellcheck(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, "bash bin/check-shell.sh").Run()
+	return err
+}
+
+func runMarkdownlint(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, "markdownlint-cli2").Run()
+	return err
 }
 
 // checkNoReplaceDirectivesInCommittedGoMods refuses to let any
@@ -166,9 +187,7 @@ func checkNoReplaceDirectivesInCommittedGoMods(ctx context.Context) error {
 // checkNoCommittedGoWorkFiles refuses to let a workspace file ship.
 // `go.work` and `go.work.sum` are local-iteration scaffolding (they
 // point at relative paths on the developer's machine) and break
-// builds for anyone who clones the repo. The matching gitignore
-// patterns should prevent these from ever being staged, but the
-// check is belt-and-suspenders.
+// builds for anyone who clones the repo.
 func checkNoCommittedGoWorkFiles(ctx context.Context) error {
 	out, err := sparkwing.Bash(ctx,
 		`git ls-files | grep -E '(^|/)go\.work(\.sum)?$' || true`,
