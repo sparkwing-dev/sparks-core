@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/sparkwing-dev/sparks-core/gitops v0.24.0
 	github.com/sparkwing-dev/sparks-core/kube v0.24.0
-	github.com/sparkwing-dev/sparkwing v0.6.0
+	github.com/sparkwing-dev/sparkwing v0.6.3
 )
 
 require (

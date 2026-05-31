@@ -2,7 +2,7 @@ module github.com/sparkwing-dev/sparks-core/step
 
 go 1.26.0
 
-require github.com/sparkwing-dev/sparkwing v0.6.0
+require github.com/sparkwing-dev/sparkwing v0.6.3
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
