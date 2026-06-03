@@ -44,6 +44,11 @@
       "description": "Pre-commit checks: formatting, linting, trailing newlines"
     },
     {
+      "path": "probe",
+      "module": "github.com/sparkwing-dev/sparks-core/probe",
+      "description": "HTTP health probes for post-deploy verification; Check feeds sparkwing Job.Verify, with unhealthy-vs-indeterminate classification"
+    },
+    {
       "path": "pipelines",
       "module": "github.com/sparkwing-dev/sparks-core/pipelines",
       "description": "High-level pipeline primitives: DockerDeploy, StaticDeploy, NextJSBuild"
