@@ -15,6 +15,7 @@ sparks-core is a multi-module monorepo: each subdirectory has its own
 - [gitops/CHANGELOG.md](gitops/CHANGELOG.md)
 - [deploy/CHANGELOG.md](deploy/CHANGELOG.md)
 - [checks/CHANGELOG.md](checks/CHANGELOG.md)
+- [probe/CHANGELOG.md](probe/CHANGELOG.md)
 - [pipelines/CHANGELOG.md](pipelines/CHANGELOG.md)
 - [templates/CHANGELOG.md](templates/CHANGELOG.md)
 
