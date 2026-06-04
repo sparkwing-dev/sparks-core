@@ -24,6 +24,14 @@ multi-module repo conventions).
   the same cluster the deploy did rather than the current kubeconfig
   context.
 
+- `ResolveContext` centralizes kube context selection for every kubectl
+  call in the package and **fails closed**: explicit `Context` >
+  in-cluster service account > `SPARKWING_KUBE_CONTEXT` >
+  `kind-$SPARKWING_KIND_CLUSTER` > `SPARKWING_KUBE_ALLOW_CURRENT=1` >
+  error. No command silently falls through to the current kubeconfig
+  context (which may be the wrong cluster). `DeployKubectl` and the
+  rollout/apply helpers no longer use the ambient context implicitly.
+
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 

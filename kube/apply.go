@@ -18,8 +18,9 @@ type ApplyConfig struct {
 	Paths []string
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty uses the current context
-	// (or the in-cluster service account when running in a pod).
+	// Context is the kubectl --context. Empty resolves via ResolveContext
+	// (SPARKWING_KUBE_CONTEXT, kind cluster, in-cluster) and fails closed
+	// rather than silently using the current kubeconfig context.
 	Context string
 	// ServerSide applies with --server-side, the safer choice for large
 	// or CRD-heavy manifests.
@@ -40,13 +41,6 @@ func (c *ApplyConfig) defaults() {
 	}
 }
 
-func (c ApplyConfig) ctxArgs() []string {
-	if c.Context != "" {
-		return []string{"--context", c.Context}
-	}
-	return nil
-}
-
 // Apply runs `kubectl apply` for each configured path, then waits for
 // any listed deployments to finish rolling out. A plain-YAML deploy
 // path, parallel to DeployKindKustomize (kustomize) and DeployKubectl
@@ -57,23 +51,19 @@ func Apply(ctx context.Context, cfg ApplyConfig) error {
 		return fmt.Errorf("kube.Apply: at least one path is required")
 	}
 	return step.Run(ctx, "apply (kubectl)", func(ctx context.Context) error {
-		base := cfg.ctxArgs()
 		for _, p := range cfg.Paths {
-			args := append([]string{}, base...)
-			args = append(args, "apply", "-n", cfg.Namespace, "-f", p)
+			args := []string{"apply", "-n", cfg.Namespace, "-f", p}
 			if cfg.ServerSide {
 				args = append(args, "--server-side")
 			}
 			sparkwing.Info(ctx, "applying %s", p)
-			if err := step.Exec(ctx, "kubectl", args...); err != nil {
+			if err := kubectl(ctx, cfg.Context, args...); err != nil {
 				return err
 			}
 		}
 		for _, deploy := range cfg.Wait {
-			args := append([]string{}, base...)
-			args = append(args, "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout="+cfg.Timeout)
 			sparkwing.Info(ctx, "waiting for %s rollout", deploy)
-			if err := step.Exec(ctx, "kubectl", args...); err != nil {
+			if err := kubectl(ctx, cfg.Context, "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout="+cfg.Timeout); err != nil {
 				return err
 			}
 		}
@@ -93,7 +83,8 @@ type SetImageConfig struct {
 	Image string
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty uses the current context.
+	// Context is the kubectl --context. Empty resolves via ResolveContext
+	// and fails closed rather than using the current kubeconfig context.
 	Context string
 	// Timeout bounds the rollout-status wait. Defaults to "180s".
 	Timeout string
@@ -118,20 +109,12 @@ func SetImage(ctx context.Context, cfg SetImageConfig) error {
 	if cfg.Deployment == "" || cfg.Container == "" || cfg.Image == "" {
 		return fmt.Errorf("kube.SetImage: Deployment, Container, and Image are required")
 	}
-	var ctxArgs []string
-	if cfg.Context != "" {
-		ctxArgs = []string{"--context", cfg.Context}
-	}
 	return step.Run(ctx, "set image (kubectl)", func(ctx context.Context) error {
 		sparkwing.Info(ctx, "%s %s=%s", cfg.Deployment, cfg.Container, cfg.Image)
-		set := append([]string{}, ctxArgs...)
-		set = append(set, "set", "image", cfg.Deployment, cfg.Container+"="+cfg.Image, "-n", cfg.Namespace)
-		if err := step.Exec(ctx, "kubectl", set...); err != nil {
+		if err := kubectl(ctx, cfg.Context, "set", "image", cfg.Deployment, cfg.Container+"="+cfg.Image, "-n", cfg.Namespace); err != nil {
 			return err
 		}
-		status := append([]string{}, ctxArgs...)
-		status = append(status, "rollout", "status", cfg.Deployment, "-n", cfg.Namespace, "--timeout="+cfg.Timeout)
-		return step.Exec(ctx, "kubectl", status...)
+		return kubectl(ctx, cfg.Context, "rollout", "status", cfg.Deployment, "-n", cfg.Namespace, "--timeout="+cfg.Timeout)
 	})
 }
 
@@ -141,12 +124,11 @@ type RolloutUndoConfig struct {
 	Deployments []string
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty uses the current context.
-	//
-	// Set this to the same context the deploy used. A rollback that
-	// omits the context targets whatever kubeconfig context happens to
-	// be current -- which may be a different (e.g. production) cluster
-	// than the one just deployed to.
+	// Context is the kubectl --context, ideally the same one the deploy
+	// used. Empty resolves via ResolveContext (SPARKWING_KUBE_CONTEXT,
+	// kind cluster, in-cluster) and fails closed -- so a rollback never
+	// silently targets a different (e.g. production) cluster than the
+	// deploy did.
 	Context string
 	// Timeout bounds each rollout-status wait. Defaults to "180s".
 	Timeout string
@@ -167,19 +149,13 @@ func (c *RolloutUndoConfig) defaults() {
 // an OnFailure handler, or call it from the rollback dispatcher.
 func RolloutUndo(ctx context.Context, cfg RolloutUndoConfig) error {
 	cfg.defaults()
-	var ctxArgs []string
-	if cfg.Context != "" {
-		ctxArgs = []string{"--context", cfg.Context}
-	}
 	return step.Run(ctx, "rollback (kubectl rollout undo)", func(ctx context.Context) error {
 		for _, deploy := range cfg.Deployments {
 			sparkwing.Info(ctx, "rolling back %s", deploy)
-			undo := append(append([]string{}, ctxArgs...), "rollout", "undo", deploy, "-n", cfg.Namespace)
-			if err := step.Exec(ctx, "kubectl", undo...); err != nil {
+			if err := kubectl(ctx, cfg.Context, "rollout", "undo", deploy, "-n", cfg.Namespace); err != nil {
 				return err
 			}
-			status := append(append([]string{}, ctxArgs...), "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout="+cfg.Timeout)
-			if err := step.Exec(ctx, "kubectl", status...); err != nil {
+			if err := kubectl(ctx, cfg.Context, "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout="+cfg.Timeout); err != nil {
 				return err
 			}
 		}

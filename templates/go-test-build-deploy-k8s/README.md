@@ -47,4 +47,17 @@ blocks do the work; the scaffolded file is just the shape.
 - Rollback is `kubectl rollout undo`. Swap the `OnFailure` body for your
   own recovery if a plain rollout-undo isn't enough.
 
+## Kube context
+
+Every `kubectl` call resolves an explicit context and **fails closed** --
+it will not fall through to whatever context is currently active in your
+kubeconfig (which might be the wrong cluster). Configure the target once:
+
+- `SPARKWING_KUBE_CONTEXT=<context>` -- the cluster to deploy to, or
+- `SPARKWING_KIND_CLUSTER=<name>` -- resolves to `kind-<name>` for local
+  kind runs (and routes the build to `kind load`).
+
+In-cluster runners use the pod service account automatically. As a last
+resort, `SPARKWING_KUBE_ALLOW_CURRENT=1` opts into the current context.
+
 The runner needs `docker` and `kubectl` on PATH.

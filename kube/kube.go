@@ -66,7 +66,7 @@ func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 			return fmt.Errorf("patch kustomization.yaml: %w", err)
 		}
 		sparkwing.Info(ctx, "applying %s", cfg.KustomizeDir)
-		if err := step.Exec(ctx, "kubectl", "--context", kubeCtx, "apply", "-k", cfg.KustomizeDir); err != nil {
+		if err := kubectl(ctx, kubeCtx, "apply", "-k", cfg.KustomizeDir); err != nil {
 			return err
 		}
 		// Wait for each rolled deployment to report Ready. First-time
@@ -80,19 +80,21 @@ func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 			if !ok {
 				continue
 			}
-			out, _ := sparkwing.Exec(
-				ctx, "kubectl",
-				"--context", kubeCtx,
+			ca, err := contextArgs(kubeCtx)
+			if err != nil {
+				return err
+			}
+			out, _ := sparkwing.Exec(ctx, "kubectl", append(ca,
 				"get", deploy,
 				"-n", cfg.Namespace,
 				"--ignore-not-found",
 				"-o", "name",
-			).String()
+			)...).String()
 			if out == "" {
 				continue
 			}
 			sparkwing.Info(ctx, "waiting for %s rollout", deploy)
-			if err := step.Exec(ctx, "kubectl", "--context", kubeCtx, "rollout", "status",
+			if err := kubectl(ctx, kubeCtx, "rollout", "status",
 				deploy, "-n", cfg.Namespace, "--timeout=180s"); err != nil {
 				return err
 			}
@@ -194,7 +196,7 @@ func DeployKubectl(ctx context.Context, images []string, deployMap map[string]st
 				continue
 			}
 			sparkwing.Info(ctx, "restarting %s", deploy)
-			if err := step.Exec(ctx, "kubectl", "rollout", "restart", deploy, "-n", namespace); err != nil {
+			if err := kubectl(ctx, "", "rollout", "restart", deploy, "-n", namespace); err != nil {
 				return err
 			}
 		}
@@ -232,9 +234,9 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 
 		// In-cluster runners use the service account -- no kubeconfig
 		// contexts available, so skip --context there.
-		var kubectlCtx []string
+		kubeCtx := ""
 		if !IsRunningInK8s() {
-			kubectlCtx = []string{"--context", "kind-" + cfg.Cluster}
+			kubeCtx = "kind-" + cfg.Cluster
 		}
 
 		data, err := os.ReadFile(kustomizePath)
@@ -242,7 +244,7 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 			sparkwing.Info(ctx, "warning: %s not found - falling back to rollout restart", kustomizePath)
 			for _, img := range cfg.Images {
 				if deploy, ok := cfg.DeployMap[img]; ok {
-					if err := step.Exec(ctx, "kubectl", append(kubectlCtx, "rollout", "restart", deploy, "-n", cfg.Namespace)...); err != nil {
+					if err := kubectl(ctx, kubeCtx, "rollout", "restart", deploy, "-n", cfg.Namespace); err != nil {
 						return err
 					}
 				}
@@ -279,7 +281,7 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 
 		kustomizeDir := filepath.Dir(kustomizePath)
 		sparkwing.Info(ctx, "applying kustomization from %s", kustomizeDir)
-		if err := step.Exec(ctx, "kubectl", append(kubectlCtx, "apply", "-k", kustomizeDir)...); err != nil {
+		if err := kubectl(ctx, kubeCtx, "apply", "-k", kustomizeDir); err != nil {
 			return err
 		}
 		sparkwing.Info(ctx, "kustomization applied")
@@ -290,7 +292,7 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 				continue
 			}
 			sparkwing.Info(ctx, "waiting for %s rollout", deploy)
-			if err := step.Exec(ctx, "kubectl", append(kubectlCtx, "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout=180s")...); err != nil {
+			if err := kubectl(ctx, kubeCtx, "rollout", "status", deploy, "-n", cfg.Namespace, "--timeout=180s"); err != nil {
 				return err
 			}
 		}

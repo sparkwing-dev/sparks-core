@@ -40,6 +40,10 @@ type Config struct {
 	Deployments []string
 	// Namespace is the kubectl -n target for the local/kind path.
 	Namespace string
+	// Context is the kubectl --context for the local/kind path. Empty
+	// resolves via kube.ResolveContext (SPARKWING_KUBE_CONTEXT, kind
+	// cluster, in-cluster) and fails closed.
+	Context string
 	// GitopsRepo is the gitops repo SSH URL for the remote path.
 	GitopsRepo string
 	// GitopsCommit is the commit to revert on the remote path. Defaults
@@ -56,18 +60,15 @@ type Config struct {
 // the environment, mirroring deploy.Run's routing.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Local || os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
-		// Pin the kubectl context to the kind cluster so the rollback
-		// targets the same cluster the deploy did, not whatever context
-		// is current.
-		kubeContext := ""
-		if kc := os.Getenv("SPARKWING_KIND_CLUSTER"); kc != "" {
-			kubeContext = "kind-" + kc
-		}
 		sparkwing.Info(ctx, "rollback: local/kind -> kubectl rollout undo (ns=%s)", cfg.Namespace)
+		// Context resolves via kube.ResolveContext (explicit Context,
+		// SPARKWING_KUBE_CONTEXT, kind-<SPARKWING_KIND_CLUSTER>, or
+		// in-cluster) and fails closed -- so the rollback targets the same
+		// cluster the deploy did, never the current kubeconfig context.
 		return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
 			Deployments: cfg.Deployments,
 			Namespace:   cfg.Namespace,
-			Context:     kubeContext,
+			Context:     cfg.Context,
 		})
 	}
 
