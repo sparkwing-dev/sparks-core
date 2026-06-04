@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `Revert` rolls a gitops deployment back by reverting a commit (the
+  last deploy by default) and pushing, so ArgoCD syncs the cluster back
+  to the prior image tags. Clones full history and skips controller
+  authorization, since a rollback is a recovery action.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed

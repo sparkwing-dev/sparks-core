@@ -39,6 +39,21 @@
       "description": "Deploy orchestrator: routes to gitops+ArgoCD (cluster) or kubectl (local)"
     },
     {
+      "path": "rollback",
+      "module": "github.com/sparkwing-dev/sparks-core/rollback",
+      "description": "Rollback dispatcher: kubectl rollout undo (local/kind) or gitops revert + ArgoCD sync (remote)"
+    },
+    {
+      "path": "migrate",
+      "module": "github.com/sparkwing-dev/sparks-core/migrate",
+      "description": "Database schema migrations via the golang-migrate CLI (up, down, force)"
+    },
+    {
+      "path": "services",
+      "module": "github.com/sparkwing-dev/sparks-core/services",
+      "description": "Ephemeral Docker service containers (Postgres, ...) for integration tests"
+    },
+    {
       "path": "checks",
       "module": "github.com/sparkwing-dev/sparks-core/checks",
       "description": "Pre-commit checks: formatting, linting, trailing newlines"

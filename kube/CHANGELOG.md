@@ -9,6 +9,14 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `Apply` runs a raw `kubectl apply` against one or more manifest paths
+  (optionally server-side) and waits on named deployments -- a
+  plain-YAML deploy path alongside the kustomize and rollout-restart
+  helpers.
+- `RolloutUndo` rolls deployments back to their previous ReplicaSet via
+  `kubectl rollout undo` and waits for the rollback to complete.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed
