@@ -21,6 +21,11 @@ multi-module repo conventions).
 - `Manifest.whenToUse`: a catalog field answering "which template do I
   pick?", populated on every template.
 
+Both new templates use the sparkwing v0.8.0 `Job.Verify` postcondition
+for the post-deploy health check and a failure-aware `OnFailure` that
+branches on `Failure.Stage`, so an unhealthy new revision (verify-stage
+failure) triggers the rollback.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed

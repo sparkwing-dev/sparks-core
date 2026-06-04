@@ -32,6 +32,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	mig := sparkwing.Job(plan, "migrate", p.migrateProd).Needs(build)
 	sparkwing.Job(plan, "deploy", p.deployApp).
 		Needs(mig).
+		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check).
 		OnFailure("rollback", p.rollBack)
 	return nil
 }
@@ -71,15 +72,16 @@ func (p *{{pascal .pipeline_name}}) migrateProd(ctx context.Context) error {
 	return migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn})
 }
 
-// deployApp pushes image tags through gitops + ArgoCD, then health-checks
-// the new revision. A failed deploy or probe fails this node, firing the
-// OnFailure rollback above.
+// deployApp pushes image tags through gitops + ArgoCD. Returning means
+// the sync succeeded; the node's Verify probe then decides whether the
+// new revision is actually healthy, and a verify failure routes to
+// rollBack below.
 func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 	tags, err := sparkwingDocker.ComputeTags(ctx)
 	if err != nil {
 		return err
 	}
-	if err := deploy.Run(ctx, deploy.Config{
+	return deploy.Run(ctx, deploy.Config{
 		GitopsRepo: {{quote .gitops_repo}},
 		GitopsPath: {{quote .gitops_path}},
 		ECR:        {{quote .ecr}},
@@ -87,13 +89,14 @@ func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 		Tag:        tags.ProdTag(),
 		AppName:    {{quote .app_name}},
 		Namespace:  {{quote .namespace}},
-	}); err != nil {
-		return err
-	}
-	return probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+	})
 }
 
-func (p *{{pascal .pipeline_name}}) rollBack(ctx context.Context) error {
+// rollBack reverts the deploy. Failure carries the stage: a verify-stage
+// failure means the new revision is unhealthy, so we roll back; an
+// action-stage failure (the deploy itself errored) rolls back too.
+func (p *{{pascal .pipeline_name}}) rollBack(ctx context.Context, f sparkwing.Failure) error {
+	sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
 	return rollback.Run(ctx, rollback.Config{
 		GitopsRepo:  {{quote .gitops_repo}},
 		AppName:     {{quote .app_name}},

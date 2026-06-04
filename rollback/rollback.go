@@ -56,8 +56,19 @@ type Config struct {
 // the environment, mirroring deploy.Run's routing.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Local || os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
+		// Pin the kubectl context to the kind cluster so the rollback
+		// targets the same cluster the deploy did, not whatever context
+		// is current.
+		kubeContext := ""
+		if kc := os.Getenv("SPARKWING_KIND_CLUSTER"); kc != "" {
+			kubeContext = "kind-" + kc
+		}
 		sparkwing.Info(ctx, "rollback: local/kind -> kubectl rollout undo (ns=%s)", cfg.Namespace)
-		return kube.RolloutUndo(ctx, cfg.Deployments, cfg.Namespace)
+		return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
+			Deployments: cfg.Deployments,
+			Namespace:   cfg.Namespace,
+			Context:     kubeContext,
+		})
 	}
 
 	sparkwing.Info(ctx, "rollback: remote -> gitops revert + argocd (app=%s)", cfg.AppName)

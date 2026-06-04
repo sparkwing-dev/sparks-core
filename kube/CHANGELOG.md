@@ -14,8 +14,18 @@ multi-module repo conventions).
   (optionally server-side) and waits on named deployments -- a
   plain-YAML deploy path alongside the kustomize and rollout-restart
   helpers.
+- `SetImage` points a deployment's container at a new image via
+  `kubectl set image` and waits for the rollout, so a CD pipeline can
+  roll the freshly built content-addressed tag (and `RolloutUndo` can
+  later step back to the prior tag).
 - `RolloutUndo` rolls deployments back to their previous ReplicaSet via
-  `kubectl rollout undo` and waits for the rollback to complete.
+  `kubectl rollout undo` and waits for the rollback to complete. Takes a
+  `RolloutUndoConfig` with an explicit `Context`, so a rollback targets
+  the same cluster the deploy did rather than the current kubeconfig
+  context.
+
+### Changed
+- **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 
 ## [v0.24.0] - 2026-05-21
 

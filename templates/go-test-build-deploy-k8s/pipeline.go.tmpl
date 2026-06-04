@@ -2,12 +2,13 @@
 // go-test-build-deploy-k8s`. Edit freely -- nothing here re-runs.
 //
 // A raw-composition DAG: each node calls a sparks-core block directly,
-// so the orchestration (what runs when, what rolls back) is visible and
-// editable. The blocks do the heavy lifting; this file is the shape.
+// so the orchestration (what runs when, what verifies, what rolls back)
+// is visible and editable. The blocks do the heavy lifting.
 package jobs
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -18,9 +19,10 @@ import (
 	"github.com/sparkwing-dev/sparks-core/probe"
 )
 
-// {{pascal .pipeline_name}} tests, builds {{.image}} to ECR, and
-// applies the repo's k8s manifests, with a verified, self-rolling-back
-// deploy.
+// {{pascal .pipeline_name}} tests, builds {{.image}}, and rolls it out to
+// Kubernetes. After the rollout a health probe verifies the new revision;
+// if the probe fails the node fails at the verify stage and OnFailure
+// rolls the deployment back to the previous revision.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
@@ -33,8 +35,13 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 {{end}}
 	sparkwing.Job(plan, "deploy", p.deploy).
 		Needs(build).
-		OnFailure("rollback", func(ctx context.Context) error {
-			return kube.RolloutUndo(ctx, []string{"deploy/{{.app_name}}"}, {{quote .namespace}})
+		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check).
+		OnFailure("rollback", func(ctx context.Context, f sparkwing.Failure) error {
+			sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
+			return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
+				Deployments: []string{"deploy/{{.app_name}}"},
+				Namespace:   {{quote .namespace}},
+			})
 		})
 	return nil
 }
@@ -47,23 +54,55 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	return docker.BuildAndPush(ctx, docker.BuildConfig{
 		Image:      {{quote .image}},
 		Dockerfile: "Dockerfile",
-		Registries: []string{ {{quote .ecr}} },
+		Registries: p.registries(),
 		Tags:       tags,
 	})
 }
 
-// deploy applies the manifests, then health-checks the new revision. A
-// failed apply or a failed probe fails this node, which fires the
-// OnFailure rollback above.
+// deploy applies the manifests (idempotent), then rolls the freshly built
+// image. Returning from deploy means the rollout succeeded; the node's
+// Verify probe then decides whether the new revision is actually healthy.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	if err := kube.Apply(ctx, kube.ApplyConfig{
 		Paths:     []string{ {{quote .k8s_path}} },
 		Namespace: {{quote .namespace}},
-		Wait:      []string{"deploy/{{.app_name}}"},
 	}); err != nil {
 		return err
 	}
-	return probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return kube.SetImage(ctx, kube.SetImageConfig{
+		Deployment: "deploy/{{.app_name}}",
+		Container:  {{quote .app_name}},
+		Image:      p.imageRef(tags),
+		Namespace:  {{quote .namespace}},
+	})
+}
+
+// registries is the push target. SPARKWING_REGISTRY (set by local/kind
+// runners) overrides the ECR default so the same pipeline can target a
+// local registry without code changes.
+func (p *{{pascal .pipeline_name}}) registries() []string {
+	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
+		return []string{reg}
+	}
+	return []string{ {{quote .ecr}} }
+}
+
+// imageRef is the reference rolled out -- it must match what build pushed.
+// Under a kind cluster the image was loaded into the node by name (no
+// registry), so the ref is the bare name+deploy-tag. A local registry
+// (SPARKWING_REGISTRY) uses the deploy tag; ECR uses the prod tag.
+func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) string {
+	if os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
+		return "{{.image}}:" + tags.DeployTag()
+	}
+	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
+		return reg + "/{{.image}}:" + tags.DeployTag()
+	}
+	return "{{.ecr}}/{{.image}}:" + tags.ProdTag()
 }
 
 func init() {

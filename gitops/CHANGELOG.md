@@ -15,6 +15,9 @@ multi-module repo conventions).
   to the prior image tags. Clones full history and skips controller
   authorization, since a rollback is a recovery action.
 
+### Changed
+- **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed
