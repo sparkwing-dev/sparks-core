@@ -1,0 +1,63 @@
+name: go-test-migrate-deploy-argo
+description: |
+  Run integration tests against an ephemeral Postgres, build a Docker
+  image to ECR, run database migrations against the target database,
+  then deploy via gitops + ArgoCD. A post-deploy HTTP probe verifies the
+  new revision; an unhealthy result triggers an automatic gitops revert
+  (rollback). A multi-node DAG (integration-test -> build -> migrate ->
+  deploy) composed from sparks-core blocks.
+whenToUse: |
+  Reach for this when a deploy must run schema migrations and you ship
+  through a gitops repo + ArgoCD -- the full stateful-service path:
+  integration tests on a throwaway database, migrations on the real one,
+  then a verified, self-rolling-back gitops deploy. If you have no
+  migrations, use docker-deploy-ecr-eks. If you apply k8s YAML directly
+  with kubectl, use go-test-build-deploy-k8s.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. myapp)
+  - name: ecr
+    type: string
+    required: true
+    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+  - name: gitops-repo
+    type: string
+    required: true
+    description: SSH URL of the gitops repo (e.g. git@github.com:org/gitops.git)
+  - name: gitops-path
+    type: string
+    required: true
+    description: Path within the gitops repo (e.g. myorg/myapp)
+  - name: app-name
+    type: string
+    required: true
+    description: ArgoCD application name; also the deploy/<app-name> rolled back on failure
+  - name: namespace
+    type: string
+    required: true
+    description: Kubernetes namespace
+  - name: health-url
+    type: string
+    required: true
+    description: URL the post-deploy probe checks for a 2xx (e.g. https://myapp.example.com/healthz)
+  - name: migrations-dir
+    type: string
+    description: golang-migrate migrations directory.
+    default: db/migrations
+  - name: db-secret
+    type: string
+    description: Name of the sparkwing secret holding the target database DSN.
+    default: DATABASE_URL
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: test-migrate-deploy
+  - name: test-cmd
+    type: string
+    description: Integration test command; runs with DATABASE_URL set to the ephemeral Postgres.
+    default: go test -tags=integration ./...
+applicability:
+  cloud: [aws]
+  category: docker-deploy

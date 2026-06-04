@@ -4,6 +4,9 @@ description: |
   smallest useful template -- a good first read for people learning
   the SDK shape since it has zero external concerns (no clouds, no
   registries, no gitops).
+whenToUse: |
+  CI hygiene only (gofmt / vet / test), no build or deploy. Use as a PR
+  gate, or as the first template to read when learning the SDK shape.
 parameters:
   - name: go-version
     type: string

@@ -3,6 +3,9 @@ description: |
   Build a Docker image, push to Google Artifact Registry, and deploy
   via gitops to GKE. GCP mirror of docker-deploy-ecr-eks. Same shape,
   GCP backends.
+whenToUse: |
+  Containerized app to GAR + gitops/GKE on GCP. The GCP twin of
+  docker-deploy-ecr-eks. Use for stateless services on GCP.
 parameters:
   - name: image
     type: string

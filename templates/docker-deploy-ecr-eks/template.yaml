@@ -5,6 +5,11 @@ description: |
   build-test-deploy pattern: tests run before build, image gets
   multi-tag (sha + branch + prod), gitops bumps kustomize, ArgoCD
   syncs.
+whenToUse: |
+  Containerized app to ECR + gitops/EKS on AWS, no database migrations.
+  Use for a stateless service deploy. If the deploy needs migrations and
+  integration tests, use go-test-migrate-deploy-argo. If you apply k8s
+  YAML directly with kubectl (no gitops), use go-test-build-deploy-k8s.
 parameters:
   - name: image
     type: string

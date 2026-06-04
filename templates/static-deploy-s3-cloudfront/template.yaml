@@ -5,6 +5,11 @@ description: |
   webapp / mysite pattern: Next static export in a
   Docker build container, S3 sync with `--delete`, CloudFront
   invalidation on the resulting deploy.
+whenToUse: |
+  Static / Next.js export to S3 + CloudFront on AWS. Use for marketing
+  sites and SPAs that build to static files. For the GCP equivalent use
+  static-deploy-gcs-cloudcdn; for a containerized service use a
+  docker-deploy template.
 parameters:
   - name: bucket
     type: string

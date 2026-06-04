@@ -9,6 +9,18 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `go-test-build-deploy-k8s` template: a raw-composition test -> build ->
+  deploy DAG that builds to ECR and applies the repo's k8s manifests
+  with kubectl, with a post-deploy probe and automatic rollout-undo on
+  failure.
+- `go-test-migrate-deploy-argo` template: a raw-composition
+  integration-test -> build -> migrate -> deploy DAG (ephemeral Postgres
+  integration tests, golang-migrate, gitops + ArgoCD) with a post-deploy
+  probe and automatic gitops revert on failure.
+- `Manifest.whenToUse`: a catalog field answering "which template do I
+  pick?", populated on every template.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed

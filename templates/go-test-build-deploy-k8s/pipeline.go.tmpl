@@ -1,0 +1,73 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// go-test-build-deploy-k8s`. Edit freely -- nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly,
+// so the orchestration (what runs when, what rolls back) is visible and
+// editable. The blocks do the heavy lifting; this file is the shape.
+package jobs
+
+import (
+	"context"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/kube"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} tests, builds {{.image}} to ECR, and
+// applies the repo's k8s manifests, with a verified, self-rolling-back
+// deploy.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Needs(build).
+		OnFailure("rollback", func(ctx context.Context) error {
+			return kube.RolloutUndo(ctx, []string{"deploy/{{.app_name}}"}, {{quote .namespace}})
+		})
+	return nil
+}
+
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return docker.BuildAndPush(ctx, docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Registries: []string{ {{quote .ecr}} },
+		Tags:       tags,
+	})
+}
+
+// deploy applies the manifests, then health-checks the new revision. A
+// failed apply or a failed probe fails this node, which fires the
+// OnFailure rollback above.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	if err := kube.Apply(ctx, kube.ApplyConfig{
+		Paths:     []string{ {{quote .k8s_path}} },
+		Namespace: {{quote .namespace}},
+		Wait:      []string{"deploy/{{.app_name}}"},
+	}); err != nil {
+		return err
+	}
+	return probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

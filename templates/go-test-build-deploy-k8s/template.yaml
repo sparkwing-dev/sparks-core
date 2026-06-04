@@ -1,0 +1,50 @@
+name: go-test-build-deploy-k8s
+description: |
+  Test, build a Docker image to ECR, and deploy to Kubernetes by
+  applying the repo's own manifests with kubectl. A post-deploy HTTP
+  probe verifies the new revision; if it comes back unhealthy the
+  deployment is automatically rolled back via kubectl rollout undo.
+  A multi-node DAG (test -> build -> deploy) composed from sparks-core
+  blocks -- edit any node freely.
+whenToUse: |
+  Reach for this when your repo owns its k8s YAML and you apply it
+  directly with kubectl (no gitops/ArgoCD, no kustomize indirection),
+  and you want a deploy that self-rolls-back on a failed health check.
+  If you deploy through a gitops repo + ArgoCD, use
+  go-test-migrate-deploy-argo (or docker-deploy-ecr-eks) instead.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. myapp)
+  - name: ecr
+    type: string
+    required: true
+    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+  - name: namespace
+    type: string
+    required: true
+    description: Kubernetes namespace
+  - name: health-url
+    type: string
+    required: true
+    description: URL the post-deploy probe checks for a 2xx (e.g. https://myapp.example.com/healthz)
+  - name: app-name
+    type: string
+    required: true
+    description: Deployment name; the pipeline waits on and rolls back deploy/<app-name>
+  - name: k8s-path
+    type: string
+    description: Path to the manifests applied with kubectl apply -f.
+    default: k8s
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: build-test-deploy
+  - name: test-cmd
+    type: string
+    description: Pre-build test command. Empty disables the test node.
+    default: go test ./...
+applicability:
+  cloud: [aws]
+  category: docker-deploy

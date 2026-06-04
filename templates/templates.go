@@ -28,7 +28,7 @@ import (
 // template directory and its files. Consumers that just want the
 // raw bytes (for rendering or diffing) reach for FS directly.
 //
-//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:next-build-and-push all:lint-test-go
+//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:next-build-and-push all:lint-test-go all:go-test-build-deploy-k8s all:go-test-migrate-deploy-argo
 var FS embed.FS
 
 // templateNames is the canonical list of templates in this registry.
@@ -40,6 +40,8 @@ var templateNames = []string{
 	"static-deploy-gcs-cloudcdn",
 	"docker-deploy-ecr-eks",
 	"docker-deploy-gar-gke",
+	"go-test-build-deploy-k8s",
+	"go-test-migrate-deploy-argo",
 	"next-build-and-push",
 	"lint-test-go",
 }
@@ -69,8 +71,13 @@ type Applicability struct {
 // the only required fields; everything else is opt-in metadata that
 // templates use to communicate constraints.
 type Manifest struct {
-	Name          string        `yaml:"name" json:"name"`
-	Description   string        `yaml:"description,omitempty" json:"description,omitempty"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	// WhenToUse is the catalog signal: a one-or-two-line answer to
+	// "which template do I pick?", written for an agent choosing among
+	// starters. Distinct from Description (what it does) -- this is when
+	// to reach for it versus a sibling.
+	WhenToUse     string        `yaml:"whenToUse,omitempty" json:"whenToUse,omitempty"`
 	Parameters    []Parameter   `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	Applicability Applicability `yaml:"applicability,omitempty" json:"applicability,omitempty"`
 }

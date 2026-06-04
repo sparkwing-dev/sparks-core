@@ -5,6 +5,10 @@ description: |
   static-deploy-s3-cloudfront -- same shape, GCP backends. Useful for
   teams that want to ship the marketing-site shape on GCP without
   inventing the pattern from scratch.
+whenToUse: |
+  Static / Next.js export to GCS + Cloud CDN on GCP. The GCP twin of
+  static-deploy-s3-cloudfront. Use for static sites on GCP; for AWS use
+  the S3/CloudFront one.
 parameters:
   - name: bucket
     type: string

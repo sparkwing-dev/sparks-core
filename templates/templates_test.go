@@ -38,6 +38,40 @@ func TestList_AllTemplatesLoadable(t *testing.T) {
 	}
 }
 
+// TestList_AllHaveWhenToUse enforces the catalog contract: every
+// template answers "which one do I pick?" not just "what does it do?".
+func TestList_AllHaveWhenToUse(t *testing.T) {
+	all, err := List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, tmpl := range all {
+		if strings.TrimSpace(tmpl.Manifest.WhenToUse) == "" {
+			t.Errorf("%s: empty whenToUse (catalog needs a pick-me signal)", tmpl.Manifest.Name)
+		}
+	}
+}
+
+// TestRender_GoTestBuildDeployK8s_TestCmdEmpty exercises the conditional
+// branch where test-cmd="" elides the test node; the result must still
+// be valid Go with no `test` node wired.
+func TestRender_GoTestBuildDeployK8s_TestCmdEmpty(t *testing.T) {
+	out, err := Render("go-test-build-deploy-k8s", map[string]string{
+		"image":      "x",
+		"ecr":        "1234.dkr.ecr.us-west-2.amazonaws.com",
+		"namespace":  "x",
+		"health-url": "https://x/healthz",
+		"app-name":   "x",
+		"test-cmd":   "",
+	})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out, `"test"`) {
+		t.Errorf("expected no `test` node when test-cmd empty, got:\n%s", out)
+	}
+}
+
 func TestGet_UnknownReturnsErrNotExist(t *testing.T) {
 	_, err := Get("does-not-exist")
 	if err == nil {
@@ -190,6 +224,22 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 			"gitops-path": "apps/test",
 			"app-name":    "test-app",
 			"namespace":   "test",
+		}},
+		{"go-test-build-deploy-k8s", map[string]string{
+			"image":      "test-app",
+			"ecr":        "1234.dkr.ecr.us-west-2.amazonaws.com",
+			"namespace":  "test",
+			"health-url": "https://test-app.example.com/healthz",
+			"app-name":   "test-app",
+		}},
+		{"go-test-migrate-deploy-argo", map[string]string{
+			"image":       "test-app",
+			"ecr":         "1234.dkr.ecr.us-west-2.amazonaws.com",
+			"gitops-repo": "git@github.com:org/gitops.git",
+			"gitops-path": "apps/test",
+			"app-name":    "test-app",
+			"namespace":   "test",
+			"health-url":  "https://test-app.example.com/healthz",
 		}},
 		{"next-build-and-push", map[string]string{
 			"artifact-bucket": "test-artifacts",

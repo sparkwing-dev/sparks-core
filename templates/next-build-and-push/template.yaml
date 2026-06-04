@@ -4,6 +4,10 @@ description: |
   (out.tar.gz) to a target store. No deploy step. Useful when the
   deploy is gated (manual approval, separate environment promotion)
   and you want CI to produce the artifact ahead of time.
+whenToUse: |
+  Build-only: produce a Next.js artifact tarball without deploying. Use
+  when the deploy is gated (manual approval) or promoted separately and
+  CI should just produce the artifact.
 parameters:
   - name: artifact-bucket
     type: string

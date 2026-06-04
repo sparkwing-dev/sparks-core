@@ -1,0 +1,109 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// go-test-migrate-deploy-argo`. Edit freely -- nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly,
+// so the orchestration (what runs when, what rolls back) is visible and
+// editable. The blocks do the heavy lifting; this file is the shape.
+package jobs
+
+import (
+	"context"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+
+	"github.com/sparkwing-dev/sparks-core/deploy"
+	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/migrate"
+	"github.com/sparkwing-dev/sparks-core/probe"
+	"github.com/sparkwing-dev/sparks-core/rollback"
+	"github.com/sparkwing-dev/sparks-core/services"
+)
+
+// {{pascal .pipeline_name}} integration-tests {{.image}} against an
+// ephemeral Postgres, builds to ECR, migrates the target database, and
+// deploys via gitops + ArgoCD with a verified, self-rolling-back deploy.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	test := sparkwing.Job(plan, "integration-test", p.integrationTest)
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+	mig := sparkwing.Job(plan, "migrate", p.migrateProd).Needs(build)
+	sparkwing.Job(plan, "deploy", p.deployApp).
+		Needs(mig).
+		OnFailure("rollback", p.rollBack)
+	return nil
+}
+
+// integrationTest stands up a throwaway Postgres, migrates it, and runs
+// the test suite against it -- so tests exercise the real schema.
+func (p *{{pascal .pipeline_name}}) integrationTest(ctx context.Context) error {
+	return services.WithPostgres(ctx, services.Postgres{}, func(ctx context.Context, dsn string) error {
+		if err := migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn}); err != nil {
+			return err
+		}
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Env("DATABASE_URL", dsn).Run()
+		return err
+	})
+}
+
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return docker.BuildAndPush(ctx, docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Registries: []string{ {{quote .ecr}} },
+		Tags:       tags,
+	})
+}
+
+// migrateProd runs migrations against the target database. The DSN comes
+// from a sparkwing secret so it never lands in the pipeline source.
+func (p *{{pascal .pipeline_name}}) migrateProd(ctx context.Context) error {
+	dsn, err := sparkwing.Secret(ctx, {{quote .db_secret}})
+	if err != nil {
+		return err
+	}
+	return migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn})
+}
+
+// deployApp pushes image tags through gitops + ArgoCD, then health-checks
+// the new revision. A failed deploy or probe fails this node, firing the
+// OnFailure rollback above.
+func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	if err := deploy.Run(ctx, deploy.Config{
+		GitopsRepo: {{quote .gitops_repo}},
+		GitopsPath: {{quote .gitops_path}},
+		ECR:        {{quote .ecr}},
+		Images:     []string{ {{quote .image}} },
+		Tag:        tags.ProdTag(),
+		AppName:    {{quote .app_name}},
+		Namespace:  {{quote .namespace}},
+	}); err != nil {
+		return err
+	}
+	return probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+func (p *{{pascal .pipeline_name}}) rollBack(ctx context.Context) error {
+	return rollback.Run(ctx, rollback.Config{
+		GitopsRepo:  {{quote .gitops_repo}},
+		AppName:     {{quote .app_name}},
+		Namespace:   {{quote .namespace}},
+		Deployments: []string{"deploy/{{.app_name}}"},
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}
