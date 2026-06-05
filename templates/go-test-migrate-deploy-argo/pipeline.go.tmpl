@@ -92,10 +92,15 @@ func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 	})
 }
 
-// rollBack reverts the deploy. Failure carries the stage: a verify-stage
-// failure means the new revision is unhealthy, so we roll back; an
-// action-stage failure (the deploy itself errored) rolls back too.
+// rollBack reverts the deploy on a definitive failure. If the verify
+// probe could not even determine health (unreachable, timeout, auth --
+// probe.Indeterminate), that's not evidence the new revision is bad, so
+// it surfaces the error instead of reverting a possibly-healthy deploy.
 func (p *{{pascal .pipeline_name}}) rollBack(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
 	sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
 	return rollback.Run(ctx, rollback.Config{
 		GitopsRepo:  {{quote .gitops_repo}},

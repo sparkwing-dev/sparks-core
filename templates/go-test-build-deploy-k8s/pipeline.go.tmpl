@@ -1,5 +1,5 @@
-// Code scaffolded by `sparkwing pipeline new --template
-// go-test-build-deploy-k8s`. Edit freely -- nothing here re-runs.
+// Scaffolded from the go-test-build-deploy-k8s template. Edit freely --
+// nothing here re-runs.
 //
 // A raw-composition DAG: each node calls a sparks-core block directly,
 // so the orchestration (what runs when, what verifies, what rolls back)
@@ -8,6 +8,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -21,8 +22,8 @@ import (
 
 // {{pascal .pipeline_name}} tests, builds {{.image}}, and rolls it out to
 // Kubernetes. After the rollout a health probe verifies the new revision;
-// if the probe fails the node fails at the verify stage and OnFailure
-// rolls the deployment back to the previous revision.
+// a definitively-unhealthy result rolls the deployment back to the
+// previous revision.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
@@ -36,14 +37,26 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	sparkwing.Job(plan, "deploy", p.deploy).
 		Needs(build).
 		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check).
-		OnFailure("rollback", func(ctx context.Context, f sparkwing.Failure) error {
-			sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
-			return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
-				Deployments: []string{"deploy/{{.app_name}}"},
-				Namespace:   {{quote .namespace}},
-			})
-		})
+		OnFailure("rollback", p.rollback)
 	return nil
+}
+
+// rollback runs when deploy fails. It rolls back only on a definitive
+// failure. If the verify probe could not even *determine* health
+// (unreachable, timeout, auth -- probe.Indeterminate), that's not
+// evidence the new revision is bad, so rolling back would revert a
+// possibly-healthy deploy because the check itself couldn't run. In that
+// case it surfaces the error instead.
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
+	return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
+		Deployments: []string{"deploy/{{.app_name}}"},
+		Namespace:   {{quote .namespace}},
+	})
 }
 
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
@@ -51,10 +64,14 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	push, _, err := p.resolveImage(tags)
+	if err != nil {
+		return err
+	}
 	return docker.BuildAndPush(ctx, docker.BuildConfig{
 		Image:      {{quote .image}},
 		Dockerfile: "Dockerfile",
-		Registries: p.registries(),
+		Registries: push,
 		Tags:       tags,
 	})
 }
@@ -73,36 +90,35 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	_, ref, err := p.resolveImage(tags)
+	if err != nil {
+		return err
+	}
 	return kube.SetImage(ctx, kube.SetImageConfig{
 		Deployment: "deploy/{{.app_name}}",
 		Container:  {{quote .app_name}},
-		Image:      p.imageRef(tags),
+		Image:      ref,
 		Namespace:  {{quote .namespace}},
 	})
 }
 
-// registries is the push target. SPARKWING_REGISTRY (set by local/kind
-// runners) overrides the ECR default so the same pipeline can target a
-// local registry without code changes.
-func (p *{{pascal .pipeline_name}}) registries() []string {
-	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
-		return []string{reg}
-	}
-	return []string{ {{quote .ecr}} }
-}
-
-// imageRef is the reference rolled out -- it must match what build pushed.
-// Under a kind cluster the image was loaded into the node by name (no
-// registry), so the ref is the bare name+deploy-tag. A local registry
-// (SPARKWING_REGISTRY) uses the deploy tag; ECR uses the prod tag.
-func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) string {
+// resolveImage picks the push registries and the image reference to roll
+// out, keeping the two consistent. Order: a kind cluster (load by name,
+// no push) -> SPARKWING_REGISTRY -> the ecr param. It errors when none
+// resolve rather than pushing an unqualified name (which would target
+// Docker Hub) or rolling out a malformed "/name:tag".
+func (p *{{pascal .pipeline_name}}) resolveImage(tags sparkwingDocker.ImageTag) (push []string, ref string, err error) {
+	image := {{quote .image}}
 	if os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
-		return "{{.image}}:" + tags.DeployTag()
+		return nil, image + ":" + tags.DeployTag(), nil
 	}
 	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
-		return reg + "/{{.image}}:" + tags.DeployTag()
+		return []string{reg}, reg + "/" + image + ":" + tags.DeployTag(), nil
 	}
-	return "{{.ecr}}/{{.image}}:" + tags.ProdTag()
+	if ecr := {{quote .ecr}}; ecr != "" {
+		return []string{ecr}, ecr + "/" + image + ":" + tags.ProdTag(), nil
+	}
+	return nil, "", fmt.Errorf("no image registry resolved for %s: set SPARKWING_KIND_CLUSTER, SPARKWING_REGISTRY, or the ecr param", image)
 }
 
 func init() {

@@ -142,30 +142,42 @@ render to parseable Go and carry a non-empty README and `whenToUse`.
 
 ## Rendering a template
 
-The normal path is `sparkwing pipeline new --template <name> --param
-k=v`. To render by hand (or from a tool), call `templates.Render(name,
-map[string]string{...})`. Two non-obvious rules:
+Render by calling `templates.Render(name, map[string]string{...})` -- it
+returns the pipeline Go source, which you write to
+`.sparkwing/jobs/<name>.go`. (The `sparkwing` CLI's `pipeline new
+--template` flag currently only knows its built-in stubs `minimal` and
+`build-test-deploy`; it does **not** yet reach this registry. Until that
+wiring lands, render programmatically or copy the `pipeline.go.tmpl` and
+substitute the params by hand -- do not tell users to run
+`sparkwing pipeline new --template <registry-name>`.)
 
-- **Param names are hyphenated in the manifest and CLI (`health-url`) but
+Two non-obvious rules:
+
+- **Param names are hyphenated in the manifest (`health-url`) but
   underscored inside the body (`{{.health_url}}`).** The renderer
-  translates; you pass them hyphenated.
-- **Passing a param as explicit-empty (`--param test-cmd=`) is honored as
-  "no value" and elides any `{{if .test_cmd}}` step** -- it does NOT fall
-  back to the manifest default. Omit the flag to get the default.
+  translates; you pass them hyphenated to `Render`.
+- **Passing a param as explicit-empty (`test-cmd=""`) is honored as "no
+  value" and elides any `{{if .test_cmd}}` step** -- it does NOT fall
+  back to the manifest default. Omit the key to get the default.
 
 ## Consuming sparks-core before a release (local dev)
 
 A `.sparkwing/` that depends on an unreleased change here needs its
-module graph pointed at the working tree. Two things bite:
+module graph pointed at the working tree.
 
+- **Use `replace` directives, not `go.work`, for unpublished modules.**
+  `go mod tidy` ignores the workspace and tries to fetch the pinned
+  version over the network -- which fails for a tag that doesn't exist
+  yet (`probe@v0.24.0: not found`). `replace` overrides resolution
+  everywhere, including tidy. (`go.work use` works for `go build`/`go
+  run` but not for tidy, which is the trap.)
 - **Replace the whole dependency subtree, not just your direct imports.**
-  An unpublished module needs a `replace` (or `go.work use`) for every
-  sparks-core module in its transitive graph. Importing `docker` also
-  pulls `step` and `aws`, so all three need a local override even though
-  you only `import` one. (The `require` version paired with a `replace`
-  is irrelevant -- `replace` wins -- so any plausible version is fine.)
-- **`GOWORK=off` when the checkout sits under another workspace.** If
-  `sparkwing` / `sparks-core` live under a directory that has its own
-  `go.work`, a stray parent workspace will shadow your resolution and you
-  get confusing "main module does not contain package" errors. Build the
-  consumer `.sparkwing/` with `GOWORK=off` (or its own `go.work`).
+  An unpublished module needs a `replace` for every sparks-core module in
+  its transitive graph. Importing `docker` also pulls `step` and `aws`,
+  so all three need a local override even though you only `import` one.
+  (The `require` version paired with a `replace` is irrelevant -- replace
+  wins -- so any plausible version is fine.)
+- **`GOWORK=off` when the checkout sits under another workspace.** If the
+  checkouts live under a directory with its own `go.work`, that parent
+  workspace shadows your resolution and you get confusing "main module
+  does not contain package" errors. Build with `GOWORK=off`.
