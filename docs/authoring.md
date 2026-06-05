@@ -139,3 +139,33 @@ path). When you add a template, drop the directory, append its name to
 `templateNames` in `templates/templates.go`, add it to the `go:embed`
 line, and add a render case to `templates_test.go`. Every template must
 render to parseable Go and carry a non-empty README and `whenToUse`.
+
+## Rendering a template
+
+The normal path is `sparkwing pipeline new --template <name> --param
+k=v`. To render by hand (or from a tool), call `templates.Render(name,
+map[string]string{...})`. Two non-obvious rules:
+
+- **Param names are hyphenated in the manifest and CLI (`health-url`) but
+  underscored inside the body (`{{.health_url}}`).** The renderer
+  translates; you pass them hyphenated.
+- **Passing a param as explicit-empty (`--param test-cmd=`) is honored as
+  "no value" and elides any `{{if .test_cmd}}` step** -- it does NOT fall
+  back to the manifest default. Omit the flag to get the default.
+
+## Consuming sparks-core before a release (local dev)
+
+A `.sparkwing/` that depends on an unreleased change here needs its
+module graph pointed at the working tree. Two things bite:
+
+- **Replace the whole dependency subtree, not just your direct imports.**
+  An unpublished module needs a `replace` (or `go.work use`) for every
+  sparks-core module in its transitive graph. Importing `docker` also
+  pulls `step` and `aws`, so all three need a local override even though
+  you only `import` one. (The `require` version paired with a `replace`
+  is irrelevant -- `replace` wins -- so any plausible version is fine.)
+- **`GOWORK=off` when the checkout sits under another workspace.** If
+  `sparkwing` / `sparks-core` live under a directory that has its own
+  `go.work`, a stray parent workspace will shadow your resolution and you
+  get confusing "main module does not contain package" errors. Build the
+  consumer `.sparkwing/` with `GOWORK=off` (or its own `go.work`).

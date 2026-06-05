@@ -19,8 +19,11 @@ parameters:
     description: Image name (e.g. myapp)
   - name: ecr
     type: string
-    required: true
-    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+    description: |
+      ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com).
+      Optional: only used on the ECR fallback. Leave empty for kind
+      (SPARKWING_KIND_CLUSTER) or a local registry (SPARKWING_REGISTRY).
+    default: ""
   - name: namespace
     type: string
     required: true

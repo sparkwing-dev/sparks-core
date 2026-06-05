@@ -47,6 +47,53 @@ blocks do the work; the scaffolded file is just the shape.
 - Rollback is `kubectl rollout undo`. Swap the `OnFailure` body for your
   own recovery if a plain rollout-undo isn't enough.
 
+## Kubernetes manifests (you supply these)
+
+The `deploy` node runs `kubectl apply -f <k8s-path>` and then `kubectl set
+image deploy/<app-name> <app-name>=<built-image>`. So your `k8s-path`
+directory must contain a Deployment (plus a Service) and **three names
+must agree** — a mismatch compiles fine and only fails at deploy time:
+
+- the Deployment's `metadata.name` and its container `name` must both be
+  `<app-name>` (the pipeline rolls `deploy/<app-name>` and sets the image
+  on the container named `<app-name>`);
+- the Service that backs `health-url` must resolve to those pods.
+
+A minimal starter (`k8s/`), with `<app-name>` = `myapp`, namespace
+`myapp`, container port 8080:
+
+```yaml
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: myapp, namespace: myapp, labels: { app: myapp } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: myapp } }
+  template:
+    metadata: { labels: { app: myapp } }
+    spec:
+      containers:
+        - name: myapp            # MUST equal app-name
+          image: myapp:latest    # set-image overwrites the tag each deploy
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+---
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata: { name: myapp, namespace: myapp }
+spec:
+  selector: { app: myapp }
+  ports: [{ port: 8080, targetPort: 8080 }]
+```
+
+The post-deploy probe runs from wherever the pipeline node runs: in-cluster
+that's the pod network (use the Service DNS, `myapp.myapp.svc:8080`); from a
+laptop/kind it's the host (use a NodePort or port-forward URL). Set
+`health-url` accordingly.
+
 ## Kube context
 
 Every `kubectl` call resolves an explicit context and **fails closed** --
