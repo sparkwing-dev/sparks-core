@@ -53,6 +53,7 @@ func (p *PrePush) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	sparkwing.Step(w, "no-replace", checkNoReplaceDirectivesInCommittedGoMods)
 	sparkwing.Step(w, "no-go-work", checkNoCommittedGoWorkFiles)
 	sparkwing.Step(w, "no-raw-kubectl", checkNoRawKubectl)
+	sparkwing.Step(w, "no-raw-aws", checkNoRawAWS)
 	sparkwing.Step(w, "tidy", tidyAllModules)
 	sparkwing.Step(w, "version-freshness", checkVersionFreshness)
 	sparkwing.Step(w, "golangci-lint", lintAllModules)

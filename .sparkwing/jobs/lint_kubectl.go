@@ -22,11 +22,11 @@ import (
 // closed -- never silently the current kubeconfig context.
 const kubectlChokepoint = "kube/context.go"
 
-// kubectlExecCallees are the function names that actually run a command.
+// execCallees are the function names that actually run a command.
 // A "kubectl" string is only a real invocation when passed to one of
 // these -- which keeps the scan off the same word in a log line, error
 // message, or comment.
-var kubectlExecCallees = map[string]bool{
+var execCallees = map[string]bool{
 	"Exec":           true, // step.Exec / sparkwing.Exec (arg-vector)
 	"Bash":           true, // sparkwing.Bash (shell line)
 	"Sh":             true, // step.Sh
@@ -92,7 +92,7 @@ func scanGoForRawKubectl(filename string, src []byte) ([]int, error) {
 	var lines []int
 	ast.Inspect(file, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
-		if !ok || !isKubectlExecCallee(call.Fun) {
+		if !ok || !isExecCallee(call.Fun) {
 			return true
 		}
 		for _, arg := range call.Args {
@@ -113,12 +113,12 @@ func scanGoForRawKubectl(filename string, src []byte) ([]int, error) {
 	return lines, nil
 }
 
-func isKubectlExecCallee(fun ast.Expr) bool {
+func isExecCallee(fun ast.Expr) bool {
 	switch e := fun.(type) {
 	case *ast.SelectorExpr:
-		return kubectlExecCallees[e.Sel.Name]
+		return execCallees[e.Sel.Name]
 	case *ast.Ident:
-		return kubectlExecCallees[e.Name]
+		return execCallees[e.Name]
 	}
 	return false
 }
