@@ -285,7 +285,7 @@ func SyncArgoCD(ctx context.Context, appName string, tag ...string) error {
 					return ctx.Err()
 				}
 
-				err := argocdSync(client, server, token, appName)
+				err := argocdSync(ctx, client, server, token, appName)
 				if err != nil {
 					errStr := fmt.Sprintf("%v", err)
 					if !strings.Contains(errStr, "auto-sync") {
@@ -370,7 +370,7 @@ type argocdApp struct {
 
 func argocdGetApp(ctx context.Context, client *http.Client, server, token, appPath string) argocdApp {
 	reqURL := server + "/api/v1/applications/" + appPath
-	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		sparkwing.Info(ctx, "argocd: failed to build request: %v", err)
 		return argocdApp{}
@@ -399,10 +399,10 @@ func argocdGetApp(ctx context.Context, client *http.Client, server, token, appPa
 	return app
 }
 
-func argocdSync(client *http.Client, server, token, appName string) error {
+func argocdSync(ctx context.Context, client *http.Client, server, token, appName string) error {
 	reqURL := server + "/api/v1/applications/" + appName + "/sync"
 	payload := []byte(`{"revision":"HEAD","prune":true}`)
-	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -534,7 +534,7 @@ func authorizeDeployWithController(ctx context.Context, cfg DeployConfig) error 
 
 	authURL := controllerURL + "/authorize?" + params.Encode()
 
-	req, err := http.NewRequest(http.MethodPost, authURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, nil)
 	if err != nil {
 		sparkwing.Info(ctx, "authorize: failed to build request: %v (continuing)", err)
 		return nil

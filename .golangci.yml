@@ -114,6 +114,16 @@ linters:
           msg: "fmt.Println bypasses the structured logger; use sparkwing.Info/Error or slog directly. Allowed in cmd/**/main.go and _test.go (see exclusions)."
         - pattern: ^time\.Sleep$
           msg: "time.Sleep ignores context cancellation; use select { case <-time.After(d): case <-ctx.Done(): return ctx.Err() } so the wait is cancelable. Allowed in cmd/**/main.go and _test.go (see exclusions)."
+        - pattern: ^http\.NewRequest$
+          msg: "http.NewRequest detaches the request from context; use http.NewRequestWithContext(ctx, ...) so cancellation and deadlines propagate to the transport."
+        - pattern: ^http\.(Get|Post|Head|PostForm)$
+          msg: "http.Get/Post/Head/PostForm use http.DefaultClient (no timeout) and carry no context; build an *http.Client with a Timeout and call client.Do(http.NewRequestWithContext(ctx, ...))."
+        - pattern: ^http\.DefaultClient$
+          msg: "http.DefaultClient has no timeout and will hang forever on a stalled peer; construct an *http.Client{Timeout: ...} instead."
+        - pattern: ^context\.(Background|TODO)$
+          msg: "library code receives a context from its caller -- thread it instead of starting a fresh root. For deliberately-detached work use context.WithoutCancel(ctx). Allowed in cmd/**/main.go and _test.go (see exclusions)."
+        - pattern: ^log\.(Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$
+          msg: "log.Fatal/Panic short-circuit deferred cleanup and crash the process; return an error and let the caller decide. Allowed in cmd/**/main.go (see exclusions)."
   exclusions:
     rules:
       # Tests often ignore errors deliberately.
