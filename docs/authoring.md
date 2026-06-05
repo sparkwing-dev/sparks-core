@@ -142,14 +142,21 @@ render to parseable Go and carry a non-empty README and `whenToUse`.
 
 ## Rendering a template
 
-Render by calling `templates.Render(name, map[string]string{...})` -- it
-returns the pipeline Go source, which you write to
-`.sparkwing/jobs/<name>.go`. (The `sparkwing` CLI's `pipeline new
---template` flag currently only knows its built-in stubs `minimal` and
-`build-test-deploy`; it does **not** yet reach this registry. Until that
-wiring lands, render programmatically or copy the `pipeline.go.tmpl` and
-substitute the params by hand -- do not tell users to run
-`sparkwing pipeline new --template <registry-name>`.)
+The primary path is the CLI:
+
+    sparkwing pipeline templates                     # list the registry + each template's params
+    sparkwing pipeline new --name <name> --template <template> --param k=v ...
+
+That scaffolds `.sparkwing/` (if absent), renders the template into
+`.sparkwing/jobs/<name>.go`, and wires the `pipelines.yaml` entry. `--name`
+sets the registered pipeline name (and the template's `pipeline-name`
+param). Missing-required and unknown params are reported with actionable
+errors. (Built-in stubs `minimal` / `build-test-deploy` still ship in the
+CLI; any other `--template` value resolves against this registry.)
+
+To render programmatically (tooling, tests), call
+`templates.Render(name, map[string]string{...})` -- it returns the
+pipeline Go source.
 
 Two non-obvious rules:
 
