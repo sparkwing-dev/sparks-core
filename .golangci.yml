@@ -18,12 +18,14 @@ linters:
     - bodyclose # missing http response body Close()
     - copyloopvar # loop-variable capture bugs (Go 1.22+ semantics)
     - depguard # banned imports (deprecated / wrong-version modules)
+    - durationcheck # multiplying two time.Durations (units bug)
     - errcheck # unchecked error returns
     - errorlint # %w wrapping + errors.Is/As discipline
     - forbidigo # banned function calls (panic / os.Exit outside main)
     - govet # default vet + extras enabled below
     - ineffassign # assignments whose value is never read
     - misspell # common english spelling errors
+    - noctx # http requests / sql queries built without a context
     - nolintlint # stale / malformed nolint directives
     - staticcheck # SA + S + ST + QF rule families
     - unconvert # redundant type conversions

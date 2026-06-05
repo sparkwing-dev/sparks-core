@@ -338,7 +338,13 @@ func argocdConfig(ctx context.Context) (server, token string) {
 		// server runs in insecure mode (HTTP).
 		server = "http://argocd-server.argocd.svc.cluster.local:80"
 		client := &http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Get(server + "/api/version")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, server+"/api/version", nil)
+		if err != nil {
+			sparkwing.Info(ctx, "argocd: failed to build version probe: %v", err)
+			server = ""
+			return server, token
+		}
+		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != http.StatusOK {
 			sparkwing.Info(ctx, "argocd: in-cluster server not reachable at %s", server)
 			server = ""
