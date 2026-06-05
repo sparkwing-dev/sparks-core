@@ -16,6 +16,7 @@ linters:
   enable:
     - bidichk # CVE-2021-42574 Trojan Source defense
     - bodyclose # missing http response body Close()
+    - contextcheck # ctx propagated through call chains, not dropped
     - copyloopvar # loop-variable capture bugs (Go 1.22+ semantics)
     - depguard # banned imports (deprecated / wrong-version modules)
     - durationcheck # multiplying two time.Durations (units bug)
