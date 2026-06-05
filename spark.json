@@ -54,6 +54,11 @@
       "description": "Ephemeral Docker service containers (Postgres, ...) for integration tests"
     },
     {
+      "path": "notify",
+      "module": "github.com/sparkwing-dev/sparks-core/notify",
+      "description": "Post deploy/run notifications to an HTTP webhook (Slack-style or arbitrary JSON)"
+    },
+    {
       "path": "checks",
       "module": "github.com/sparkwing-dev/sparks-core/checks",
       "description": "Pre-commit checks: formatting, linting, trailing newlines"
