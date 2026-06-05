@@ -29,8 +29,10 @@ multi-module repo conventions).
   in-cluster service account > `SPARKWING_KUBE_CONTEXT` >
   `kind-$SPARKWING_KIND_CLUSTER` > `SPARKWING_KUBE_ALLOW_CURRENT=1` >
   error. No command silently falls through to the current kubeconfig
-  context (which may be the wrong cluster). `DeployKubectl` and the
-  rollout/apply helpers no longer use the ambient context implicitly.
+  context (which may be the wrong cluster). Every kubectl call -- write
+  (apply, set image, rollout) and read (`DetectNodeArch`, rollout-status
+  lookups) -- now routes through this single helper; none use the ambient
+  context implicitly.
 
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).

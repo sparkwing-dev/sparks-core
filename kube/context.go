@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
@@ -77,4 +79,15 @@ func kubectl(ctx context.Context, explicit string, args ...string) error {
 		return err
 	}
 	return step.Exec(ctx, "kubectl", append(ca, args...)...)
+}
+
+// kubectlCapture is kubectl for the read path: it returns the command's
+// trimmed stdout instead of streaming it. Same context resolution, so
+// capture-style queries (get -o name, ...) also stay context-explicit.
+func kubectlCapture(ctx context.Context, explicit string, args ...string) (string, error) {
+	ca, err := contextArgs(explicit)
+	if err != nil {
+		return "", err
+	}
+	return sparkwing.Exec(ctx, "kubectl", append(ca, args...)...).String()
 }

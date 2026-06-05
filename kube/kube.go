@@ -28,7 +28,7 @@ func IsRunningInK8s() bool {
 // Docker platform string (e.g. "linux/arm64", "linux/amd64"). Queries
 // the first node's labels via kubectl. Empty string on failure.
 func DetectNodeArch(ctx context.Context) string {
-	arch, err := sparkwing.Bash(ctx, "kubectl get nodes -o jsonpath={.items[0].status.nodeInfo.architecture}").String()
+	arch, err := kubectlCapture(ctx, "", "get", "nodes", "-o", "jsonpath={.items[0].status.nodeInfo.architecture}")
 	if err != nil || arch == "" {
 		return ""
 	}
@@ -80,16 +80,12 @@ func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 			if !ok {
 				continue
 			}
-			ca, err := contextArgs(kubeCtx)
-			if err != nil {
-				return err
-			}
-			out, _ := sparkwing.Exec(ctx, "kubectl", append(ca,
+			out, _ := kubectlCapture(ctx, kubeCtx,
 				"get", deploy,
 				"-n", cfg.Namespace,
 				"--ignore-not-found",
 				"-o", "name",
-			)...).String()
+			)
 			if out == "" {
 				continue
 			}
