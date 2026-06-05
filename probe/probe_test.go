@@ -2,6 +2,7 @@ package probe_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -13,7 +14,7 @@ import (
 
 func TestCheck_HealthyPasses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer srv.Close()
@@ -26,7 +27,7 @@ func TestCheck_HealthyPasses(t *testing.T) {
 
 func TestCheck_UnhealthyBodyIsDefinitive(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"degraded"}`))
 	}))
 	defer srv.Close()
@@ -62,7 +63,7 @@ func TestCheck_RetriesUntilHealthy(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer srv.Close()
@@ -86,13 +87,13 @@ func TestCheck_PerAttemptHeader(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
 	err := probe.HTTP(srv.URL).
 		HeaderFunc("X-Token", func(_ context.Context) (string, error) {
-			return "tok-" + string(rune('0'+calls.Add(1))), nil
+			return fmt.Sprintf("tok-%d", calls.Add(1)), nil
 		}).
 		Check(context.Background())
 	if err != nil {
