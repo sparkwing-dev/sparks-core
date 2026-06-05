@@ -112,6 +112,8 @@ linters:
           msg: "os.Exit short-circuits deferred cleanup; return an error from main or use orchestrator-managed shutdown. Allowed in cmd/**/main.go (see exclusions)."
         - pattern: ^fmt\.Println$
           msg: "fmt.Println bypasses the structured logger; use sparkwing.Info/Error or slog directly. Allowed in cmd/**/main.go and _test.go (see exclusions)."
+        - pattern: ^time\.Sleep$
+          msg: "time.Sleep ignores context cancellation; use select { case <-time.After(d): case <-ctx.Done(): return ctx.Err() } so the wait is cancelable. Allowed in cmd/**/main.go and _test.go (see exclusions)."
   exclusions:
     rules:
       # Tests often ignore errors deliberately.

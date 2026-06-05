@@ -279,7 +279,11 @@ func SyncArgoCD(ctx context.Context, appName string, tag ...string) error {
 				kickCount++
 				sparkwing.Info(ctx, "argocd: kicking hard refresh (attempt %d)", kickCount)
 				argocdGetApp(ctx, client, server, token, appName+"?refresh=hard")
-				time.Sleep(2 * time.Second)
+				select {
+				case <-time.After(2 * time.Second):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 
 				err := argocdSync(client, server, token, appName)
 				if err != nil {
@@ -312,7 +316,11 @@ func SyncArgoCD(ctx context.Context, appName string, tag ...string) error {
 				}
 				return nil
 			}
-			time.Sleep(2 * time.Second)
+			select {
+			case <-time.After(2 * time.Second):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 
 		sparkwing.Info(ctx, "argocd: gave up waiting for %s sync after %d attempts (still at %s)", appName, kickCount, shortRev(startRev))
