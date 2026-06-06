@@ -11,10 +11,11 @@ no cloud or cluster.
 # Postgres (default)
 sparkwing pipeline new --name integration-test --template integration-test-with-service
 
-# Redis
+# Redis (no env needed -- clear service-env)
 sparkwing pipeline new --name redis-it --template integration-test-with-service \
   --param service-image=redis:7-alpine --param service-port=6379 \
-  --param ready-cmd="redis-cli ping" --param test-cmd="go test ./integration/..."
+  --param ready-cmd="redis-cli ping" --param service-env="" \
+  --param test-cmd="go test ./integration/..."
 ```
 
 ## What it does
@@ -39,7 +40,8 @@ observer that can't guarantee cleanup) or a downstream `Needs` node
 | `pipeline-name` | no | `integration-test` | pipeline registration name |
 | `service-image` | no | `postgres:16-alpine` | dependency image |
 | `service-port` | no | `5432` | published to `127.0.0.1:<port>` |
-| `ready-cmd` | no | `pg_isready` | readiness probe run inside the container |
+| `ready-cmd` | no | `pg_isready -U postgres` | readiness probe run inside the container |
+| `service-env` | no | `POSTGRES_PASSWORD=postgres,POSTGRES_DB=app` | container env as `KEY=VAL,KEY=VAL` (postgres needs a password; clear for redis) |
 | `test-cmd` | no | `go test ./integration/...` | test command, run on the host |
 
 ## Notes

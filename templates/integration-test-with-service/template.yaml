@@ -27,8 +27,14 @@ parameters:
     description: |
       Readiness probe run INSIDE the container via `docker exec` (needs
       no host-side client). The service is ready when it exits 0.
-      Examples: "pg_isready", "redis-cli ping".
-    default: pg_isready
+      Examples: "pg_isready -U postgres", "redis-cli ping".
+    default: pg_isready -U postgres
+  - name: service-env
+    type: string
+    description: |
+      Container environment as "KEY=VAL,KEY=VAL". The postgres image
+      needs POSTGRES_PASSWORD to start; redis needs none (set empty).
+    default: POSTGRES_PASSWORD=postgres,POSTGRES_DB=app
   - name: test-cmd
     type: string
     description: Test command, run on the host once the service is ready.
