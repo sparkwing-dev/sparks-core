@@ -1,0 +1,32 @@
+name: build-publish-binary
+description: |
+  Build a versioned Go binary, write a SHA-256 checksum, and publish
+  both into a local release directory. Fully local -- no cloud,
+  registry, or cluster -- so it runs end-to-end with `sparkwing run` on
+  a laptop. A post-build Verify re-hashes the published artifact.
+whenToUse: |
+  Produce a release artifact from a Go repo: compile with a version
+  stamped via -ldflags, checksum it, and drop both into a release dir.
+  Use for CLI/tool releases or any "build an artifact and verify it"
+  flow. For container images use a docker-deploy template; for static
+  sites use a static-deploy template.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: release-binary
+  - name: main-package
+    type: string
+    description: Go package path to build (the `go build` target), relative to the repo root.
+    default: ./cmd/app
+  - name: binary-name
+    type: string
+    description: Output binary file name (a version suffix is appended).
+    default: app
+  - name: release-dir
+    type: string
+    description: Directory (relative to the repo root) to publish artifacts into.
+    default: dist
+applicability:
+  cloud: []
+  category: build
