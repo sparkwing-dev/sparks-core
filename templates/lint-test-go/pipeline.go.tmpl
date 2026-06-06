@@ -32,9 +32,9 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	sparkwing.Job(plan, "gofmt", sparkwing.JobFn(p.gofmt))
-	sparkwing.Job(plan, "vet", sparkwing.JobFn(p.vet))
-	sparkwing.Job(plan, "test", sparkwing.JobFn(p.test))
+	sparkwing.Job(plan, "gofmt", p.gofmt)
+	sparkwing.Job(plan, "vet", p.vet)
+	sparkwing.Job(plan, "test", p.test)
 	return nil
 }
 

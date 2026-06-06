@@ -32,9 +32,9 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build))
-	sync := sparkwing.Job(plan, "sync", sparkwing.JobFn(p.sync)).Needs(build)
-	sparkwing.Job(plan, "invalidate", sparkwing.JobFn(p.invalidate)).Needs(sync)
+	build := sparkwing.Job(plan, "build", p.build)
+	sync := sparkwing.Job(plan, "sync", p.sync).Needs(build)
+	sparkwing.Job(plan, "invalidate", p.invalidate).Needs(sync)
 	return nil
 }
 

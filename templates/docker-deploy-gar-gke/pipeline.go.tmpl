@@ -32,10 +32,10 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	{{ if .test_cmd }}test := sparkwing.Job(plan, "test", sparkwing.JobFn(p.test))
-	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build)).Needs(test){{ else }}build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build)){{ end }}
-	push := sparkwing.Job(plan, "push", sparkwing.JobFn(p.push)).Needs(build)
-	sparkwing.Job(plan, "deploy", sparkwing.JobFn(p.deploy)).Needs(push)
+	{{ if .test_cmd }}test := sparkwing.Job(plan, "test", p.test)
+	build := sparkwing.Job(plan, "build", p.build).Needs(test){{ else }}build := sparkwing.Job(plan, "build", p.build){{ end }}
+	push := sparkwing.Job(plan, "push", p.push).Needs(build)
+	sparkwing.Job(plan, "deploy", p.deploy).Needs(push)
 	return nil
 }
 

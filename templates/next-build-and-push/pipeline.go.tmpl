@@ -33,9 +33,9 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	build := sparkwing.Job(plan, "build", sparkwing.JobFn(p.build))
-	pack := sparkwing.Job(plan, "tarball", sparkwing.JobFn(p.tarball)).Needs(build)
-	sparkwing.Job(plan, "upload", sparkwing.JobFn(p.upload)).Needs(pack)
+	build := sparkwing.Job(plan, "build", p.build)
+	pack := sparkwing.Job(plan, "tarball", p.tarball).Needs(build)
+	sparkwing.Job(plan, "upload", p.upload).Needs(pack)
 	return nil
 }
 
