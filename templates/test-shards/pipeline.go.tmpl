@@ -1,0 +1,66 @@
+// Code scaffolded by `sparkwing pipeline new --template test-shards`.
+// Edit freely -- nothing here re-runs.
+//
+// Run a test suite split into {{.shards}} parallel shards, gated by a
+// node that passes only when every shard passes. Fully local.
+package jobs
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+const {{pascal .pipeline_name}}ShardTotal = {{.shards}}
+
+// {{pascal .pipeline_name}} fans {{.shards}} shard jobs out in parallel,
+// then a gate node depends on the whole group so it runs only when
+// every shard passed.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run tests across {{.shards}} parallel shards with an all-pass gate"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	idx := make([]int, {{pascal .pipeline_name}}ShardTotal)
+	for i := range idx {
+		idx[i] = i
+	}
+	shards := sparkwing.JobFanOut(plan, "shard", idx, func(i int) (string, any) {
+		return fmt.Sprintf("shard-%d", i), &{{pascal .pipeline_name}}Shard{index: i}
+	})
+	sparkwing.Job(plan, "gate", p.gate).Needs(shards)
+	return nil
+}
+
+// {{pascal .pipeline_name}}Shard runs the suite for one shard. The test
+// command sees SHARD_INDEX (0-based) and SHARD_TOTAL in its environment
+// so it can select its slice -- via a test runner's native --shard
+// flag, or `go test -run` over a computed subset.
+type {{pascal .pipeline_name}}Shard struct {
+	sparkwing.Base
+	index int
+}
+
+func (s *{{pascal .pipeline_name}}Shard) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	idx := s.index
+	sparkwing.Step(w, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).
+			Env("SHARD_INDEX", fmt.Sprintf("%d", idx)).
+			Env("SHARD_TOTAL", fmt.Sprintf("%d", {{pascal .pipeline_name}}ShardTotal)).
+			Run()
+		return err
+	})
+	return nil, nil
+}
+
+func (p *{{pascal .pipeline_name}}) gate(ctx context.Context) error {
+	sparkwing.Info(ctx, "all %d shards passed", {{pascal .pipeline_name}}ShardTotal)
+	return nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

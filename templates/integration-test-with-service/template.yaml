@@ -1,0 +1,38 @@
+name: integration-test-with-service
+description: |
+  Run integration tests against a throwaway service container (Postgres,
+  Redis, ...) that's started before the tests and torn down after --
+  even on failure or panic -- via sparkwing's services.WithServices.
+  Needs a Docker daemon; no cloud or cluster.
+whenToUse: |
+  Tests that need a real dependency (database, cache, broker) running
+  locally. The service is published to 127.0.0.1:<port> so your test
+  reaches it at localhost:<port> on every platform. For CI hygiene with
+  no dependency use lint-test-go; for sharded suites use test-shards.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: integration-test
+  - name: service-image
+    type: string
+    description: Container image for the dependency (e.g. postgres:16-alpine, redis:7-alpine).
+    default: postgres:16-alpine
+  - name: service-port
+    type: string
+    description: Port the service listens on; published to 127.0.0.1:<port> for the test.
+    default: "5432"
+  - name: ready-cmd
+    type: string
+    description: |
+      Readiness probe run INSIDE the container via `docker exec` (needs
+      no host-side client). The service is ready when it exits 0.
+      Examples: "pg_isready", "redis-cli ping".
+    default: pg_isready
+  - name: test-cmd
+    type: string
+    description: Test command, run on the host once the service is ready.
+    default: go test ./integration/...
+applicability:
+  cloud: []
+  category: ci-hygiene

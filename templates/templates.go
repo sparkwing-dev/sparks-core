@@ -28,7 +28,7 @@ import (
 // template directory and its files. Consumers that just want the
 // raw bytes (for rendering or diffing) reach for FS directly.
 //
-//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:next-build-and-push all:build-publish-binary all:lint-test-go all:go-test-build-deploy-k8s all:go-test-migrate-deploy-argo
+//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:approval-gated-deploy all:next-build-and-push all:build-publish-binary all:docker-build-smoketest all:lint-test-go all:test-shards all:integration-test-with-service all:scheduled-cleanup all:go-test-build-deploy-k8s all:go-test-migrate-deploy-argo
 var FS embed.FS
 
 // templateNames is the canonical list of templates in this registry.
@@ -42,9 +42,14 @@ var templateNames = []string{
 	"docker-deploy-gar-gke",
 	"go-test-build-deploy-k8s",
 	"go-test-migrate-deploy-argo",
+	"approval-gated-deploy",
 	"next-build-and-push",
 	"build-publish-binary",
+	"docker-build-smoketest",
 	"lint-test-go",
+	"test-shards",
+	"integration-test-with-service",
+	"scheduled-cleanup",
 }
 
 // Parameter declares one substitution variable for a template. Authors

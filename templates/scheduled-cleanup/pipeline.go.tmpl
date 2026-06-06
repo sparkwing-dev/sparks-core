@@ -1,0 +1,72 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// scheduled-cleanup`. Edit freely -- nothing here re-runs.
+//
+// Delete files under {{.target_dir}} older than {{.max_age_days}} days.
+// Intended to run on a schedule ("{{.schedule}}") -- add the trigger to
+// .sparkwing/sparkwing.yaml (see the template README). Fully local.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+const (
+	{{pascal .pipeline_name}}Dir     = {{quote .target_dir}}
+	{{pascal .pipeline_name}}MaxDays = {{.max_age_days}}
+)
+
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Delete files under {{.target_dir}} older than {{.max_age_days}} days (cron: {{.schedule}})"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "prune", p.prune)
+	return nil
+}
+
+func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
+	dir := sparkwing.Path({{pascal .pipeline_name}}Dir)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		sparkwing.Info(ctx, "%s does not exist; nothing to prune", dir)
+		return nil
+	}
+	cutoff := time.Now().AddDate(0, 0, -{{pascal .pipeline_name}}MaxDays)
+	var removed int
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !d.Type().IsRegular() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.ModTime().Before(cutoff) {
+			if rerr := os.Remove(path); rerr != nil {
+				return rerr
+			}
+			removed++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	sparkwing.Info(ctx, "pruned %d file(s) older than %d days from %s", removed, {{pascal .pipeline_name}}MaxDays, dir)
+	sparkwing.Annotate(ctx, fmt.Sprintf("pruned %d file(s)", removed))
+	return nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

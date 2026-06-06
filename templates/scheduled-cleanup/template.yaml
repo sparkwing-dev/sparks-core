@@ -1,0 +1,33 @@
+name: scheduled-cleanup
+description: |
+  A scheduled maintenance pipeline: delete files under a directory
+  older than N days. Fully local. A concrete starter for the
+  "run something on a cron" shape -- the README shows how to wire the
+  `on: schedule:` trigger into sparkwing.yaml.
+whenToUse: |
+  Periodic maintenance/cleanup/reporting jobs that run on a cron rather
+  than on push. Edit the prune body into whatever scheduled work you
+  need. For push/PR CI use lint-test-go or test-shards.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: scheduled-cleanup
+  - name: schedule
+    type: string
+    description: |
+      Cron expression for the intended schedule. Informational here
+      (shown in help); add it to sparkwing.yaml under `on: schedule:`
+      to actually trigger -- see the template README.
+    default: "0 3 * * *"
+  - name: target-dir
+    type: string
+    description: Directory to prune, relative to the repo root.
+    default: tmp
+  - name: max-age-days
+    type: string
+    description: Delete regular files older than this many days (a positive integer).
+    default: "30"
+applicability:
+  cloud: []
+  category: maintenance

@@ -1,0 +1,44 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// integration-test-with-service`. Edit freely -- nothing here re-runs.
+//
+// Run integration tests against a throwaway {{.service_image}} container
+// started before the tests and torn down after (even on failure/panic),
+// via services.WithServices. Needs a Docker daemon.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	"github.com/sparkwing-dev/sparkwing/sparkwing/services"
+)
+
+// {{pascal .pipeline_name}} runs the test suite with a {{.service_image}}
+// sidecar. The service is published to 127.0.0.1:{{.service_port}}, so
+// the test reaches it at localhost:{{.service_port}}.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Integration tests against a throwaway {{.service_image}} container"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "integration", p.run)
+	return nil
+}
+
+func (p *{{pascal .pipeline_name}}) run(ctx context.Context) error {
+	svc := services.Service{
+		Image:    {{quote .service_image}},
+		Port:     {{.service_port}},
+		ReadyCmd: {{quote .ready_cmd}},
+	}
+	return services.WithServices(ctx, []services.Service{svc}, func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

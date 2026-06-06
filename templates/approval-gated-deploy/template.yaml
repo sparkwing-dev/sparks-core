@@ -1,0 +1,30 @@
+name: approval-gated-deploy
+description: |
+  Build -> test -> human approval gate -> deploy. The deploy node only
+  runs after a person approves the gate (CLI or dashboard). Fully local
+  to run; the deploy step is a placeholder you replace. Demonstrates
+  sparkwing.JobApproval.
+whenToUse: |
+  Any deploy that must pause for a human "go" before the irreversible
+  step -- prod releases, destructive migrations. For unattended deploys
+  use a docker-deploy or static-deploy template instead.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: gated-deploy
+  - name: environment
+    type: string
+    description: Environment name shown in the approval prompt.
+    default: prod
+  - name: deploy-cmd
+    type: string
+    description: Shell command the deploy step runs after approval (replace the placeholder).
+    default: echo "deploying"
+  - name: timeout-hours
+    type: string
+    description: Hours the gate waits for a human answer before it expires (denied).
+    default: "2"
+applicability:
+  cloud: []
+  category: deploy

@@ -1,0 +1,46 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// docker-build-smoketest`. Edit freely -- nothing here re-runs.
+//
+// Build a Docker image and smoke-test that it runs. Needs a Docker
+// daemon; no registry or cluster.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} builds {{.image_tag}} from {{.dockerfile}}
+// and, as a Verify postcondition, runs the image so a container that
+// can't start fails the node at the verify stage.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build {{.image_tag}} from {{.dockerfile}} and smoke-test that it runs"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "build", p.build).Verify(p.smokeTest)
+	return nil
+}
+
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "docker", "build",
+		"-t", {{quote .image_tag}},
+		"-f", {{quote .dockerfile}},
+		{{quote .build_context}},
+	).Run()
+	return err
+}
+
+// smokeTest runs the freshly-built image; a non-zero exit (or a
+// container that can't start) fails the node at the verify stage.
+func (p *{{pascal .pipeline_name}}) smokeTest(ctx context.Context) error {
+	{{if .verify_cmd}}_, err := sparkwing.Exec(ctx, "docker", "run", "--rm", "--entrypoint", "sh", {{quote .image_tag}}, "-c", {{quote .verify_cmd}}).Run(){{else}}_, err := sparkwing.Exec(ctx, "docker", "run", "--rm", {{quote .image_tag}}).Run(){{end}}
+	return err
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

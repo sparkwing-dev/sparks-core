@@ -1,0 +1,28 @@
+name: test-shards
+description: |
+  Run a test suite split into N parallel shards, gated by a node that
+  passes only when every shard passes. Fully local -- runs end-to-end
+  with `sparkwing run`, no cloud or cluster. The canonical fan-out +
+  fan-in gate shape.
+whenToUse: |
+  Speed up a large test suite by sharding it across parallel jobs, or
+  as a worked example of JobFanOut + an all-pass gate. For a single
+  unsharded CI-hygiene gate use lint-test-go.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: test-shards
+  - name: shards
+    type: string
+    description: Number of parallel shards (a positive integer).
+    default: "4"
+  - name: test-cmd
+    type: string
+    description: |
+      Test command run per shard. SHARD_INDEX (0-based) and SHARD_TOTAL
+      are exported into its environment so it can select its slice.
+    default: go test ./...
+applicability:
+  cloud: []
+  category: ci-hygiene

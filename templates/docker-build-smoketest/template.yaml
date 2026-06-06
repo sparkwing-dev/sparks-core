@@ -1,0 +1,37 @@
+name: docker-build-smoketest
+description: |
+  Build a Docker image from a Dockerfile and smoke-test that it runs.
+  Fully local -- needs only a Docker daemon, no registry or cluster.
+  The build is one Job; a Verify postcondition runs the freshly-built
+  image and fails the node if it can't start.
+whenToUse: |
+  Validate that an image builds and its container actually starts
+  before you push or deploy it. For pushing to a registry + deploying,
+  use docker-deploy-ecr-eks (AWS) or docker-deploy-gar-gke (GCP).
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: docker-build
+  - name: image-tag
+    type: string
+    description: Tag to build (e.g. myapp:local).
+    default: app:local
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: build-context
+    type: string
+    description: Docker build context directory, relative to the repo root.
+    default: "."
+  - name: verify-cmd
+    type: string
+    description: |
+      Smoke-test command run inside the built image via `sh -c`. Leave
+      empty to run the image's default CMD/ENTRYPOINT instead -- but set
+      it (e.g. "myapp --version") for long-running server images so the
+      smoke test exits instead of hanging.
+applicability:
+  cloud: []
+  category: build

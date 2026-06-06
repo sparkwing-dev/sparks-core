@@ -1,0 +1,53 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// approval-gated-deploy`. Edit freely -- nothing here re-runs.
+//
+// build -> test -> human approval gate -> deploy. The deploy node runs
+// only after a person approves the gate.
+package jobs
+
+import (
+	"context"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} gates the deploy to {{.environment}} behind
+// a human approval: build and test run, then the run blocks at the
+// gate until someone approves (CLI or dashboard), then deploy runs.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "build -> test -> approval gate -> deploy to {{.environment}}"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	build := sparkwing.Job(plan, "build", p.build)
+	test := sparkwing.Job(plan, "test", p.test).Needs(build)
+	approve := sparkwing.JobApproval(plan, "approve-deploy", sparkwing.ApprovalConfig{
+		Message:  "Approve deploy to {{.environment}}?",
+		Timeout:  {{.timeout_hours}} * time.Hour,
+		OnExpiry: sparkwing.ApprovalDeny, // unanswered = do not deploy
+	}).Needs(test)
+	sparkwing.Job(plan, "deploy", p.deploy).Needs(approve)
+	return nil
+}
+
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, `echo "build step - replace with real logic"`).Run()
+	return err
+}
+
+func (p *{{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, `echo "test step - replace with real logic"`).Run()
+	return err
+}
+
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .deploy_cmd}}).Run()
+	return err
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
