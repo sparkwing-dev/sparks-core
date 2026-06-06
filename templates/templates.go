@@ -83,7 +83,12 @@ type Manifest struct {
 	// "which template do I pick?", written for an agent choosing among
 	// starters. Distinct from Description (what it does) -- this is when
 	// to reach for it versus a sibling.
-	WhenToUse     string        `yaml:"whenToUse,omitempty" json:"whenToUse,omitempty"`
+	WhenToUse string `yaml:"whenToUse,omitempty" json:"whenToUse,omitempty"`
+	// Prerequisite is what must already exist in the repo for a scaffold
+	// of this template to `sparkwing run` successfully -- e.g. "a Go
+	// module at the repo root". Surfaced by `pipeline templates` and
+	// printed after `pipeline new` so the first run isn't a surprise.
+	Prerequisite  string        `yaml:"prerequisite,omitempty" json:"prerequisite,omitempty"`
 	Parameters    []Parameter   `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	Applicability Applicability `yaml:"applicability,omitempty" json:"applicability,omitempty"`
 }

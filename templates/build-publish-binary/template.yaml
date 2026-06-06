@@ -27,6 +27,7 @@ parameters:
     type: string
     description: Directory (relative to the repo root) to publish artifacts into.
     default: dist
+prerequisite: The Go package named by main-package (default ./cmd/app) plus a go.mod at the repo root.
 applicability:
   cloud: []
   category: build

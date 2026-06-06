@@ -32,6 +32,7 @@ parameters:
       empty to run the image's default CMD/ENTRYPOINT instead -- but set
       it (e.g. "myapp --version") for long-running server images so the
       smoke test exits instead of hanging.
+prerequisite: A Dockerfile at the configured path (default ./Dockerfile) and a running Docker daemon.
 applicability:
   cloud: []
   category: build

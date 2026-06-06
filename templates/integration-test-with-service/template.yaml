@@ -39,6 +39,7 @@ parameters:
     type: string
     description: Test command, run on the host once the service is ready.
     default: go test ./integration/...
+prerequisite: A Go module + tests at ./integration (the default test-cmd) and a running Docker daemon.
 applicability:
   cloud: []
   category: ci-hygiene

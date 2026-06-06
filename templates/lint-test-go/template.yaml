@@ -20,6 +20,7 @@ parameters:
     type: string
     description: Additional args appended to `go test`.
     default: ./...
+prerequisite: A Go module at the repo root (gofmt/vet/test run there); scaffolding into an empty repo runs but has nothing to check.
 applicability:
   cloud: []
   category: ci-hygiene
