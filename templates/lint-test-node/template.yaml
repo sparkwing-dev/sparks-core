@@ -1,0 +1,50 @@
+name: lint-test-node
+description: |
+  CI hygiene gate for a Node/TypeScript project: install, then lint
+  (eslint), typecheck (tsc --noEmit), and test in a parallel
+  independent-node DAG so one run surfaces every failure. Thin inline
+  SDK, no cloud / registry / cluster -- the Node twin of lint-test-go.
+whenToUse: |
+  CI hygiene for a JS/TS repo (npm/pnpm/yarn), no build or deploy. Pick
+  over lint-test-go when the project is Node; over lint-test-python when
+  the toolchain is Node. Leave typecheck-cmd empty for plain-JS. For a
+  polyglot monorepo where only changed packages run, gate this with
+  skip-if-paths-unchanged.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: lint-test-node
+  - name: node-version
+    type: string
+    description: Node version banner (informational only; a bare `npm ci` does not read .nvmrc, so ensure your runner provides this version via its image or a version manager like nvm/volta/fnm).
+    default: "20"
+  - name: install-cmd
+    type: string
+    description: Dependency install, run before the checks. `pnpm install --frozen-lockfile` / `yarn install --immutable` for those managers; empty to skip.
+    default: npm ci
+  - name: lint-cmd
+    type: string
+    description: Lint command (typically eslint). Empty disables the lint node.
+    default: npm run lint
+  - name: typecheck-cmd
+    type: string
+    description: Type-check command (tsc --noEmit). Empty disables the node -- do this for a plain-JS project.
+    default: npx tsc --noEmit
+  - name: test-cmd
+    type: string
+    description: Test command (vitest/jest/node --test). Empty disables the test node.
+    default: npm test
+prerequisite: A Node project at the repo root (a package.json the checks run against); scaffolding into an empty repo runs but has nothing to check.
+applicability:
+  cloud: []
+  category: ci-hygiene
+verify: runnable
+verify_fixture: node-module
+verify_params:
+  pipeline-name: lint-test-node
+  node-version: "20"
+  install-cmd: node -v
+  lint-cmd: node -e "process.exit(0)"
+  typecheck-cmd: ""
+  test-cmd: npm test

@@ -1,0 +1,73 @@
+name: test-matrix
+description: |
+  Fan the full test suite out across a matrix of toolchain versions and
+  OS runner labels, one parallel job per combination, gated by an
+  all-pass node. Each cell exports MATRIX_VERSION (and dispatches to its
+  OS runner); an optional container-image mode runs each version in its
+  own throwaway Docker container. The Cartesian product is built in Plan
+  from comma-lists; OS is a soft runner-label preference so it still
+  runs on a single-runner laptop.
+whenToUse: |
+  Prove one suite passes across every {version} x {OS} combination
+  (compat / regression), NOT to go faster -- it runs the WHOLE suite N
+  times. Sibling test-shards splits ONE suite across parallel shards for
+  speed. For a single unsharded pass use lint-test-go. Set
+  container-image-repo to isolate each version in an official language
+  image (node:20/22, python:3.11-3.13) with no local version manager.
+  For a suite needing a live dependency use integration-test-with-service.
+prerequisite: A test suite at the repo root the default test-cmd (`go test ./...`) can run; scaffolding into an empty repo renders and runs but the cells have nothing to test.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: test-matrix
+  - name: versions
+    type: string
+    description: |
+      Comma list of toolchain versions; one matrix row each. Exported
+      to the cell as MATRIX_VERSION.
+    default: 1.24,1.25,1.26
+  - name: os-labels
+    type: string
+    description: |
+      Comma list of OS runner labels (e.g. linux,darwin) forming the
+      second dimension. Applied as soft Prefers so a single-runner
+      laptop still dispatches every cell. Empty means versions only.
+    default: ""
+  - name: container-image-repo
+    type: string
+    description: |
+      When set, each version cell runs `docker run <repo>:<version>`
+      with the repo bind-mounted. Empty runs cells on the host with
+      MATRIX_VERSION exported.
+    default: ""
+  - name: setup-cmd
+    type: string
+    description: |
+      Optional per-cell setup run in the SAME shell as test-cmd (joined
+      as `setup-cmd && test-cmd`) so exported PATH/vars persist into the
+      test. Sees MATRIX_VERSION; use a shim-based selector like asdf
+      (gvm/nvm rely on a login shell and will not take effect here). In
+      container mode it runs inside the container. Empty runs test-cmd
+      alone.
+    default: ""
+  - name: test-cmd
+    type: string
+    description: Test command run in each cell with MATRIX_VERSION exported.
+    default: go test ./...
+  - name: timeout
+    type: string
+    description: |
+      Optional per-cell timeout as a Go duration (e.g. 30m). Empty
+      disables the cap. Guards against a hung image pull or a wedged
+      test blocking the all-pass gate indefinitely.
+    default: ""
+applicability:
+  cloud: []
+  category: testing-strategies
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  pipeline-name: test-matrix
+  versions: "1"
+  test-cmd: go test ./...

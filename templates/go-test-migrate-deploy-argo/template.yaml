@@ -10,18 +10,31 @@ whenToUse: |
   Reach for this when a deploy must run schema migrations and you ship
   through a gitops repo + ArgoCD -- the full stateful-service path:
   integration tests on a throwaway database, migrations on the real one,
-  then a verified, self-rolling-back gitops deploy. If you have no
-  migrations, use docker-deploy-ecr-eks. If you apply k8s YAML directly
-  with kubectl, use go-test-build-deploy-k8s.
+  then a verified, self-rolling-back gitops deploy. Migrations run
+  against the target database before deploy and are not reverted on
+  rollback, so they must be backward-compatible (expand/contract): a
+  failed, rolled-back deploy leaves the new schema running under the old
+  code. If you have no migrations, use docker-deploy-ecr-eks. If you
+  apply k8s YAML directly with kubectl, use go-test-build-deploy-k8s. To
+  run migrations on their own (up/down, no build or deploy) use
+  db-migrate-updown.
+prerequisite: |
+  A Dockerfile at the repo root, a golang-migrate migrations directory
+  (migrations-dir), a gitops repo plus an ArgoCD application, and an EKS
+  cluster. Needs docker, kubectl, git, and the migrate CLI on PATH; the
+  sparkwing secret named by dsn-secret holding the target database DSN;
+  gitops push credentials (GITHUB_TOKEN or an SSH deploy key); and ArgoCD
+  access (SPARKWING_ARGOCD_SERVER + SPARKWING_ARGOCD_TOKEN, or running
+  in-cluster).
 parameters:
   - name: image
     type: string
     required: true
     description: Image name (e.g. myapp)
-  - name: ecr
+  - name: registry
     type: string
     required: true
-    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+    description: Container registry URL to push to (e.g. <acct>.dkr.ecr.<region>.amazonaws.com, us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org).
   - name: gitops-repo
     type: string
     required: true
@@ -42,14 +55,26 @@ parameters:
     type: string
     required: true
     description: URL the post-deploy probe checks for a 2xx (e.g. https://myapp.example.com/healthz)
+  - name: postgres-image
+    type: string
+    description: Postgres image for the ephemeral integration-test database. Pin this to match production.
+    default: postgres:16-alpine
   - name: migrations-dir
     type: string
     description: golang-migrate migrations directory.
     default: db/migrations
-  - name: db-secret
+  - name: dsn-secret
     type: string
     description: Name of the sparkwing secret holding the target database DSN.
     default: DATABASE_URL
+  - name: health-retries
+    type: string
+    description: Number of post-deploy health-probe attempts before declaring the revision unhealthy.
+    default: "30"
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the build context.
+    default: Dockerfile
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
@@ -61,3 +86,12 @@ parameters:
 applicability:
   cloud: [aws]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  gitops-repo: git@github.com:example/gitops.git
+  gitops-path: apps/example
+  app-name: example-app
+  namespace: example
+  health-url: https://example.com/healthz

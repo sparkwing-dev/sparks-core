@@ -1,0 +1,103 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// pypi-publish-wheel`. Edit freely -- nothing here re-runs.
+//
+// Build a Python sdist and wheel, validate them with `twine check`, and
+// upload to a package index with `twine upload`. The version-file gate
+// refuses to publish a version whose git tag already exists. Build and
+// check run locally; the upload honors the dry-run convention, echoing
+// its argv instead of reaching the index while dry-run is set.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/release"
+)
+
+const (
+	packageDir   = {{quote .package_dir}}
+	buildCmd     = {{quote .build_cmd}}
+	repository   = {{quote .repository}}
+	versionFile  = {{quote .version_file}}
+	versionField = {{quote .version_field}}
+	tokenSecret  = {{quote .token_secret}}
+)
+
+// {{pascal .pipeline_name}} builds and validates a Python distribution
+// and publishes it to {{.repository}}. The version declared in
+// {{.version_file}} gates the run: a release whose tag already exists is
+// refused before anything builds.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build, check, and publish a Python wheel + sdist to {{.repository}}"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Reads the version from {{.version_file}}, refuses to publish it when the matching git tag already exists, builds the sdist and wheel, validates them with `twine check`, then uploads with `twine upload`. With dry-run set the upload echoes its argv instead of reaching the index; clear dry-run and provide the token secret to publish for real."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Dry run: build, check, and echo the upload command", Command: "sparkwing run {{.pipeline_name}}"},
+		{Comment: "Publish for real (scaffold with dry-run cleared)", Command: "sparkwing pipeline new --template pypi-publish-wheel --param dry-run="},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	guard := sparkwing.Job(plan, "guard-version", p.guardVersion)
+	build := sparkwing.Job(plan, "build", p.build).Needs(guard)
+	check := sparkwing.Job(plan, "twine-check", p.check).Needs(build)
+	sparkwing.Job(plan, "upload", p.upload).Needs(check)
+	return nil
+}
+
+// guardVersion reads the version declared in the version file and fails
+// the run if a matching git tag already exists, so an already-published
+// version is never re-uploaded.
+func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
+	version, err := release.GuardVersionFile(ctx, release.VersionFileConfig{
+		Path:  filepath.Join(packageDir, versionFile),
+		Field: versionField,
+	})
+	if err != nil {
+		return err
+	}
+	sparkwing.Annotate(ctx, fmt.Sprintf("publishing version %s", version))
+	return nil
+}
+
+// build produces the sdist and wheel by running the configured build
+// command in the package directory.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, buildCmd).Dir(packageDir).Run()
+	return err
+}
+
+// check validates the built distributions with `twine check` before any
+// upload.
+func (p *{{pascal .pipeline_name}}) check(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, "twine check dist/*").Dir(packageDir).Run()
+	return err
+}
+
+// upload publishes the built distributions to the configured repository
+// with `twine upload`, authenticating with the token secret. It honors
+// the dry-run convention, echoing the argv instead of reaching the index
+// while dry-run is set.
+func (p *{{pascal .pipeline_name}}) upload(ctx context.Context) error {
+	return release.PyPIPublish(ctx, release.PyPIPublishConfig{
+		Dir:         packageDir,
+		Repository:  repository,
+		TokenSecret: tokenSecret,
+		DryRun:      {{if .dry_run}}true{{else}}false{{end}},
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

@@ -1,0 +1,52 @@
+name: terraform-plan-pr
+description: |
+  Run terraform init + terraform plan against a Terraform root and surface
+  the add/change/destroy summary as a run annotation and an optional webhook
+  comment. This pipeline never applies -- plan is the whole point, so a
+  reviewer sees exactly what a merge would do before anyone touches
+  infrastructure.
+whenToUse: |
+  Reach for plan-only visibility into Terraform changes on a pull request,
+  with zero mutation. Pick terraform-apply-gated instead when you also want
+  to apply the plan behind a human approval gate. Pick approval-gated-deploy
+  instead when the gated artifact is a generic deploy, not Terraform. One
+  `terraform` CLI serves both AWS and GCP, so this template is cloud-agnostic.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: tf-plan
+  - name: tf-dir
+    type: string
+    description: Terraform root directory (where the .tf files and backend config live), relative to the repo root.
+    default: "."
+  - name: var-file
+    type: string
+    description: Optional tfvars file passed to plan as -var-file (e.g. prod.tfvars). Empty omits it.
+    default: ""
+  - name: workspace
+    type: string
+    description: Optional terraform workspace selected before planning. Empty uses the current/default workspace; the workspace must already exist.
+    default: ""
+  - name: notify-webhook
+    type: string
+    description: Optional webhook URL the plan summary is POSTed to (Slack-style {"text":...}). Empty is a safe no-op, so the report node stays green with no webhook.
+    default: ""
+prerequisite: >-
+  The `terraform` binary on PATH and a Terraform root directory (default the
+  repo root) holding your .tf files and backend configuration. Backend/state
+  access uses ambient credentials; plan reads state but never mutates
+  infrastructure.
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: terraform
+verify: compile-only
+verify_fixture: none
+verify_params:
+  pipeline-name: tf-plan
+  tf-dir: infra
+  var-file: prod.tfvars
+  workspace: prod
+  notify-webhook: https://example.com/hooks/terraform

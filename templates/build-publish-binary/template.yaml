@@ -1,15 +1,18 @@
 name: build-publish-binary
 description: |
-  Build a versioned Go binary, write a SHA-256 checksum, and publish
-  both into a local release directory. Fully local -- no cloud,
-  registry, or cluster -- so it runs end-to-end with `sparkwing run` on
-  a laptop. A post-build Verify re-hashes the published artifact.
+  Build a versioned, statically linked Go binary, write a SHA-256
+  checksums manifest, and publish both into a local release directory.
+  Fully local -- no cloud, registry, or cluster -- so it runs end-to-end
+  with `sparkwing run` on a laptop. A post-build Verify re-hashes the
+  published artifact against the manifest.
 whenToUse: |
   Produce a release artifact from a Go repo: compile with a version
   stamped via -ldflags, checksum it, and drop both into a release dir.
   Use for CLI/tool releases or any "build an artifact and verify it"
-  flow. For container images use a docker-deploy template; for static
-  sites use a static-deploy template.
+  flow. To publish a versioned GitHub release with built assets use
+  github-release-go; for language package registries use
+  npm-publish-package or pypi-publish-wheel. For container images use a
+  docker-deploy template; for static sites use a static-deploy template.
 parameters:
   - name: pipeline-name
     type: string
@@ -21,8 +24,16 @@ parameters:
     default: ./cmd/app
   - name: binary-name
     type: string
-    description: Output binary file name (a version suffix is appended).
+    description: Base output binary name; the artifact is `<binary>_<version>_<goos>_<goarch>`.
     default: app
+  - name: version-var
+    type: string
+    description: >-
+      Linker symbol the version is stamped into via `-ldflags -X` (for
+      example main.Version, main.version, or a package path like
+      example.com/app/internal/build.Version). The linker ignores it when
+      the symbol does not exist.
+    default: main.Version
   - name: release-dir
     type: string
     description: Directory (relative to the repo root) to publish artifacts into.
@@ -31,3 +42,9 @@ prerequisite: The Go package named by main-package (default ./cmd/app) plus a go
 applicability:
   cloud: []
   category: build
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  main-package: "."
+  binary-name: app
+  release-dir: dist

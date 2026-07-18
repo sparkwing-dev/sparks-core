@@ -27,19 +27,19 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	approve := sparkwing.JobApproval(plan, "approve-deploy", sparkwing.ApprovalConfig{
 		Message:  "Approve deploy to {{.environment}}?",
 		Timeout:  {{.timeout_hours}} * time.Hour,
-		OnExpiry: sparkwing.ApprovalDeny, // unanswered = do not deploy
+		OnExpiry: sparkwing.ApprovalDeny,
 	}).Needs(test)
 	sparkwing.Job(plan, "deploy", p.deploy).Needs(approve)
 	return nil
 }
 
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
-	_, err := sparkwing.Bash(ctx, `echo "build step - replace with real logic"`).Run()
+	_, err := sparkwing.Bash(ctx, {{quote .build_cmd}}).Run()
 	return err
 }
 
 func (p *{{pascal .pipeline_name}}) test(ctx context.Context) error {
-	_, err := sparkwing.Bash(ctx, `echo "test step - replace with real logic"`).Run()
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
 	return err
 }
 

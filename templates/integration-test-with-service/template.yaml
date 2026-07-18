@@ -2,13 +2,17 @@ name: integration-test-with-service
 description: |
   Run integration tests against a throwaway service container (Postgres,
   Redis, ...) that's started before the tests and torn down after --
-  even on failure or panic -- via sparkwing's services.WithServices.
-  Needs a Docker daemon; no cloud or cluster.
+  even on failure or panic -- via sparkwing's services.With. Needs a
+  Docker daemon; no cloud or cluster.
 whenToUse: |
-  Tests that need a real dependency (database, cache, broker) running
-  locally. The service is published to 127.0.0.1:<port> so your test
-  reaches it at localhost:<port> on every platform. For CI hygiene with
-  no dependency use lint-test-go; for sharded suites use test-shards.
+  Tests that need a real dependency (a database, a cache, a broker)
+  running locally in Docker. The container's port is published to an
+  ephemeral host port that's injected into the test as an env var, so
+  the test reaches the service on localhost on every platform. One
+  service per scaffold; add more by nesting services.With calls in the
+  body. For CI hygiene with no dependency use lint-test-go; for sharded
+  suites use test-shards; to gate on a coverage threshold use
+  coverage-gated-test.
 parameters:
   - name: pipeline-name
     type: string
@@ -20,7 +24,9 @@ parameters:
     default: postgres:16-alpine
   - name: service-port
     type: string
-    description: Port the service listens on; published to 127.0.0.1:<port> for the test.
+    description: |
+      Port the service listens on inside the container. It's published
+      to an ephemeral host port and injected into the test.
     default: "5432"
   - name: ready-cmd
     type: string
@@ -29,12 +35,26 @@ parameters:
       no host-side client). The service is ready when it exits 0.
       Examples: "pg_isready -U postgres", "redis-cli ping".
     default: pg_isready -U postgres
-  - name: service-env
+  - name: ready-timeout
+    type: string
+    description: |
+      Maximum time to wait for the readiness probe to pass, as a Go
+      duration (e.g. 30s, 2m). Services that migrate or seed on boot
+      need a larger value than the default.
+    default: "30s"
+  - name: env
     type: string
     description: |
       Container environment as "KEY=VAL,KEY=VAL". The postgres image
       needs POSTGRES_PASSWORD to start; redis needs none (set empty).
+      The test must connect with the same credentials set here.
     default: POSTGRES_PASSWORD=postgres,POSTGRES_DB=app
+  - name: port-env
+    type: string
+    description: |
+      Env var the ephemeral host port is injected into for the test
+      command; the test reads it to reach the service on localhost.
+    default: SERVICE_PORT
   - name: test-cmd
     type: string
     description: Test command, run on the host once the service is ready.
@@ -42,4 +62,6 @@ parameters:
 prerequisite: A Go module + tests at ./integration (the default test-cmd) and a running Docker daemon.
 applicability:
   cloud: []
-  category: ci-hygiene
+  category: testing-strategies
+verify: runnable
+verify_fixture: docker

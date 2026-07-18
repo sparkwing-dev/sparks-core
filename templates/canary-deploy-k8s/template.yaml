@@ -1,0 +1,104 @@
+name: canary-deploy-k8s
+description: |
+  Progressive canary rollout on Kubernetes: build the image, deploy a
+  small canary alongside the stable Deployment, probe the canary's own
+  endpoint, then promote the stable Deployment to the new image on
+  success or delete the canary (leaving stable untouched) on failure.
+  A build -> canary -> probe -> {promote|abort} DAG composed from
+  sparks-core blocks -- the control flow is visible and editable.
+whenToUse: |
+  Reach for this when a bad revision must be caught on a slice of traffic
+  before it reaches everyone -- the canary runs the new image and only a
+  passing health probe promotes it fleet-wide. Choose over
+  go-test-build-deploy-k8s / go-test-migrate-deploy-argo, which flip the
+  whole Deployment at once and roll back after: canary verifies before
+  promotion instead of reverting after. For an instant all-or-nothing
+  selector cutover with a warm rollback, blue/green is a documentable
+  variant of this template plus a Service selector flip. Language-agnostic:
+  set test-cmd to your stack's test command (pytest, npm test, cargo
+  test, ...) or empty to skip the test node.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name to build and roll out (e.g. myapp).
+  - name: registry
+    type: string
+    description: |
+      Container registry URL to push to (e.g.
+      <acct>.dkr.ecr.<region>.amazonaws.com,
+      us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org). Empty resolves
+      a kind cluster (SPARKWING_KIND_CLUSTER) or local registry
+      (SPARKWING_REGISTRY) instead.
+    default: ""
+  - name: namespace
+    type: string
+    required: true
+    description: Kubernetes namespace for both the canary and the stable Deployment.
+  - name: container
+    type: string
+    required: true
+    description: Container name within the pod spec to retag on the canary and on promote.
+  - name: stable-deployment
+    type: string
+    required: true
+    description: Stable rollout target promoted on success, e.g. deploy/myapp.
+  - name: canary-manifest
+    type: string
+    description: |
+      Path to the canary Deployment+Service manifest applied (and pinned
+      to the new image) for the probe. Deleted on both promote and abort.
+    default: k8s/canary.yaml
+  - name: canary-deployment
+    type: string
+    required: true
+    description: Canary Deployment name waited on and cleaned up, e.g. deploy/myapp-canary.
+  - name: canary-health-url
+    type: string
+    required: true
+    description: URL of the canary's service the post-deploy probe checks for a 2xx before promoting.
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: platform
+    type: string
+    description: |
+      Build target platform passed to docker build --platform (e.g.
+      linux/amd64). Empty builds for the builder's native architecture;
+      set it when the builder arch differs from the cluster nodes (a
+      laptop-driven canary onto an amd64 cluster).
+    default: ""
+  - name: rollout-timeout
+    type: string
+    description: |
+      Timeout for each kubectl rollout-status wait, applied to both the
+      canary rollout and the stable promotion (e.g. 180s, 5m). Raise it
+      for a large stable Deployment or a slow-starting app.
+    default: 180s
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: canary-deploy
+  - name: test-cmd
+    type: string
+    description: Pre-build test command. Empty disables the test node.
+    default: go test ./...
+applicability:
+  cloud: [aws, gcp]
+  category: docker-deploy
+prerequisite: |
+  A Kubernetes cluster with the stable Deployment already running, plus a
+  canary Deployment+Service manifest in the repo. The runner needs docker
+  and kubectl on PATH and a resolvable kube context. ECR logins happen
+  automatically; for GAR on GCP the runner must already have docker
+  configured for the registry (`gcloud auth configure-docker
+  <region>-docker.pkg.dev`).
+verify: compile-only
+verify_params:
+  image: example-app
+  namespace: example
+  container: example-app
+  stable-deployment: deploy/example-app
+  canary-deployment: deploy/example-app-canary
+  canary-health-url: https://canary.example.com/healthz

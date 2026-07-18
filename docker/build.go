@@ -21,6 +21,13 @@ type BuildConfig struct {
 	Tags       sparkwingDocker.ImageTag
 	AWSProfile string
 	Platform   string
+	// BuildArgs are forwarded as --build-arg K=V (order-independent). Set
+	// PROXY_URL here to route package installs through a dependency proxy.
+	BuildArgs map[string]string
+	// CacheFrom are BuildKit --cache-from specs; see BuildCacheRef.
+	CacheFrom []string
+	// CacheTo are BuildKit --cache-to specs; see BuildCacheRef.
+	CacheTo []string
 }
 
 // ecrLoginOnce ensures each ECR registry is authenticated exactly
@@ -94,26 +101,47 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 		if cfg.Platform != "" {
 			args = append(args, "--platform", cfg.Platform)
 		}
+		args = append(args, buildArgFlags(cfg.BuildArgs)...)
+		for _, c := range cfg.CacheFrom {
+			args = append(args, "--cache-from", c)
+		}
+		for _, c := range cfg.CacheTo {
+			args = append(args, "--cache-to", c)
+		}
 		for _, t := range buildTags {
 			args = append(args, "-t", t)
 		}
 		args = append(args, cfg.Context)
-		return step.Exec(ctx, "docker", args...)
+		if dryRun() {
+			echoArgv(ctx, "docker", args)
+			return nil
+		}
+		_, err := sparkwing.Exec(ctx, "docker", args...).Env(buildKitEnv, "1").Run()
+		return err
 	}); err != nil {
 		return err
 	}
 
 	if kindCluster := os.Getenv("SPARKWING_KIND_CLUSTER"); kindCluster != "" {
 		loadTag := cfg.Image + ":" + cfg.Tags.DeployTag()
+		loadArgs := []string{"load", "docker-image", loadTag, "--name", kindCluster}
 		return step.Run(ctx, "kind load ("+cfg.Image+")", func(ctx context.Context) error {
+			if dryRun() {
+				echoArgv(ctx, "kind", loadArgs)
+				return nil
+			}
 			sparkwing.Info(ctx, "kind load %s -> %s", loadTag, kindCluster)
-			return step.Exec(ctx, "kind", "load", "docker-image", loadTag, "--name", kindCluster)
+			return step.Exec(ctx, "kind", loadArgs...)
 		})
 	}
 
 	for _, t := range pushTags {
 		pushTag := t
 		if err := step.Run(ctx, "push ("+cfg.Image+")", func(ctx context.Context) error {
+			if dryRun() {
+				echoArgv(ctx, "docker", []string{"push", pushTag})
+				return nil
+			}
 			sparkwing.Info(ctx, "pushing %s", pushTag)
 			if err := step.Exec(ctx, "docker", "push", pushTag); err != nil {
 				return err

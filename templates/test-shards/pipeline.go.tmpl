@@ -24,6 +24,9 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	if {{pascal .pipeline_name}}ShardTotal < 1 {
+		return fmt.Errorf("shards must be >= 1, got %d", {{pascal .pipeline_name}}ShardTotal)
+	}
 	idx := make([]int, {{pascal .pipeline_name}}ShardTotal)
 	for i := range idx {
 		idx[i] = i
@@ -35,13 +38,25 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// {{pascal .pipeline_name}}Shard runs the suite for one shard. The test
-// command sees SHARD_INDEX (0-based) and SHARD_TOTAL in its environment
-// so it can select its slice -- via a test runner's native --shard
-// flag, or `go test -run` over a computed subset.
+// {{pascal .pipeline_name}}Shard runs one shard of the suite. Its test
+// command sees SHARD_INDEX (0-based) and SHARD_TOTAL in the environment
+// and selects its slice from them -- the default splits the module's
+// packages by list position; a test runner's native --shard flag works
+// too.
 type {{pascal .pipeline_name}}Shard struct {
 	sparkwing.Base
 	index int
+}
+
+// Prefers biases every shard onto a runner advertising the configured
+// label. It is a soft preference, not a hard Requires, so a
+// single-runner setup still dispatches the shard.
+func ({{pascal .pipeline_name}}Shard) Prefers() []string {
+	label := {{quote .runner_label}}
+	if label == "" {
+		return nil
+	}
+	return []string{label}
 }
 
 func (s *{{pascal .pipeline_name}}Shard) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {

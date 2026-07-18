@@ -1,9 +1,9 @@
 # go-test-build-deploy-k8s
 
-Test, build a Docker image to ECR, and deploy to Kubernetes by applying
-the repo's own manifests with `kubectl apply`. A post-deploy HTTP probe
-verifies the new revision; an unhealthy result triggers an automatic
-`kubectl rollout undo`.
+Test, build a Docker image, push it to your registry, and deploy to
+Kubernetes by applying the repo's own manifests with `kubectl apply`. A
+post-deploy HTTP probe verifies the new revision; an unhealthy result
+triggers an automatic `kubectl rollout undo`.
 
 This is a **raw-composition** template: the generated `Plan()` wires
 sparks-core blocks (`docker`, `kube`, `probe`) into a `test -> build ->
@@ -22,17 +22,22 @@ blocks do the work; the scaffolded file is just the shape.
   `go-test-migrate-deploy-argo` or `docker-deploy-ecr-eks`.
 - You need database migrations as part of the deploy: use
   `go-test-migrate-deploy-argo`.
+- You're on GCP (GAR + GKE, kubectl-applied): use
+  `gke-deploy-gar-kubectl`.
 
 ## Parameters
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `image` | yes | | Image name (e.g. `myapp`) |
-| `ecr` | yes | | ECR registry URL |
+| `registry` | no | (empty) | Registry URL to push to (ECR/GAR/GHCR); empty resolves a kind cluster (`SPARKWING_KIND_CLUSTER`) or local registry (`SPARKWING_REGISTRY`) |
 | `namespace` | yes | | Kubernetes namespace |
 | `health-url` | yes | | URL the post-deploy probe checks for a 2xx |
 | `app-name` | yes | | Deployment name; waits on / rolls back `deploy/<app-name>` |
+| `container` | no | (app-name) | Container name within the pod spec to retag; defaults to `app-name` |
 | `k8s-path` | no | `k8s` | Path passed to `kubectl apply -f` |
+| `dockerfile` | no | `Dockerfile` | Path to the Dockerfile, relative to the repo root |
+| `platform` | no | (native) | Build target platform for `docker build --platform` (e.g. `linux/amd64`) |
 | `pipeline-name` | no | `build-test-deploy` | Name users type after `sparkwing run` |
 | `test-cmd` | no | `go test ./...` | Pre-build test command; empty disables the test node |
 
@@ -44,19 +49,29 @@ blocks do the work; the scaffolded file is just the shape.
 - The probe accepts any 2xx. Tighten it with `.ExpectStatus(200)` or
   `.ExpectJSON("status", "ok")` if your health endpoint returns
   structured output.
+- The probe polls for about 60s (`.Retry(30).Interval(2 * time.Second)`)
+  before giving up. If your app needs longer to become healthy (JVM
+  warmup, cache priming), raise the retry count or interval so a slow
+  start doesn't trip a false rollback.
+- The build targets the builder's native architecture unless you set
+  `platform`. When the builder arch differs from the cluster nodes (an
+  arm64 laptop or Graviton runner pushing to amd64 nodes), set
+  `platform` to `linux/amd64` so the image can actually run.
 - Rollback is `kubectl rollout undo`. Swap the `OnFailure` body for your
   own recovery if a plain rollout-undo isn't enough.
 
 ## Kubernetes manifests (you supply these)
 
 The `deploy` node runs `kubectl apply -f <k8s-path>` and then `kubectl set
-image deploy/<app-name> <app-name>=<built-image>`. So your `k8s-path`
-directory must contain a Deployment (plus a Service) and **three names
-must agree** — a mismatch compiles fine and only fails at deploy time:
+image deploy/<app-name> <container>=<built-image>`. So your `k8s-path`
+directory must contain a Deployment (plus a Service) and **the names must
+agree**. A mismatch compiles fine and only fails at deploy time:
 
-- the Deployment's `metadata.name` and its container `name` must both be
-  `<app-name>` (the pipeline rolls `deploy/<app-name>` and sets the image
-  on the container named `<app-name>`);
+- the Deployment's `metadata.name` must be `<app-name>` (the pipeline
+  rolls `deploy/<app-name>`);
+- its container `name` must be `<container>`, which defaults to
+  `<app-name>` -- set the `container` param when your Deployment names
+  the container differently;
 - the Service that backs `health-url` must resolve to those pods.
 
 A minimal starter (`k8s/`), with `<app-name>` = `myapp`, namespace
@@ -74,7 +89,7 @@ spec:
     metadata: { labels: { app: myapp } }
     spec:
       containers:
-        - name: myapp            # MUST equal app-name
+        - name: myapp            # MUST equal the container param (defaults to app-name)
           image: myapp:latest    # set-image overwrites the tag each deploy
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8080 }]

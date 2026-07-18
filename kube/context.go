@@ -4,11 +4,38 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 
 	"github.com/sparkwing-dev/sparks-core/step"
 )
+
+// dryRunEnv, when non-empty, switches every cloud-mutating kube helper
+// into echo mode: it logs the exact kubectl argv it would run and
+// returns success without touching the cluster. This is what a
+// template-verify run relies on to stay green with no reachable cluster.
+const dryRunEnv = "SPARKWING_DRY_RUN"
+
+// dryRunKey marks a context so kubectl echoes instead of executing, the
+// per-call equivalent of setting SPARKWING_DRY_RUN.
+type dryRunKey struct{}
+
+// withDryRun returns ctx marked for echo mode, so a single Delete/Scale
+// call can opt into dry-run without setting the process-wide env var.
+func withDryRun(ctx context.Context) context.Context {
+	return context.WithValue(ctx, dryRunKey{}, true)
+}
+
+// dryRunEnabled reports whether echo mode is active for ctx: either the
+// SPARKWING_DRY_RUN env var is set, or the context was marked per call.
+func dryRunEnabled(ctx context.Context) bool {
+	if os.Getenv(dryRunEnv) != "" {
+		return true
+	}
+	on, _ := ctx.Value(dryRunKey{}).(bool)
+	return on
+}
 
 // ResolveContext decides which kubectl context a command should target.
 // It is the single policy point for every kubectl invocation in this
@@ -70,10 +97,22 @@ func contextArgs(explicit string) ([]string, error) {
 }
 
 // kubectl runs `kubectl [--context <resolved>] args...`, resolving the
-// context via ResolveContext. Every kubectl invocation in this package
-// goes through here so the context is always explicit and never silently
-// the current one.
+// context via ResolveContext. Every cloud-mutating kubectl invocation in
+// this package goes through here so the context is always explicit and
+// never silently the current one. Under dry-run (SPARKWING_DRY_RUN or a
+// per-call withDryRun context) it echoes the resolved argv and returns
+// success without contacting the cluster; the fail-closed context guard
+// is relaxed there because nothing is executed, so a dry run never needs
+// a configured context to succeed.
 func kubectl(ctx context.Context, explicit string, args ...string) error {
+	if dryRunEnabled(ctx) {
+		full := args
+		if kc, err := ResolveContext(explicit); err == nil && kc != "" {
+			full = append([]string{"--context", kc}, args...)
+		}
+		sparkwing.Info(ctx, "[dry-run] kubectl %s", strings.Join(full, " "))
+		return nil
+	}
 	ca, err := contextArgs(explicit)
 	if err != nil {
 		return err

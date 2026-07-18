@@ -1,0 +1,135 @@
+// Scaffolded from the cloudrun-deploy-source template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: the deploy node calls a sparks-core block
+// directly, so the orchestration (what deploys, what verifies, what rolls
+// back) is visible and editable. The blocks do the heavy lifting.
+package jobs
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/cloudrun"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} deploys service {{.service}} to Cloud Run
+// straight from source: Cloud Build's buildpacks build the container
+// server-side, no Dockerfile. After the rollout a health probe verifies
+// the new revision at the URL the deploy returns; a definitively-unhealthy
+// result shifts traffic back to the previous revision.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// url is the service URL the deploy resolves at run time; the Verify
+	// probe reads it. Empty under SPARKWING_DRY_RUN, which skips the probe.
+	url string
+	// priorRevision is the revision that was serving before this deploy,
+	// captured so a failed verify rolls back to a known-good target instead
+	// of rediscovering one. Empty on a first deploy or under dry-run.
+	priorRevision string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Verify(p.verify).
+		OnFailure("rollback", p.rollback)
+	return nil
+}
+
+// deploy rolls the source tree out to Cloud Run and records the returned
+// service URL for the Verify probe. Returning nil means the rollout
+// succeeded; the node's Verify then decides whether the new revision is
+// actually healthy.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	res, err := cloudrun.DeploySource(ctx, cloudrun.DeployConfig{
+		Service:              {{quote .service}},
+		Source:               {{quote .source_dir}},
+		Region:               {{quote .region}},
+		Project:              {{quote .project}},
+		Env:                  parseEnv({{quote .env}}),
+		AllowUnauthenticated: allowUnauthenticated({{quote .allow_unauthenticated}}),
+	})
+	if err != nil {
+		return err
+	}
+	p.url = res.URL
+	p.priorRevision = res.PriorRevision
+	return nil
+}
+
+// verify probes the freshly deployed service. Under SPARKWING_DRY_RUN the
+// deploy echoes its argv and returns no URL, so there is nothing live to
+// probe and the check passes.
+func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
+	if p.url == "" {
+		sparkwing.Info(ctx, "no service URL resolved (dry-run) - skipping health probe")
+		return nil
+	}
+	return probe.HTTP(p.url+{{quote .health_path}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+// rollback shifts traffic back only on a definitive unhealthy verdict from
+// the post-deploy probe. A failure before the verify stage (the deploy
+// body itself erroring) rolled nothing out -- the current revision is
+// still serving -- so reverting traffic would move production off a
+// healthy revision in response to a build error; it surfaces the error
+// untouched instead. An indeterminate probe result (unreachable, timeout,
+// auth -- probe.Indeterminate) is not evidence the new revision is bad, so
+// it too leaves the new revision in place to investigate.
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage != sparkwing.StageVerify {
+		sparkwing.Warn(ctx, "deploy failed before verification (%s stage: %v) - no new revision took traffic, leaving the service untouched", f.Stage, f.Err)
+		return f.Err
+	}
+	if probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "post-deploy health check failed - shifting traffic back to the prior revision")
+	return cloudrun.Rollback(cloudrun.RollbackConfig{
+		Service:  {{quote .service}},
+		Region:   {{quote .region}},
+		Project:  {{quote .project}},
+		Revision: p.priorRevision,
+	})(ctx)
+}
+
+// allowUnauthenticated reports whether the service should be publicly
+// reachable (--allow-unauthenticated). Only an explicit truthy value makes
+// it public; "", "false", "0", and "no" all keep the service private, so a
+// falsey-looking string never accidentally exposes it to the internet.
+func allowUnauthenticated(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// parseEnv turns a "KEY=VAL,KEY=VAL" parameter into the env map the deploy
+// passes to --set-env-vars. An empty string yields no env vars.
+func parseEnv(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	env := map[string]string{}
+	for _, pair := range strings.Split(raw, ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		env[strings.TrimSpace(k)] = v
+	}
+	return env
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

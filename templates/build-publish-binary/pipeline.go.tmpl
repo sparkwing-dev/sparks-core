@@ -1,33 +1,42 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // build-publish-binary`. Edit freely -- nothing here re-runs.
 //
-// Build a versioned Go binary, checksum it, and publish both into a
-// local release directory. Fully local: no cloud, registry, or cluster.
+// Build a versioned, statically linked Go binary, checksum it, and
+// publish both into a local release directory. Fully local: no cloud,
+// registry, or cluster.
 package jobs
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/release"
 )
-
-// {{pascal .pipeline_name}} builds {{.main_package}} into a versioned
-// binary, writes a SHA-256 checksum, and publishes both into
-// {{.release_dir}}/. A Verify postcondition re-hashes the published
-// artifact so a corrupted copy fails the run at the verify stage.
-type {{pascal .pipeline_name}} struct{ sparkwing.Base }
-
-func ({{pascal .pipeline_name}}) ShortHelp() string {
-	return "Build a versioned Go binary + checksum, publish to {{.release_dir}}/"
-}
 
 const (
 	binaryName = {{quote .binary_name}}
 	releaseDir = {{quote .release_dir}}
 	mainPkg    = {{quote .main_package}}
+	versionVar = {{quote .version_var}}
 )
+
+// {{pascal .pipeline_name}} builds {{.main_package}} into a versioned,
+// statically linked binary, writes a SHA-256 checksums manifest, and
+// publishes both into {{.release_dir}}/. A Verify postcondition re-hashes
+// the published artifact so a corrupted copy fails the run at the verify
+// stage.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build a versioned Go binary + checksum, publish to {{.release_dir}}/"
+}
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 	sparkwing.Job(plan, "build-publish", p.buildPublish).
@@ -36,51 +45,74 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 }
 
 // buildPublish derives a version from git (falling back to "dev" in a
-// repo with no tags/commits), compiles with that version stamped via
-// -ldflags, then writes the binary + a .sha256 checksum into the
-// release dir. All paths resolve against the repo root (WorkDir).
+// repo with no tags/commits), cross-builds the host platform with that
+// version stamped via -ldflags into a trimmed, CGO-free binary, then
+// writes a sha256sum-format checksums.txt over the release dir.
 func (p *{{pascal .pipeline_name}}) buildPublish(ctx context.Context) error {
-	version, err := sparkwing.Bash(ctx, "git describe --tags --always --dirty 2>/dev/null || echo dev").String()
+	version, err := release.DeriveVersion(ctx, release.VersionConfig{
+		Describe:       true,
+		DevFallback:    "dev",
+		AllowNonSemver: true,
+	})
 	if err != nil {
-		return fmt.Errorf("derive version: %w", err)
+		return err
 	}
-	out := sparkwing.Path(releaseDir, binaryName+"-"+version)
-	_, err = sparkwing.Bash(ctx,
-		`set -euo pipefail
-mkdir -p "$DIR"
-go build -ldflags "-X main.Version=$VER" -o "$OUT" "$PKG"
-shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256"`).
-		Env("DIR", sparkwing.Path(releaseDir)).
-		Env("VER", version).
-		Env("OUT", out).
-		Env("PKG", mainPkg).
-		Run()
+	artifacts, err := release.CrossBuildGo(ctx, release.CrossBuildConfig{
+		MainPkg:    mainPkg,
+		BinaryName: binaryName,
+		Version:    version,
+		Platforms:  []string{runtime.GOOS + "/" + runtime.GOARCH},
+		OutDir:     releaseDir,
+		LDFlags:    fmt.Sprintf("-X %s=%s", versionVar, version),
+		Trimpath:   true,
+	})
 	if err != nil {
-		return fmt.Errorf("build+publish: %w", err)
+		return err
 	}
-	sparkwing.Info(ctx, "published %s (version %s)", out, version)
-	sparkwing.Annotate(ctx, fmt.Sprintf("published %s", filepath.Base(out)))
+	if err := release.Checksums(ctx, release.ChecksumConfig{Dir: releaseDir}); err != nil {
+		return err
+	}
+	sparkwing.Info(ctx, "published %d artifact(s) for version %s", len(artifacts), version)
+	sparkwing.Annotate(ctx, fmt.Sprintf("published %s %s", binaryName, version))
 	return nil
 }
 
-// verifyChecksum re-hashes every published binary and compares it to the
-// recorded .sha256, failing the node at the verify stage on a mismatch.
+// verifyChecksum re-reads checksums.txt and re-hashes every listed
+// artifact, failing the node at the verify stage on any mismatch.
 func (p *{{pascal .pipeline_name}}) verifyChecksum(ctx context.Context) error {
-	_, err := sparkwing.Bash(ctx,
-		`set -euo pipefail
-shopt -s nullglob
-for f in "$DIR"/*.sha256; do
-  bin="${f%.sha256}"
-  want=$(cat "$f")
-  got=$(shasum -a 256 "$bin" | awk '{print $1}')
-  if [ "$want" != "$got" ]; then
-    echo "checksum mismatch for $bin"
-    exit 1
-  fi
-done`).
-		Env("DIR", sparkwing.Path(releaseDir)).
-		Run()
-	return err
+	root := sparkwing.WorkDir()
+	if root == "" {
+		root = "."
+	}
+	data, err := os.ReadFile(filepath.Join(root, releaseDir, "checksums.txt"))
+	if err != nil {
+		return fmt.Errorf("read checksums: %w", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		want, name := fields[0], fields[1]
+		got, err := sha256File(filepath.Join(root, releaseDir, name))
+		if err != nil {
+			return err
+		}
+		if want != got {
+			return fmt.Errorf("checksum mismatch for %s", name)
+		}
+	}
+	return nil
+}
+
+// sha256File returns the lowercase hex SHA-256 of a file's contents.
+func sha256File(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum), nil
 }
 
 func init() {

@@ -1,0 +1,67 @@
+name: pypi-publish-wheel
+description: |
+  Build a Python sdist and wheel, validate them with `twine check`, and
+  upload to PyPI (or TestPyPI) with `twine upload`, gated on the project
+  version being unreleased. Build and check run locally; the upload
+  routes through a block that honors SPARKWING_DRY_RUN, so a scaffold
+  renders and (in a dry run) echoes its argv without reaching a real
+  index.
+whenToUse: |
+  The Python package-registry publish. Pick over github-release-go when
+  consumers install with `pip install your-pkg`, not by downloading a
+  binary. Sibling registry template: npm-publish-package (Node). Set the
+  repository param to testpypi to rehearse against TestPyPI first, then
+  flip it to pypi for the real upload.
+prerequisite: |
+  A Python project at package-dir with a build backend and a declared
+  version in the version file (pyproject.toml by default), plus the build
+  command's toolchain (python and the build module by default) and twine
+  on PATH.
+parameters:
+  - name: pipeline-name
+    type: string
+    default: publish-pypi
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: package-dir
+    type: string
+    default: "."
+    description: Directory containing pyproject.toml / setup.cfg, relative to the repo root. Build, check, and upload all run here.
+  - name: build-cmd
+    type: string
+    default: python -m build
+    description: Command that builds the sdist and wheel into dist/, run in package-dir. Swap for `uv build`, `python -m build --wheel`, or a hatch/flit invocation as your backend requires.
+  - name: repository
+    type: string
+    default: testpypi
+    description: "twine repository target: testpypi (safe default) or pypi."
+  - name: version-file
+    type: string
+    default: pyproject.toml
+    description: Manifest whose declared version gates the release, relative to package-dir. The release is refused when its git tag already exists.
+  - name: version-field
+    type: string
+    default: ""
+    description: Dotted version key within the version file. Empty uses the file's default (project.version for pyproject.toml); set tool.poetry.version for a Poetry project.
+  - name: token-secret
+    type: string
+    default: PYPI_API_TOKEN
+    description: Name of the sparkwing secret holding the index API token (username __token__), exported as TWINE_PASSWORD. TestPyPI needs its own token, distinct from a PyPI one.
+  - name: dry-run
+    type: string
+    default: "true"
+    description: When non-empty, the upload echoes its twine argv instead of reaching the index. Set empty to publish for real.
+applicability:
+  cloud: []
+  category: release-publish
+verify: dry-runnable
+verify_fixture: python-module
+verify_tools: [twine, pyproject-build]
+verify_params:
+  pipeline-name: publish-pypi
+  package-dir: "."
+  build-cmd: python -m build
+  repository: testpypi
+  version-file: pyproject.toml
+  version-field: ""
+  token-secret: PYPI_API_TOKEN
+  dry-run: ""

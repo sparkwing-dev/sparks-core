@@ -1,15 +1,20 @@
 name: static-deploy-s3-cloudfront
 description: |
-  Build a Next.js (or any static-output) app and sync to S3 +
-  CloudFront with cache invalidation. Mirrors the webapp /
-  webapp / mysite pattern: Next static export in a
-  Docker build container, S3 sync with `--delete`, CloudFront
-  invalidation on the resulting deploy.
+  Build a Next.js (or any static-output) app and sync it to S3 +
+  CloudFront: a static export produced in a Node build container, an S3
+  sync with `--delete`, and a CloudFront invalidation on the resulting
+  deploy.
 whenToUse: |
   Static / Next.js export to S3 + CloudFront on AWS. Use for marketing
   sites and SPAs that build to static files. For the GCP equivalent use
   static-deploy-gcs-cloudcdn; for a containerized service use a
   docker-deploy template.
+prerequisite: |
+  A Next.js or other static-output site at the repo root configured to
+  emit to the out dir (`npm ci && npm run build`); a pre-provisioned S3
+  bucket and CloudFront distribution; an AWS profile with S3 write and
+  cloudfront:CreateInvalidation permission; and a Docker daemon on the
+  runner for the default container build strategy.
 parameters:
   - name: bucket
     type: string
@@ -19,10 +24,35 @@ parameters:
     type: string
     required: true
     description: CloudFront distribution ID (e.g. E2AIZJK5YLB0YN)
+  - name: aws-profile
+    type: string
+    default: ""
+    description: >-
+      AWS profile for the aws CLI (S3 sync and CloudFront invalidation).
+      Empty resolves via AWS_PROFILE, IRSA on an in-cluster runner, or the
+      default profile.
   - name: url
     type: string
     description: Deployed site URL; logged after a successful deploy.
     default: https://example.com
+  - name: out-dir
+    type: string
+    description: >-
+      Build output directory synced to S3. A custom build command usually
+      needs a matching out-dir (Vite emits dist, CRA build, plain public).
+    default: out
+  - name: node-image
+    type: string
+    description: >-
+      Node image for the container build strategy. Match your project's
+      Node major. Ignored by the host strategy.
+    default: node:22-alpine
+  - name: nextjs-strategy
+    type: string
+    description: >-
+      Build strategy: container (Docker, reproducible, the CI default) or
+      host (native npm build on the runner, no Docker).
+    default: container
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
@@ -32,9 +62,14 @@ parameters:
     description: |
       Per-site .next/cache volume name. Lets the cluster runner reuse
       Next's incremental build cache between pipeline runs. Empty
-      disables; pick something like `<project>-next` for parity with
-      existing consumer repos.
+      disables; pick something like `<project>-next`. Ignored by the host
+      strategy.
     default: ""
 applicability:
   cloud: [aws]
   category: static-site-deploy
+verify: compile-only
+verify_params:
+  bucket: example-verify-bucket
+  distribution: E1234567890ABC
+  aws-profile: example-profile

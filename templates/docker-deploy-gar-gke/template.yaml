@@ -1,44 +1,65 @@
 name: docker-deploy-gar-gke
 description: |
-  Build a Docker image, push to Google Artifact Registry, and deploy
-  via gitops to GKE. GCP mirror of docker-deploy-ecr-eks. Same shape,
-  GCP backends.
+  Test, build a Docker image, push it to Google Artifact Registry, and
+  deploy to GKE through a gitops repo: bump the kustomize image tag,
+  push, and wait for ArgoCD to sync the new revision to Synced +
+  Healthy. The GCP twin of docker-deploy-ecr-eks.
 whenToUse: |
-  Containerized app to GAR + gitops/GKE on GCP. The GCP twin of
-  docker-deploy-ecr-eks. Use for stateless services on GCP.
+  Containerized app to GAR + gitops/GKE on GCP, where an ArgoCD
+  Application tracks a gitops repo and you bump a kustomization image
+  tag to ship. The GCP twin of docker-deploy-ecr-eks. If you apply k8s
+  YAML directly with kubectl (no gitops repo, no ArgoCD), use
+  gke-deploy-gar-kubectl. For a serverless container with no cluster use
+  docker-deploy-gar-cloudrun (from a prebuilt image) or
+  cloudrun-deploy-source (deploy from source). Language agnostic despite
+  the built-in Go test default: set test-cmd to your stack's command
+  (pytest, npm test, cargo test, ...) or empty to skip the test node.
+prerequisite: |
+  A Dockerfile at the repo root, gcloud + docker on PATH, and a gitops
+  repo with a kustomization.yaml at gitops-path referencing the image,
+  plus write access to that repo (GITHUB_TOKEN or an SSH key) and an
+  ArgoCD Application named app-name tracking it against a GKE cluster.
 parameters:
   - name: image
     type: string
     required: true
     description: Image name (e.g. my-service)
-  - name: gar
+  - name: registry
     type: string
     required: true
-    description: GAR registry URL (e.g. us-west1-docker.pkg.dev/my-project/my-repo)
+    description: Container registry URL to push to (e.g. <acct>.dkr.ecr.<region>.amazonaws.com, us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org).
   - name: gitops-repo
     type: string
     required: true
-    description: SSH URL of the gitops repo
+    description: SSH URL of the gitops repo (e.g. git@github.com:org/gitops.git)
   - name: gitops-path
     type: string
     required: true
-    description: Path within the gitops repo (kustomize root)
+    description: Path within the gitops repo (kustomize root holding kustomization.yaml)
   - name: app-name
     type: string
     required: true
-    description: ArgoCD application name
+    description: ArgoCD application name; the deploy waits on it reaching Synced + Healthy
   - name: namespace
     type: string
     required: true
-    description: Kubernetes namespace
+    description: Kubernetes namespace; the local-kind path targets it directly
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: build-test-deploy
   - name: test-cmd
     type: string
-    description: Pre-build test command. Empty disables the test step.
+    description: Pre-build test command. Empty disables the test node.
     default: go test ./...
 applicability:
   cloud: [gcp]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  registry: us-central1-docker.pkg.dev/example-project/example-repo
+  gitops-repo: git@github.com:example/gitops.git
+  gitops-path: apps/example
+  app-name: example-app
+  namespace: example

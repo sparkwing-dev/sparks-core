@@ -1,8 +1,9 @@
 # build-publish-binary
 
-Build a versioned Go binary, write a SHA-256 checksum, and publish both
-into a local release directory. Fully local — no cloud, registry, or
-cluster — so it runs end-to-end with `sparkwing run` on a laptop.
+Build a versioned, statically linked Go binary, write a SHA-256 checksums
+manifest, and publish both into a local release directory. Fully local,
+with no cloud, registry, or cluster, so it runs end-to-end with
+`sparkwing run` on a laptop.
 
 ## Scaffold
 
@@ -15,14 +16,16 @@ sparkwing pipeline new --name release-binary --template build-publish-binary \
 
 One `build-publish` job:
 
-1. Derives a version from `git describe --tags --always --dirty`
+1. Derives a version from `git describe --tags --always`
    (falls back to `dev` in a repo with no tags/commits).
-2. Compiles `main-package` with the version stamped via
-   `-ldflags "-X main.Version=<version>"`.
-3. Writes the binary and a `<binary>.sha256` checksum into `release-dir`.
+2. Cross-builds the host platform with the version stamped via
+   `-ldflags "-X <version-var>=<version>"`, using `-trimpath` and
+   `CGO_ENABLED=0` for a reproducible, statically linked binary.
+3. Writes the binary as `<binary>_<version>_<goos>_<goarch>` and a
+   `checksums.txt` sha256sum-format manifest into `release-dir`.
 
-A `.Verify` postcondition re-hashes every published binary against its
-recorded checksum, failing the run at the verify stage on a mismatch.
+A `.Verify` postcondition re-reads `checksums.txt` and re-hashes every
+listed artifact, failing the run at the verify stage on a mismatch.
 
 ## Parameters
 
@@ -30,11 +33,16 @@ recorded checksum, failing the run at the verify stage on a mismatch.
 |------|----------|---------|-------------|
 | `pipeline-name` | no | `release-binary` | pipeline registration name |
 | `main-package` | no | `./cmd/app` | `go build` target, relative to repo root |
-| `binary-name` | no | `app` | output binary file name |
+| `binary-name` | no | `app` | base output binary name |
+| `version-var` | no | `main.Version` | linker symbol the version is stamped into |
 | `release-dir` | no | `dist` | publish directory, relative to repo root |
 
 ## Notes
 
 - Paths resolve against the repo root (`WorkDir()`), not `.sparkwing/`.
-- For container images use a docker-deploy template; for static sites
-  use a static-deploy template.
+- Point `version-var` at your own symbol (`main.version`, a `build`
+  package path, and so on); the linker ignores it when the symbol does
+  not exist.
+- For a real GitHub Release with cross-platform assets use
+  github-release-go. For container images use a docker-deploy template;
+  for static sites use a static-deploy template.

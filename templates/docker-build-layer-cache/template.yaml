@@ -1,0 +1,79 @@
+name: docker-build-layer-cache
+description: |
+  Build a Docker image with BuildKit layer caching wired for reuse across
+  CI runs. The build reads prior layers via --cache-from and exports fresh
+  ones via --cache-to, so a repeat build replays unchanged layers instead
+  of rebuilding them. Cache lives in a host directory by default (runs
+  green with only Docker) or in an ECR/GAR registry ref for sharing across
+  runners. --build-arg is forwarded, including a dependency-proxy
+  PROXY_URL. No push, no deploy: the artifact is a locally-tagged image.
+whenToUse: |
+  Pick when repeat image builds are the CI bottleneck and you want
+  unchanged layers to replay across runs. Contrast docker-build-smoketest,
+  which builds once with no cross-run cache and smoke-tests the result.
+  Contrast the docker-deploy templates (docker-deploy-ecr-eks,
+  docker-deploy-gar-gke) and container-publish-multiarch, which build then
+  push (and deploy); this is build-with-cache only. For content-addressed
+  replay of a whole job's output rather than image layers, use
+  cached-test-suite.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: build
+  - name: image-tag
+    type: string
+    description: Tag to build (e.g. myapp:local).
+    default: app:local
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: build-context
+    type: string
+    description: Docker build context directory, relative to the repo root.
+    default: "."
+  - name: cache-backend
+    type: string
+    description: |
+      Where BuildKit reads and writes layer cache: local (a host dir, runs
+      green with only Docker), ecr, or gar (a registry ref shared across
+      runners).
+    default: local
+  - name: cache-ref
+    type: string
+    description: |
+      Registry cache ref when cache-backend is ecr or gar (e.g.
+      123456789012.dkr.ecr.us-west-2.amazonaws.com/app:buildcache or
+      us-west1-docker.pkg.dev/proj/repo/app:buildcache). For local it
+      overrides the .buildx-cache cache directory; empty uses that default.
+    default: ""
+  - name: build-args
+    type: string
+    description: |
+      KEY=VAL,KEY=VAL forwarded as --build-arg. Set PROXY_URL here to route
+      package installs through a dependency proxy.
+    default: ""
+  - name: platform
+    type: string
+    description: |
+      Target build platform (e.g. linux/amd64 or linux/arm64). Empty builds
+      for the host architecture.
+    default: ""
+prerequisite: |
+  A Dockerfile at the configured path (default ./Dockerfile) and a Docker
+  daemon with BuildKit (bundled with Docker 23+; older engines need `docker
+  buildx`). For cache-backend ecr or gar, ambient cloud credentials (an AWS
+  profile / IRSA role, or an active gcloud identity) that can read and write
+  the cache registry -- the pipeline runs the docker login for you. The ECR
+  cache repository must already exist; ECR does not auto-create it.
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: caching-skip
+verify: runnable
+verify_fixture: docker
+verify_params:
+  image-tag: sparkwing-verify:local
+  cache-backend: local

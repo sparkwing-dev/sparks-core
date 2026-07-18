@@ -1,0 +1,136 @@
+// Scaffolded from the gke-deploy-gar-kubectl template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly,
+// so the orchestration (what runs when, what verifies, what rolls back)
+// is visible and editable. The blocks do the heavy lifting. This is the
+// GCP twin of go-test-build-deploy-k8s: it pushes to Google Artifact
+// Registry, bootstraps GKE credentials, and applies the repo's own
+// manifests with kubectl.
+package jobs
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/gcp"
+	"github.com/sparkwing-dev/sparks-core/kube"
+	"github.com/sparkwing-dev/sparks-core/probe"
+	"github.com/sparkwing-dev/sparks-core/rollback"
+)
+
+// {{pascal .pipeline_name}} tests, builds {{.image}} to GAR, and rolls it
+// out to GKE. After the rollout a health probe verifies the new revision;
+// a definitively-unhealthy result rolls the deployment back to the
+// previous revision.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Needs(build).
+		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check).
+		OnFailure("rollback", p.rollback)
+	return nil
+}
+
+// build authenticates docker against the GAR host, then builds and pushes
+// the image. GAR auth is the GCP analog of the ECR login docker.BuildAndPush
+// runs itself for ECR registries, so it is done explicitly here first.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	if err := gcp.ConfigureDockerAuth(ctx, p.garHost()); err != nil {
+		return err
+	}
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return docker.BuildAndPush(ctx, docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Platform:   {{quote .platform}},
+		Registries: []string{ {{quote .registry}} },
+		Tags:       tags,
+	})
+}
+
+// deploy fetches GKE credentials, applies the manifests (idempotent), then
+// rolls the freshly built image. Returning from deploy means the rollout
+// succeeded; the node's Verify probe then decides whether the new revision
+// is actually healthy.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	if err := gcp.GetGKECredentials(ctx, gcp.GKEConfig{
+		Cluster:  {{quote .cluster}},
+		Location: {{quote .region}},
+		Project:  {{quote .project}},
+	}); err != nil {
+		return err
+	}
+	if err := kube.Apply(ctx, kube.ApplyConfig{
+		Paths:     []string{ {{quote .k8s_path}} },
+		Namespace: {{quote .namespace}},
+	}); err != nil {
+		return err
+	}
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return kube.SetImage(ctx, kube.SetImageConfig{
+		Deployment: "deploy/{{.app_name}}",
+		Container:  {{quote .app_name}},
+		Image:      p.imageRef(tags),
+		Namespace:  {{quote .namespace}},
+	})
+}
+
+// rollback runs when deploy fails. It rolls back only on a definitive
+// failure. If the verify probe could not even *determine* health
+// (unreachable, timeout, auth -- probe.Indeterminate), that's not
+// evidence the new revision is bad, so rolling back would revert a
+// possibly-healthy deploy because the check itself couldn't run. In that
+// case it surfaces the error instead. Local: true forces the kubectl
+// rollout-undo path (this template owns its YAML, no gitops).
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "deploy failed at %s stage - rolling back", f.Stage)
+	return rollback.Run(ctx, rollback.Config{
+		Deployments: []string{"deploy/{{.app_name}}"},
+		Namespace:   {{quote .namespace}},
+		Local:       true,
+	})
+}
+
+// garHost is the Artifact Registry host that docker authenticates against,
+// the first path segment of the registry URL (e.g.
+// "us-west1-docker.pkg.dev" from "us-west1-docker.pkg.dev/proj/repo").
+func (p *{{pascal .pipeline_name}}) garHost() string {
+	return strings.SplitN({{quote .registry}}, "/", 2)[0]
+}
+
+// imageRef is the full GAR image reference rolled out to the deployment,
+// kept consistent with the tag docker.BuildAndPush pushes to a non-ECR
+// registry (the content-addressed DeployTag).
+func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) string {
+	return {{quote .registry}} + "/" + {{quote .image}} + ":" + tags.DeployTag()
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

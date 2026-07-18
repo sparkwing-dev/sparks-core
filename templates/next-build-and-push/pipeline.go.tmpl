@@ -2,8 +2,9 @@
 // next-build-and-push`. Edit freely -- nothing here re-runs.
 //
 // Build-only flavor of the static-deploy templates. Produces an
-// out.tar.gz artifact and uploads it; the deploy step lives elsewhere
-// (typically a separate pipeline gated on manual approval).
+// out.tar.gz artifact and uploads it, keyed by commit SHA; the deploy
+// step lives elsewhere (typically a separate pipeline gated on manual
+// approval).
 package jobs
 
 import (
@@ -15,15 +16,21 @@ import (
 )
 
 // {{pascal .pipeline_name}} builds a Next.js static export and uploads
-// the resulting tarball to an artifact bucket.
-type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+// the resulting tarball to an S3 artifact bucket, keyed by commit SHA.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// key is the S3 object key computed once in Plan from the commit
+	// SHA and reused by upload, so the artifact is addressable by the
+	// commit it was built from.
+	key string
+}
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
 	return "Build Next.js static export, upload artifact tarball"
 }
 
 func ({{pascal .pipeline_name}}) Help() string {
-	return "Builds the Next.js static export and uploads out.tar.gz to s3://{{.artifact_bucket}}/{{.artifact_prefix}}/. No deploy step -- ship the tarball, gate the deploy."
+	return "Builds the Next.js static export and uploads out.tar.gz to s3://{{.artifact_bucket}}/{{.artifact_prefix}}/<sha>.tar.gz. No deploy step -- ship the tarball, gate the deploy."
 }
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
@@ -33,25 +40,34 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	build := sparkwing.Job(plan, "build", p.build)
+	sha := run.Git.ShortSHA()
+	if sha == "" {
+		sha = time.Now().UTC().Format("20060102-150405")
+	}
+	p.key = fmt.Sprintf("%s/%s.tar.gz", {{quote .artifact_prefix}}, sha)
+	build := sparkwing.Job(plan, "build", p.build).
+		Retry(2, sparkwing.RetryBackoff(3*time.Second)).
+		Timeout(20 * time.Minute)
 	pack := sparkwing.Job(plan, "tarball", p.tarball).Needs(build)
-	sparkwing.Job(plan, "upload", p.upload).Needs(pack)
+	sparkwing.Job(plan, "upload", p.upload).
+		Needs(pack).
+		Retry(2, sparkwing.RetryBackoff(3*time.Second)).
+		Timeout(10 * time.Minute)
 	return nil
 }
 
 func ({{pascal .pipeline_name}}) build(ctx context.Context) error {
-	_, err := sparkwing.Bash(ctx, `NEXT_EXPORT=1 npm install && NEXT_EXPORT=1 npm run build`).Run()
+	_, err := sparkwing.Bash(ctx, {{quote .build_cmd}}).Run()
 	return err
 }
 
 func ({{pascal .pipeline_name}}) tarball(ctx context.Context) error {
-	_, err := sparkwing.Exec(ctx, "tar", "-czf", "out.tar.gz", "-C", "out", ".").Run()
+	_, err := sparkwing.Exec(ctx, "tar", "-czf", "out.tar.gz", "-C", {{quote .out_dir}}, ".").Run()
 	return err
 }
 
-func ({{pascal .pipeline_name}}) upload(ctx context.Context) error {
-	key := fmt.Sprintf("%s/%s.tar.gz", {{quote .artifact_prefix}}, time.Now().UTC().Format("20060102-150405"))
-	dest := "s3://" + {{quote .artifact_bucket}} + "/" + key
+func (p *{{pascal .pipeline_name}}) upload(ctx context.Context) error {
+	dest := "s3://" + {{quote .artifact_bucket}} + "/" + p.key
 	if _, err := sparkwing.Exec(ctx, "aws", "s3", "cp", "out.tar.gz", dest).Run(); err != nil {
 		return err
 	}

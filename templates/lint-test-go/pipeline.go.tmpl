@@ -51,8 +51,11 @@ func ({{pascal .pipeline_name}}) vet(ctx context.Context) error {
 	return err
 }
 
+// test runs `go test` with the caller's args through Bash so a
+// multi-token test-args value (e.g. `-race ./...`) word-splits the way
+// a shell would. vet takes fixed argv, so it uses Exec instead.
 func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
-	_, err := sparkwing.Exec(ctx, "go", "test", {{quote .test_args}}).Run()
+	_, err := sparkwing.Bash(ctx, {{quote (printf "go test %s" .test_args)}}).Run()
 	return err
 }
 

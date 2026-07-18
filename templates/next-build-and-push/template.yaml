@@ -1,26 +1,45 @@
 name: next-build-and-push
 description: |
   Build a Next.js static export and upload the artifact tarball
-  (out.tar.gz) to a target store. No deploy step. Useful when the
-  deploy is gated (manual approval, separate environment promotion)
-  and you want CI to produce the artifact ahead of time.
+  (out.tar.gz) to an S3 bucket, keyed by commit SHA. No deploy step.
+  Useful when the deploy is gated (manual approval, separate
+  environment promotion) and you want CI to produce the artifact ahead
+  of time.
 whenToUse: |
-  Build-only: produce a Next.js artifact tarball without deploying. Use
-  when the deploy is gated (manual approval) or promoted separately and
-  CI should just produce the artifact.
+  Build-only: produce a Next.js artifact tarball on S3 without
+  deploying. Use when the deploy is gated (manual approval) or promoted
+  separately and CI should just produce the artifact. To deploy an
+  ephemeral per-PR preview instead, use next-preview-deploy-cloudrun; to
+  ship a static site to a CDN use static-deploy-s3-cloudfront or
+  static-deploy-gcs-cloudcdn.
+prerequisite: |
+  A Next.js (or any static-output) app at the repo root that builds to
+  out/ via `npm ci && npm run build`, plus a pre-provisioned S3 bucket
+  to receive the artifact tarball.
 parameters:
   - name: artifact-bucket
     type: string
     required: true
-    description: S3 bucket / GCS bucket to upload the artifact tarball to
+    description: S3 bucket to upload the artifact tarball to (e.g. myorg-artifacts).
   - name: artifact-prefix
     type: string
-    description: Prefix within the bucket. Defaults to "artifacts/{image}/{sha}".
+    description: Prefix within the bucket; the tarball is keyed at <prefix>/<sha>.tar.gz.
     default: artifacts
+  - name: build-cmd
+    type: string
+    description: Command that installs deps and builds the static export to the output dir.
+    default: npm ci && npm run build
+  - name: out-dir
+    type: string
+    description: Build output directory tarred into the artifact.
+    default: out
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: build
 applicability:
-  cloud: [aws, gcp]
-  category: build-only
+  cloud: [aws]
+  category: build
+verify: compile-only
+verify_params:
+  artifact-bucket: example-verify-bucket

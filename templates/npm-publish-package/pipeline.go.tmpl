@@ -1,0 +1,112 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// npm-publish-package`. Edit freely -- nothing here re-runs.
+//
+// Guard the declared package version, optionally build, then publish
+// the npm package with `npm publish`. The publish step echoes its argv
+// under SPARKWING_DRY_RUN (and while dry-run is set) so a scaffold runs
+// green before a token and reaches no registry.
+package jobs
+
+import (
+	"context"
+	"path/filepath"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/release"
+)
+
+// {{pascal .pipeline_name}} publishes the npm package under {{.package_dir}}
+// to {{.registry}}. It first refuses to re-publish a version whose git
+// tag already exists,{{if .build_cmd}} then runs the build command,{{end}} then invokes
+// `npm publish`. The publish step honors the dry-run convention: with
+// dry-run set (the default) or SPARKWING_DRY_RUN in the environment it
+// logs the command it would run instead of executing it.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Guard the version and publish an npm package with `npm publish`"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Reads the version from package.json, refuses to publish it if the matching git tag already exists,{{if .build_cmd}} runs the build command,{{end}} then runs `npm publish`. With dry-run set the publish step echoes its argv instead of reaching the registry; clear dry-run and provide the token secret to publish for real."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Dry run: guard + echo the publish command", Command: "sparkwing run {{.pipeline_name}}"},
+		{Comment: "Publish for real", Command: "sparkwing run {{.pipeline_name}} --param dry-run="},
+	}
+}
+
+const (
+	packageDir  = {{quote .package_dir}}
+	registry    = {{quote .registry}}
+	access      = {{quote .access}}
+	distTag     = {{quote .dist_tag}}
+	tagPrefix   = {{quote .tag_prefix}}
+	tokenSecret = {{quote .token_secret}}
+{{- if .build_cmd}}
+	buildCmd    = {{quote .build_cmd}}
+{{- if .install_cmd}}
+	installCmd  = {{quote .install_cmd}}
+{{- end}}
+{{- end}}
+)
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	guard := sparkwing.Job(plan, "guard-version", p.guardVersion)
+{{- if .build_cmd}}
+	build := sparkwing.Job(plan, "build", p.build).Needs(guard)
+	sparkwing.Job(plan, "publish", p.publish).Needs(build)
+{{- else}}
+	sparkwing.Job(plan, "publish", p.publish).Needs(guard)
+{{- end}}
+	return nil
+}
+
+// guardVersion refuses to publish when the git tag for the version
+// declared in package.json already exists, so a forgotten version bump
+// fails fast instead of clobbering a published release.
+func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
+	_, err := release.GuardVersionFile(ctx, release.VersionFileConfig{
+		Path:      filepath.Join(packageDir, "package.json"),
+		Field:     "version",
+		TagPrefix: tagPrefix,
+	})
+	return err
+}
+{{- if .build_cmd}}
+
+// build installs dependencies (unless the install command is empty) and
+// runs the configured build command in the package directory before the
+// artifact is published.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+{{- if .install_cmd}}
+	if _, err := sparkwing.Bash(ctx, installCmd).Dir(packageDir).Run(); err != nil {
+		return err
+	}
+{{- end}}
+	_, err := sparkwing.Bash(ctx, buildCmd).Dir(packageDir).Run()
+	return err
+}
+{{- end}}
+
+// publish runs `npm publish` for the package. The dry-run flag routes
+// through the release block's echo path, so no registry is reached
+// unless dry-run is cleared.
+func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
+	return release.NpmPublish(ctx, release.NpmPublishConfig{
+		Dir:         packageDir,
+		Registry:    registry,
+		Access:      access,
+		Tag:         distTag,
+		Provenance:  {{if .provenance}}true{{else}}false{{end}},
+		TokenSecret: tokenSecret,
+		DryRun:      {{if .dry_run}}true{{else}}false{{end}},
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

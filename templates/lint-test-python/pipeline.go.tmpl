@@ -1,0 +1,96 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// lint-test-python`. Edit freely -- nothing here re-runs.
+//
+// Python CI hygiene on the uv/ruff/pytest stack: install once, then
+// ruff format --check, ruff check, mypy, and pytest fan out in a
+// parallel independent-node DAG so one run surfaces every failure.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} installs the environment, then runs the
+// format, lint, typecheck, and test checks in parallel. Each check is
+// independent -- a failure doesn't stop its peers, so one run reports
+// every problem at once. Targets Python {{.python_version}}. Any check
+// whose command was left empty at scaffold time is absent from the DAG.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Python CI hygiene: ruff format + ruff check + mypy + pytest"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Installs the environment, then runs ruff format --check, ruff check, mypy, and pytest in parallel. Targets Python {{.python_version}}. Each check is independent so a single run surfaces every problem at once. Every command is a parameter -- swap the uv defaults for pip/poetry forms, or leave one empty to drop that node."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{- if .install_cmd }}
+{{- if or .format_cmd .lint_cmd .typecheck_cmd .test_cmd }}
+	install := sparkwing.Job(plan, "install", p.install)
+{{- else }}
+	sparkwing.Job(plan, "install", p.install)
+{{- end }}
+{{- end }}
+{{- if .format_cmd }}
+	sparkwing.Job(plan, "format", p.format){{if .install_cmd}}.Needs(install){{end}}
+{{- end }}
+{{- if .lint_cmd }}
+	sparkwing.Job(plan, "lint", p.lint){{if .install_cmd}}.Needs(install){{end}}
+{{- end }}
+{{- if .typecheck_cmd }}
+	sparkwing.Job(plan, "typecheck", p.typecheck){{if .install_cmd}}.Needs(install){{end}}
+{{- end }}
+{{- if .test_cmd }}
+	sparkwing.Job(plan, "test", p.test){{if .install_cmd}}.Needs(install){{end}}
+{{- end }}
+	return nil
+}
+{{- if .install_cmd }}
+
+func ({{pascal .pipeline_name}}) install(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .install_cmd}}).Run()
+	return err
+}
+{{- end }}
+{{- if .format_cmd }}
+
+func ({{pascal .pipeline_name}}) format(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .format_cmd}}).Run()
+	return err
+}
+{{- end }}
+{{- if .lint_cmd }}
+
+func ({{pascal .pipeline_name}}) lint(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .lint_cmd}}).Run()
+	return err
+}
+{{- end }}
+{{- if .typecheck_cmd }}
+
+func ({{pascal .pipeline_name}}) typecheck(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .typecheck_cmd}}).Run()
+	return err
+}
+{{- end }}
+{{- if .test_cmd }}
+
+func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	return err
+}
+{{- end }}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

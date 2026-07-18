@@ -67,6 +67,37 @@ Rules every block follows:
   `docker`, `kubectl`, `kind`, `git` are present; document any
   additional required binary (e.g. `migrate`) in the package doc.
 
+### Cloud mutations honor `SPARKWING_DRY_RUN`
+
+A block that mutates cloud state -- registers a task definition, updates
+a service, shifts a Cloud Run traffic split, publishes a Lambda version
+-- must be safe to exercise on a laptop with no credentials. The
+convention that makes that work is a single environment variable:
+
+- **When `SPARKWING_DRY_RUN` is non-empty, a cloud-mutating operation
+  echoes the exact command argv it would run and returns success without
+  executing it.** Echo through the module's logging convention
+  (`sparkwing.Info(ctx, "[dry-run] aws %s", ...)`), one line per command,
+  so the log shows precisely what a live run would invoke. A block may
+  also expose a `DryRun bool` config field as an in-code equivalent; the
+  env var and the field both activate the echo.
+- **State-reading operations may run for real.** A `describe`, a `get`,
+  a version lookup has no side effect, so a block is free to execute it
+  even under dry-run. When a read exists only to feed a mutation the
+  block is skipping, echo a placeholder argv for the read instead, so the
+  dry-run output stays self-contained and reaches no infrastructure.
+- **Every argv-emitting path is unit-testable.** Build the argv in a
+  pure helper and assert it (see the `ecs` block's `argv.go` and its
+  test); the dry-run echo is then just that helper's output, so a test
+  pins the exact command without a cloud call.
+
+This convention is load-bearing for the template registry. A template
+whose cloud mutations all flow through convention-honoring blocks can
+declare `verify: dry-runnable` (see [Verification
+metadata](#verification-metadata)): the harness scaffolds it, sets
+`SPARKWING_DRY_RUN`, and runs it green with no credentials, because every
+mutating block echoes instead of executing.
+
 Each block is its own Go module: own `go.mod`, own `CHANGELOG.md`, own
 `<module>/vMAJOR.MINOR.PATCH` tag. New modules start at `v0.1.0`.
 
@@ -115,6 +146,50 @@ A template is a directory with three files (see
 The manifest's `whenToUse` is the catalog signal: it answers "which
 template do I pick?" not just "what exists?". Write it for an agent
 choosing among starters.
+
+### Verification metadata
+
+Every template manifest declares how far the registry's verification
+harness can exercise a scaffold of it without cloud credentials or live
+infrastructure. Three `template.yaml` fields carry that contract (see
+[`templates/templates.go`](../templates/templates.go) for the parsed
+shape and the loader validation):
+
+- **`verify`** -- the verification tier, one of:
+  - `runnable` -- the scaffolded pipeline runs green on a laptop with no
+    cloud credentials (a Docker daemon is permitted).
+  - `dry-runnable` -- a side-effect-free run path exists (a preview /
+    plan parameter, or cloud mutations that all route through
+    `SPARKWING_DRY_RUN`-honoring blocks), so the scaffold runs green
+    locally without touching real infrastructure.
+  - `compile-only` -- the template touches real cloud services, so the
+    harness can only render, compile, lint, and explain it.
+
+  Omitting `verify` defaults to `compile-only`, the safe assumption.
+- **`verify_params`** -- a sample value per parameter the harness
+  scaffolds with. Values are safe placeholders (fake bucket names,
+  `example.com` URLs) chosen so a render / compile / lint / explain never
+  reaches real infrastructure. Every *required* parameter must have an
+  entry, and a key may only name a declared parameter; the loader rejects
+  a manifest that breaks either rule.
+- **`verify_fixture`** -- the scratch-repo scaffolding the harness
+  synthesizes before a runnable or dry-runnable run, one of:
+  - `none` -- an empty scratch repo holding just the scaffolded pipeline
+    (the default).
+  - `go-module` -- a `go.mod` plus a trivial buildable package and a
+    passing test at the repo root, for templates whose steps run `go
+    build` / `vet` / `test` there.
+  - `docker` -- the `go-module` contents plus a `Dockerfile`, for
+    templates whose steps build or run a container image.
+
+  Ignored for the `compile-only` tier, which never runs the scaffold.
+
+Claim the highest tier the template can honestly satisfy. A
+`dry-runnable` claim is only valid when *every* cloud mutation in the
+generated pipeline flows through a block that honors `SPARKWING_DRY_RUN`
+(see [Cloud mutations honor
+`SPARKWING_DRY_RUN`](#cloud-mutations-honor-sparkwing_dry_run)), so the
+harness can set that variable and reach no cloud.
 
 ## 3. Pipeline primitives (the conveniences)
 

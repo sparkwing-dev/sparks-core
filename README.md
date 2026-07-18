@@ -10,16 +10,30 @@ freely.
 
 | Module | Path | Purpose |
 |---|---|---|
-| [step](step/) | `github.com/sparkwing-dev/sparks-core/step` | Shared step-banner + error-wrapped shell/exec helpers used across the other modules |
+| [step](step/) | `github.com/sparkwing-dev/sparks-core/step` | Shared step-banner + error-wrapped shell helpers used across the other modules |
 | [aws](aws/) | `github.com/sparkwing-dev/sparks-core/aws` | AWS profile-flag resolution and IRSA detection |
 | [docker](docker/) | `github.com/sparkwing-dev/sparks-core/docker` | Docker build, push, multi-registry tagging, ECR auth, registry detection |
 | [s3](s3/) | `github.com/sparkwing-dev/sparks-core/s3` | S3 static-site deployment with cache-header conventions |
 | [kube](kube/) | `github.com/sparkwing-dev/sparks-core/kube` | Kubernetes deploy helpers (kubectl, kustomize) |
-| [gitops](gitops/) | `github.com/sparkwing-dev/sparks-core/gitops` | GitOps deployment with kustomize patching, retry, ArgoCD sync |
+| [gitops](gitops/) | `github.com/sparkwing-dev/sparks-core/gitops` | GitOps deployment with kustomize patching, retry, and ArgoCD sync |
 | [deploy](deploy/) | `github.com/sparkwing-dev/sparks-core/deploy` | Deploy orchestrator: routes to gitops+ArgoCD (cluster) or kubectl (local) |
+| [rollback](rollback/) | `github.com/sparkwing-dev/sparks-core/rollback` | Rollback dispatcher: kubectl rollout undo (local/kind) or gitops revert + ArgoCD sync (remote) |
+| [migrate](migrate/) | `github.com/sparkwing-dev/sparks-core/migrate` | Database schema migrations via the golang-migrate CLI (up, down, force) |
+| [services](services/) | `github.com/sparkwing-dev/sparks-core/services` | Ephemeral Docker service containers (Postgres, ...) for integration tests |
+| [notify](notify/) | `github.com/sparkwing-dev/sparks-core/notify` | Post deploy/run notifications to an HTTP webhook (Slack-style or arbitrary JSON) |
 | [checks](checks/) | `github.com/sparkwing-dev/sparks-core/checks` | Pre-commit checks: formatting, linting, trailing newlines |
-| [pipelines](pipelines/) | `github.com/sparkwing-dev/sparks-core/pipelines` | High-level pipeline primitives (`DockerDeploy`, `StaticDeploy`, `NextJSBuild`) |
-| [templates](templates/) | `github.com/sparkwing-dev/sparks-core/templates` | Curated pipeline template registry consumed by `sparkwing pipeline new --template` |
+| [probe](probe/) | `github.com/sparkwing-dev/sparks-core/probe` | HTTP health probes for post-deploy verification; Check feeds sparkwing Job.Verify, with unhealthy-vs-indeterminate classification |
+| [pipelines](pipelines/) | `github.com/sparkwing-dev/sparks-core/pipelines` | High-level pipeline primitives: DockerDeploy, StaticDeploy, NextJSBuild |
+| [templates](templates/) | `github.com/sparkwing-dev/sparks-core/templates` | Curated pipeline template registry: deterministic starters consumed by sparkwing pipeline new --template |
+| [gcp](gcp/) | `github.com/sparkwing-dev/sparks-core/gcp` | GCP project/auth resolution and Workload Identity detection, twin of the aws module |
+| [cloudrun](cloudrun/) | `github.com/sparkwing-dev/sparks-core/cloudrun` | Cloud Run deploy, traffic shifting, URL discovery, and rollback via gcloud |
+| [ecs](ecs/) | `github.com/sparkwing-dev/sparks-core/ecs` | ECS/Fargate task-definition rollout, wait-for-stable, and rollback |
+| [lambda](lambda/) | `github.com/sparkwing-dev/sparks-core/lambda` | AWS Lambda deploys (container image and zip), version publish, alias shift and rollback |
+| [release](release/) | `github.com/sparkwing-dev/sparks-core/release` | Release and publish helpers: version gating, changelog parsing, checksums, GitHub/npm/PyPI publish flows |
+| [contentkey](contentkey/) | `github.com/sparkwing-dev/sparks-core/contentkey` | Content-addressed cache keys and skip predicates for path-scoped work |
+| [coverage](coverage/) | `github.com/sparkwing-dev/sparks-core/coverage` | Coverage report parsing (Go coverprofile, lcov, cobertura) and threshold gating |
+| [terraform](terraform/) | `github.com/sparkwing-dev/sparks-core/terraform` | Terraform init, plan-to-saved-file, apply-saved-plan, and change summaries |
+| [dbbackup](dbbackup/) | `github.com/sparkwing-dev/sparks-core/dbbackup` | Database dump, backup upload, and restore helpers for scheduled backups and restore drills |
 
 Each module has its own `CHANGELOG.md` and is tagged independently
 under the convention `<module>/vMAJOR.MINOR.PATCH` (e.g.
@@ -102,20 +116,15 @@ that module's `CHANGELOG.md`.
 
 ```
 sparks-core/
-├── aws/         go.mod, CHANGELOG.md, *.go
-├── checks/
-├── deploy/
-├── docker/
-├── gitops/
-├── kube/
-├── pipelines/
-├── s3/
-├── step/
+├── <module>/     one directory per module in the table above:
+│                 go.mod, CHANGELOG.md, *.go
+├── .sparkwing/   this repo's own pipelines (pre-commit, pre-push,
+│                 release-modules) and lint gates
+├── spark.json    the authoritative module manifest
 ├── go.work       # workspace: dev-only, gitignored from consumers
-├── CHANGELOG.md  # historical, frozen at the pre-restructure tag (v0.19.0)
+├── CHANGELOG.md  # repo-level index: links every per-module CHANGELOG
 └── README.md     # this file
 ```
 
-The historical single-module CHANGELOG is preserved at the repo root
-for context. Going forward, all changes land in per-module
-`CHANGELOG.md` files.
+Individual changes land in per-module `CHANGELOG.md` files; the root
+CHANGELOG indexes them and records repo-wide events.

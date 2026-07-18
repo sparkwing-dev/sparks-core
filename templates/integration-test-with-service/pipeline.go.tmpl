@@ -3,20 +3,24 @@
 //
 // Run integration tests against a throwaway {{.service_image}} container
 // started before the tests and torn down after (even on failure/panic),
-// via services.WithServices. Needs a Docker daemon.
+// via services.With. Needs a Docker daemon.
 package jobs
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
-	"github.com/sparkwing-dev/sparkwing/sparkwing/services"
+
+	"github.com/sparkwing-dev/sparks-core/services"
 )
 
 // {{pascal .pipeline_name}} runs the test suite with a {{.service_image}}
-// sidecar. The service is published to 127.0.0.1:{{.service_port}}, so
-// the test reaches it at localhost:{{.service_port}}.
+// sidecar. Container port {{.service_port}} is published to an ephemeral
+// host port, injected into the test as {{.port_env}} so it reaches the
+// service at localhost.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -29,14 +33,21 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 }
 
 func (p *{{pascal .pipeline_name}}) run(ctx context.Context) error {
-	svc := services.Service{
-		Image:    {{quote .service_image}},
-		Port:     {{.service_port}},
-		ReadyCmd: {{quote .ready_cmd}},
-		Env:      {{pascal .pipeline_name}}ParseEnv({{quote .service_env}}),
+	readyTimeout, err := time.ParseDuration({{quote .ready_timeout}})
+	if err != nil {
+		return err
 	}
-	return services.WithServices(ctx, []services.Service{svc}, func(ctx context.Context) error {
-		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	spec := services.Spec{
+		Image:         {{quote .service_image}},
+		Env:           {{pascal .pipeline_name}}ParseEnv({{quote .env}}),
+		ContainerPort: {{.service_port}},
+		Ready:         strings.Fields({{quote .ready_cmd}}),
+		ReadyTimeout:  readyTimeout,
+	}
+	return services.With(ctx, spec, func(ctx context.Context, hostPort int) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).
+			Env({{quote .port_env}}, strconv.Itoa(hostPort)).
+			Run()
 		return err
 	})
 }

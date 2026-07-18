@@ -70,7 +70,8 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	}
 	return docker.BuildAndPush(ctx, docker.BuildConfig{
 		Image:      {{quote .image}},
-		Dockerfile: "Dockerfile",
+		Dockerfile: {{quote .dockerfile}},
+		Platform:   {{quote .platform}},
 		Registries: push,
 		Tags:       tags,
 	})
@@ -96,7 +97,7 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	}
 	return kube.SetImage(ctx, kube.SetImageConfig{
 		Deployment: "deploy/{{.app_name}}",
-		Container:  {{quote .app_name}},
+		Container:  {{quote (default .container .app_name)}},
 		Image:      ref,
 		Namespace:  {{quote .namespace}},
 	})
@@ -104,9 +105,11 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 
 // resolveImage picks the push registries and the image reference to roll
 // out, keeping the two consistent. Order: a kind cluster (load by name,
-// no push) -> SPARKWING_REGISTRY -> the ecr param. It errors when none
-// resolve rather than pushing an unqualified name (which would target
-// Docker Hub) or rolling out a malformed "/name:tag".
+// no push) -> SPARKWING_REGISTRY -> the registry param. ECR registries
+// carry the ProdTag, every other registry the DeployTag, matching what
+// docker.BuildAndPush pushes. It errors when none resolve rather than
+// pushing an unqualified name (which would target Docker Hub) or rolling
+// out a malformed "/name:tag".
 func (p *{{pascal .pipeline_name}}) resolveImage(tags sparkwingDocker.ImageTag) (push []string, ref string, err error) {
 	image := {{quote .image}}
 	if os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
@@ -115,10 +118,13 @@ func (p *{{pascal .pipeline_name}}) resolveImage(tags sparkwingDocker.ImageTag) 
 	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
 		return []string{reg}, reg + "/" + image + ":" + tags.DeployTag(), nil
 	}
-	if ecr := {{quote .ecr}}; ecr != "" {
-		return []string{ecr}, ecr + "/" + image + ":" + tags.ProdTag(), nil
+	if reg := {{quote .registry}}; reg != "" {
+		if docker.IsECR(reg) {
+			return []string{reg}, reg + "/" + image + ":" + tags.ProdTag(), nil
+		}
+		return []string{reg}, reg + "/" + image + ":" + tags.DeployTag(), nil
 	}
-	return nil, "", fmt.Errorf("no image registry resolved for %s: set SPARKWING_KIND_CLUSTER, SPARKWING_REGISTRY, or the ecr param", image)
+	return nil, "", fmt.Errorf("no image registry resolved for %s: set SPARKWING_KIND_CLUSTER, SPARKWING_REGISTRY, or the registry param", image)
 }
 
 func init() {

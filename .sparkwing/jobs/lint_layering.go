@@ -20,10 +20,14 @@ import (
 // the dependency graph one-directional -- no cycles, no sideways edges,
 // no module reaching "up" into a higher-level one.
 //
-//	0  step, aws, probe, templates   leaves (no sparks-core deps)
+//	0  step, aws, probe, templates,  leaves (no sparks-core deps)
+//	   contentkey
 //	1  docker, s3, kube, gitops,     capability blocks (-> step / a leaf)
-//	   migrate, services, notify, checks
-//	2  deploy, rollback              orchestrators (-> blocks)
+//	   migrate, services, notify,
+//	   checks, gcp, ecs, lambda,
+//	   release, coverage, terraform,
+//	   dbbackup
+//	2  deploy, rollback, cloudrun    orchestrators (-> blocks)
 //	3  pipelines                     high-level primitives (-> blocks/orchestrators)
 //
 // Adding a module? Put it here. An unlisted module's imports aren't
@@ -34,9 +38,12 @@ import (
 // on templates as a pure, SDK-free leaf.
 var moduleLayer = map[string]int{
 	"step": 0, "aws": 0, "probe": 0, "templates": 0,
-	"docker": 1, "s3": 1, "kube": 1, "gitops": 1,
+	"contentkey": 0,
+	"docker":     1, "s3": 1, "kube": 1, "gitops": 1,
 	"migrate": 1, "services": 1, "notify": 1, "checks": 1,
-	"deploy": 2, "rollback": 2,
+	"gcp": 1, "ecs": 1, "lambda": 1, "release": 1,
+	"coverage": 1, "terraform": 1, "dbbackup": 1,
+	"deploy": 2, "rollback": 2, "cloudrun": 2,
 	"pipelines": 3,
 }
 

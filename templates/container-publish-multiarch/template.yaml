@@ -1,0 +1,107 @@
+name: container-publish-multiarch
+description: |
+  Build a multi-arch (amd64 + arm64) container image with `docker buildx`
+  and push a single manifest to a registry -- ECR, GAR, or GHCR -- with no
+  cluster deploy. Login dispatches on the registry kind; the build stops at
+  a pushed image. The publish-half of the docker-deploy templates.
+whenToUse: |
+  Publish a container image (multi-arch, no deploy) as a release artifact.
+  Pick over docker-build-smoketest when you are actually pushing to a
+  registry, not just proving the image builds and starts. Pick over the
+  docker-deploy templates (docker-deploy-ecr-eks, docker-deploy-gar-gke)
+  when you want the image published but NOT rolled out -- deploy is gated
+  or promoted separately, or ArgoCD auto-syncs from the registry. GAR is
+  first-class via registry-kind=gar, so this doubles as the GCP
+  image-publish path. For a GitHub release of built binaries use
+  github-release-go; to publish to a language registry use
+  npm-publish-package or pypi-publish-wheel.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: publish-image
+  - name: image
+    type: string
+    required: true
+    description: Image name / repository path within the registry (e.g. myapp or team/myapp).
+  - name: registry
+    type: string
+    required: true
+    description: |
+      Container registry URL to push to (e.g.
+      <acct>.dkr.ecr.<region>.amazonaws.com, us-west1-docker.pkg.dev/proj/repo,
+      or ghcr.io/org).
+  - name: registry-kind
+    type: string
+    description: "Auth dispatch: ecr (AWS), gar (GCP), or ghcr (token login)."
+    default: ecr
+  - name: tags
+    type: string
+    description: |
+      Comma-separated tags to publish (each becomes registry/image:tag). For a
+      release artifact prefer an immutable tag (a version or commit SHA) over
+      the mutable `latest`.
+    default: latest
+  - name: platforms
+    type: string
+    description: Comma-separated buildx target platforms for the manifest.
+    default: linux/amd64,linux/arm64
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: build-context
+    type: string
+    description: Docker build context directory, relative to the repo root.
+    default: "."
+  - name: cache-backend
+    type: string
+    description: |
+      Where BuildKit reads and writes layer cache across runs: local (a host
+      dir, runs green with only Docker), ecr, gar, or ghcr (a registry ref
+      shared across runners).
+    default: local
+  - name: cache-ref
+    type: string
+    description: |
+      Registry cache ref when cache-backend is ecr, gar, or ghcr (e.g.
+      us-west1-docker.pkg.dev/proj/repo/app:buildcache). Ignored for local,
+      which caches to the .buildx-cache directory.
+    default: ""
+  - name: build-args
+    type: string
+    description: |
+      KEY=VAL,KEY=VAL forwarded as --build-arg (e.g. VERSION=1.2.3,COMMIT=abc).
+      Empty passes no build args.
+    default: ""
+  - name: ghcr-username
+    type: string
+    description: |
+      Docker-login username for ghcr. Empty uses a token placeholder that
+      works for classic GitHub tokens; set the owning account for a
+      fine-grained token. Ignored for ecr/gar.
+    default: ""
+  - name: token-secret
+    type: string
+    description: |
+      Sparkwing secret name holding a registry token. Required for
+      registry-kind=ghcr; unused for ecr/gar, which authenticate via the
+      cloud CLI (aws / gcloud).
+    default: GITHUB_TOKEN
+prerequisite: |
+  A Dockerfile at the configured path (default ./Dockerfile), `docker buildx`
+  with a non-docker-driver builder that targets the requested platforms (QEMU
+  for cross-arch), and push access to the registry (aws/gcloud creds for
+  ecr/gar, or a token secret for ghcr).
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: release-publish
+verify: compile-only
+verify_fixture: docker
+verify_params:
+  registry: registry.example.com/team
+  image: sparkwing-verify
+  registry-kind: ghcr
+  token-secret: REGISTRY_TOKEN

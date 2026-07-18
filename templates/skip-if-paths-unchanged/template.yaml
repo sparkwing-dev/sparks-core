@@ -1,0 +1,44 @@
+name: skip-if-paths-unchanged
+description: |
+  A CI job guarded by .SkipIf(contentkey.Unchanged(base, paths...)): it
+  runs only when a tracked file under the watched paths differs from a
+  base ref, otherwise the node soft-skips with a recorded skip reason.
+  The cheap monorepo path-gate -- a `git diff` decides, nothing is
+  stored or replayed.
+whenToUse: |
+  Pick to avoid running a job at all when its inputs did not change vs a
+  base branch -- skip the frontend lint when only the backend moved, or
+  skip the whole suite on a docs-only PR. Contrast cached-test-suite,
+  which replays a stored result on identical file CONTENT; use this for a
+  zero-cost `git diff` skip against a moving base. Contrast lint-test-go
+  and test-shards, which always re-run with no skip notion. For a whole
+  polyglot monorepo, replicate this guard per component job (one
+  contentkey.Unchanged predicate per subtree).
+prerequisite: A git repo with at least one prior commit; the base-ref must resolve for the diff to run (a missing base fails safe and runs the job).
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: ci
+  - name: watch-paths
+    type: string
+    description: Comma list of paths/globs (git pathspecs, matched recursively). The job runs when any tracked file here differs from base-ref; unchanged skips it. The default pairs with the Go work-cmd; retarget it at the subtree that feeds your job.
+    default: "*.go,go.mod,go.sum"
+  - name: base-ref
+    type: string
+    description: Diff base for the change check. Locally set HEAD~1; in CI origin/main or the PR merge-base. A base that does not resolve fails safe and runs the job.
+    default: origin/main
+  - name: work-cmd
+    type: string
+    description: Command the guarded job runs when the watched paths changed. The default runs the Go test suite; swap it (and watch-paths) for any stack.
+    default: go test ./...
+applicability:
+  cloud: []
+  category: caching-skip
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  pipeline-name: ci
+  watch-paths: "*.go,go.mod,go.sum"
+  base-ref: origin/main
+  work-cmd: go test ./...

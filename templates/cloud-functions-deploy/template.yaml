@@ -1,0 +1,77 @@
+name: cloud-functions-deploy
+description: |
+  Deploy a 2nd-gen Google Cloud Function from source with
+  `gcloud functions deploy --gen2`. Google builds and deploys from source
+  with buildpacks, so there is no Dockerfile to own and no local Docker
+  build. The trigger param selects an HTTP endpoint, a Pub/Sub topic, or a
+  GCS bucket; for HTTP triggers a post-deploy probe verifies the function
+  URL. Polyglot: node, python, go, java. A single-node DAG (deploy ->
+  verify) composed from sparks-core blocks -- edit it freely.
+whenToUse: |
+  Reach for this when you ship a single event or HTTP handler as a 2nd-gen
+  Cloud Function rather than a full service -- Google builds and deploys
+  from source, so you manage neither a container nor a cluster.
+  Pick cloudrun-deploy-source instead for a multi-route HTTP service you
+  still let Cloud Build build from source, or docker-deploy-gar-cloudrun
+  when you want to build and push the exact image to Artifact Registry
+  first. The AWS source-function twin is lambda-deploy with
+  package-type=zip.
+prerequisite: |
+  A source tree at source-dir that a Cloud Functions buildpack can detect
+  and build (a package.json, a requirements.txt, a Go module, ...) exposing
+  the entry-point handler, the gcloud CLI on PATH, and the Cloud Functions,
+  Cloud Build, and Cloud Run APIs enabled on the project.
+parameters:
+  - name: function
+    type: string
+    required: true
+    description: Cloud Function name.
+  - name: runtime
+    type: string
+    required: true
+    description: Language runtime (e.g. nodejs20, python312, go122).
+  - name: entry-point
+    type: string
+    required: true
+    description: Exported function/handler name, passed via --entry-point.
+  - name: region
+    type: string
+    required: true
+    description: Function region (e.g. us-west1).
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID.
+  - name: trigger
+    type: string
+    description: 'Trigger: "http", "topic:NAME" for a Pub/Sub topic, or "bucket:NAME" for a GCS bucket.'
+    default: http
+  - name: source-dir
+    type: string
+    description: Source directory passed to --source, relative to the repo root.
+    default: "."
+  - name: allow-unauthenticated
+    type: string
+    description: "For http triggers: non-empty makes the function public (--allow-unauthenticated); empty (the default) keeps it private, and the health probe then authenticates with a gcloud identity token."
+    default: ""
+  - name: health-path
+    type: string
+    description: For http triggers, path appended to the function URL for the post-deploy probe.
+    default: "/"
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: deploy
+applicability:
+  cloud: [gcp]
+  category: serverless-function-deploy
+verify: dry-runnable
+verify_fixture: none
+verify_params:
+  function: example-fn
+  runtime: nodejs20
+  entry-point: handler
+  region: us-west1
+  project: example-project
+  trigger: http
+  health-path: /healthz

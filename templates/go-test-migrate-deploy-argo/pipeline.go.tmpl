@@ -32,7 +32,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	mig := sparkwing.Job(plan, "migrate", p.migrateProd).Needs(build)
 	sparkwing.Job(plan, "deploy", p.deployApp).
 		Needs(mig).
-		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check).
+		Verify(probe.HTTP({{quote .health_url}}).Retry({{.health_retries}}).Interval(2 * time.Second).Check).
 		OnFailure("rollback", p.rollBack)
 	return nil
 }
@@ -40,7 +40,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 // integrationTest stands up a throwaway Postgres, migrates it, and runs
 // the test suite against it -- so tests exercise the real schema.
 func (p *{{pascal .pipeline_name}}) integrationTest(ctx context.Context) error {
-	return services.WithPostgres(ctx, services.Postgres{}, func(ctx context.Context, dsn string) error {
+	return services.WithPostgres(ctx, services.Postgres{Image: {{quote .postgres_image}}}, func(ctx context.Context, dsn string) error {
 		if err := migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn}); err != nil {
 			return err
 		}
@@ -56,8 +56,8 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	}
 	return docker.BuildAndPush(ctx, docker.BuildConfig{
 		Image:      {{quote .image}},
-		Dockerfile: "Dockerfile",
-		Registries: []string{ {{quote .ecr}} },
+		Dockerfile: {{quote .dockerfile}},
+		Registries: []string{ {{quote .registry}} },
 		Tags:       tags,
 	})
 }
@@ -65,7 +65,7 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 // migrateProd runs migrations against the target database. The DSN comes
 // from a sparkwing secret so it never lands in the pipeline source.
 func (p *{{pascal .pipeline_name}}) migrateProd(ctx context.Context) error {
-	dsn, err := sparkwing.Secret(ctx, {{quote .db_secret}})
+	dsn, err := sparkwing.Secret(ctx, {{quote .dsn_secret}})
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 	return deploy.Run(ctx, deploy.Config{
 		GitopsRepo: {{quote .gitops_repo}},
 		GitopsPath: {{quote .gitops_path}},
-		ECR:        {{quote .ecr}},
+		ECR:        {{quote .registry}},
 		Images:     []string{ {{quote .image}} },
 		Tag:        tags.ProdTag(),
 		AppName:    {{quote .app_name}},

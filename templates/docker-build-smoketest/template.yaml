@@ -6,8 +6,11 @@ description: |
   image and fails the node if it can't start.
 whenToUse: |
   Validate that an image builds and its container actually starts
-  before you push or deploy it. For pushing to a registry + deploying,
-  use docker-deploy-ecr-eks (AWS) or docker-deploy-gar-gke (GCP).
+  before you push or deploy it. To speed rebuilds with a persisted layer
+  cache use docker-build-layer-cache; to build and push a multi-arch
+  image use container-publish-multiarch. For pushing to a registry +
+  deploying, use docker-deploy-ecr-eks (AWS) or docker-deploy-gar-gke
+  (GCP).
 parameters:
   - name: pipeline-name
     type: string
@@ -25,14 +28,38 @@ parameters:
     type: string
     description: Docker build context directory, relative to the repo root.
     default: "."
+  - name: build-args
+    type: string
+    description: |
+      Extra build arguments as KEY=VAL,KEY=VAL, forwarded as --build-arg.
+      Empty passes none.
+    default: ""
+  - name: target
+    type: string
+    description: |
+      Build a specific stage of a multi-stage Dockerfile, passed as
+      --target. Empty builds the final stage.
+    default: ""
+  - name: build-timeout
+    type: string
+    description: |
+      Max wall-clock for the build-and-smoke-test node as a Go duration
+      (e.g. 20m). The image build and the smoke-test run share this
+      budget; exceeding it fails the node.
+    default: 20m
   - name: verify-cmd
     type: string
     description: |
-      Smoke-test command run inside the built image via `sh -c`. Leave
-      empty to run the image's default CMD/ENTRYPOINT instead -- but set
-      it (e.g. "myapp --version") for long-running server images so the
-      smoke test exits instead of hanging.
+      Arguments appended to the built image's own entrypoint for the
+      smoke test, e.g. "--version". Empty runs the image's default
+      command. Set it for long-running server images so the smoke test
+      exits instead of hanging.
+    default: ""
 prerequisite: A Dockerfile at the configured path (default ./Dockerfile) and a running Docker daemon.
 applicability:
   cloud: []
   category: build
+verify: runnable
+verify_fixture: docker
+verify_params:
+  image-tag: sparkwing-verify:local

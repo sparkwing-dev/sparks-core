@@ -1,11 +1,11 @@
 name: go-test-build-deploy-k8s
 description: |
-  Test, build a Docker image to ECR, and deploy to Kubernetes by
-  applying the repo's own manifests with kubectl. A post-deploy HTTP
-  probe verifies the new revision; if it comes back unhealthy the
-  deployment is automatically rolled back via kubectl rollout undo.
-  A multi-node DAG (test -> build -> deploy) composed from sparks-core
-  blocks -- edit any node freely.
+  Test, build a Docker image, push it to your registry, and deploy to
+  Kubernetes by applying the repo's own manifests with kubectl. A
+  post-deploy HTTP probe verifies the new revision; if it comes back
+  unhealthy the deployment is automatically rolled back via kubectl
+  rollout undo. A multi-node DAG (test -> build -> deploy) composed from
+  sparks-core blocks -- edit any node freely.
 whenToUse: |
   Reach for this when your repo owns its k8s YAML and you apply it
   directly with kubectl (no gitops/ArgoCD, no kustomize indirection),
@@ -14,18 +14,23 @@ whenToUse: |
   Dockerfile builds -- set test-cmd to your stack's test command
   (pytest, npm test, cargo test, ...) or empty to skip the test node.
   If you deploy through a gitops repo + ArgoCD, use
-  go-test-migrate-deploy-argo (or docker-deploy-ecr-eks) instead.
+  go-test-migrate-deploy-argo (or docker-deploy-ecr-eks) instead. On GCP
+  (GAR + GKE, kubectl-applied) use gke-deploy-gar-kubectl. For a
+  progressive/canary rollout with automatic health-gated promotion use
+  canary-deploy-k8s.
 parameters:
   - name: image
     type: string
     required: true
     description: Image name (e.g. myapp)
-  - name: ecr
+  - name: registry
     type: string
     description: |
-      ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com).
-      Optional: only used on the ECR fallback. Leave empty for kind
-      (SPARKWING_KIND_CLUSTER) or a local registry (SPARKWING_REGISTRY).
+      Container registry URL to push to (e.g.
+      <acct>.dkr.ecr.<region>.amazonaws.com,
+      us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org). Empty resolves
+      a kind cluster (SPARKWING_KIND_CLUSTER) or local registry
+      (SPARKWING_REGISTRY) instead.
     default: ""
   - name: namespace
     type: string
@@ -39,10 +44,25 @@ parameters:
     type: string
     required: true
     description: Deployment name; the pipeline waits on and rolls back deploy/<app-name>
+  - name: container
+    type: string
+    description: Container name within the pod spec to retag. Defaults to app-name when empty.
+    default: ""
   - name: k8s-path
     type: string
     description: Path to the manifests applied with kubectl apply -f.
     default: k8s
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: platform
+    type: string
+    description: |
+      Build target platform passed to docker build --platform (e.g.
+      linux/amd64). Empty builds for the builder's native architecture;
+      set it when the builder arch differs from the cluster nodes.
+    default: ""
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
@@ -54,3 +74,15 @@ parameters:
 applicability:
   cloud: [aws]
   category: docker-deploy
+prerequisite: |
+  A repo-root Dockerfile and k8s manifests under k8s-path (a
+  Deployment+Service; the Deployment's metadata.name equals app-name and
+  its container equals the container param). The runner needs docker and
+  kubectl on PATH, a resolvable kube context, and a push target (the
+  registry param, SPARKWING_REGISTRY, or a kind cluster).
+verify: compile-only
+verify_params:
+  image: example-app
+  namespace: example
+  health-url: https://example.com/healthz
+  app-name: example-app

@@ -1,0 +1,12 @@
+Terraform will perform the following actions:
+
+  # module.network.aws_subnet.private[0] will be created
+  + resource "aws_subnet" "private" {}
+
+  # module.network.aws_subnet.public[0] will be updated in-place
+  ~ resource "aws_subnet" "public" {}
+
+  # aws_instance.web will be replaced
+-/+ resource "aws_instance" "web" {}
+
+Plan: 10 to add, 4 to change, 2 to destroy.

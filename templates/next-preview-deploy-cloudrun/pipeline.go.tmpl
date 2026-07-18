@@ -1,0 +1,227 @@
+// Scaffolded from the next-preview-deploy-cloudrun template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly, so
+// the orchestration (what runs when, what verifies) is visible and
+// editable. The blocks do the heavy lifting: docker builds the branch
+// image, gcp authenticates the push to Artifact Registry, and cloudrun
+// deploys it as a tagged, no-traffic preview revision. A preview never
+// serves production traffic, so there is no rollback: a failed deploy just
+// fails the run, and the pull request author sees a broken preview.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/cloudrun"
+	"github.com/sparkwing-dev/sparks-core/gcp"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} tests, builds {{.image}}, pushes it to the
+// registry ({{.registry}}), and deploys it as a tagged `--no-traffic`
+// preview revision on the Cloud Run service {{.service}}. The deploy returns
+// a stable per-branch preview URL, which a health probe checks and which the
+// run prints for the pull request.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// slug is the Cloud Run revision tag derived from the branch. It is a
+	// DNS/path-safe, truncated form of the branch name, computed once in
+	// Plan and reused as the stable preview URL's tag on every deploy.
+	slug string
+	// imageTag is the image tag computed once in build and reused by push
+	// and deploy so all three name the same image. It folds in a timestamp
+	// so each push of a branch produces a fresh image reference and a new
+	// preview revision. No lock is needed: build Needs-precedes push, which
+	// Needs-precedes deploy.
+	imageTag string
+	// url is the tagged preview URL the deploy resolves at run time; the
+	// Verify probe reads it. Empty under SPARKWING_DRY_RUN, which skips the
+	// probe.
+	url string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, rc sparkwing.RunContext) error {
+	branch := {{quote .branch_ref}}
+	if branch == "" && rc.Git != nil {
+		branch = rc.Git.Branch
+	}
+	p.slug = previewSlug(branch)
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}	push := sparkwing.Job(plan, "push", p.push).Needs(build)
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Needs(push).
+		Verify(p.verify)
+	return nil
+}
+
+// build compiles the branch image from the configured Dockerfile and build
+// context with a slug-and-timestamp tag. It runs for real even under
+// SPARKWING_DRY_RUN so a broken Dockerfile still fails the pipeline; only the
+// registry and Cloud Run mutations echo.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	p.imageTag = p.slug + "-" + time.Now().UTC().Format("20060102-150405")
+	_, err := sparkwing.Exec(ctx, "docker", "build",
+		"-t", {{quote .image}}+":"+p.imageTag,
+		"-f", {{quote .dockerfile}}, {{quote .build_context}}).Run()
+	return err
+}
+
+// push authenticates docker with Artifact Registry via gcloud, tags the
+// freshly built image for the registry, and pushes it. Under
+// SPARKWING_DRY_RUN the auth and the push echo their argv and skip the
+// registry round-trip, so the pipeline is exercisable with no GCP access.
+func (p *{{pascal .pipeline_name}}) push(ctx context.Context) error {
+	if err := gcp.ConfigureDockerAuth(ctx, garHost({{quote .registry}})); err != nil {
+		return err
+	}
+	local := {{quote .image}} + ":" + p.imageTag
+	remote := {{quote .registry}} + "/" + {{quote .image}} + ":" + p.imageTag
+	if _, err := sparkwing.Exec(ctx, "docker", "tag", local, remote).Run(); err != nil {
+		return err
+	}
+	if os.Getenv("SPARKWING_DRY_RUN") != "" {
+		sparkwing.Info(ctx, "DRY RUN: docker push %s", remote)
+		return nil
+	}
+	_, err := sparkwing.Exec(ctx, "docker", "push", remote).Run()
+	return err
+}
+
+// deploy rolls the pushed image out as a tagged, no-traffic preview revision
+// and records the returned preview URL for the Verify probe. The revision is
+// reachable at its own tagged URL but serves no production traffic, so
+// deploying a branch never affects the live service.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	port := 0
+	if raw := {{quote .port}}; raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return fmt.Errorf("invalid port %q: %w", raw, err)
+		}
+		port = parsed
+	}
+	res, err := cloudrun.Deploy(ctx, cloudrun.DeployConfig{
+		Service:              {{quote .service}},
+		Image:                {{quote .registry}} + "/" + {{quote .image}} + ":" + p.imageTag,
+		Region:               {{quote .region}},
+		Project:              {{quote .project}},
+		Port:                 port,
+		Env:                  parseEnv({{quote .env}}),
+		Tag:                  p.slug,
+		NoTraffic:            true,
+		AllowUnauthenticated: truthy({{quote .allow_unauthenticated}}),
+	})
+	if err != nil {
+		return err
+	}
+	p.url = res.URL
+	if p.url == "" {
+		sparkwing.Info(ctx, "preview revision tagged %q deployed (no URL resolved under dry-run)", p.slug)
+		return nil
+	}
+	sparkwing.Info(ctx, "preview for %q is live at %s", p.slug, p.url)
+	return nil
+}
+
+// verify probes the freshly deployed preview revision at its tagged URL.
+// Under SPARKWING_DRY_RUN the deploy echoes its argv and returns no URL, so
+// there is nothing live to probe and the check passes.
+func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
+	if p.url == "" {
+		sparkwing.Info(ctx, "no preview URL resolved (dry-run) - skipping health probe")
+		return nil
+	}
+	return probe.HTTP(p.url + {{quote .health_path}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+// previewSlug turns a branch/ref into a DNS/path-safe Cloud Run revision
+// tag: lowercased, every run of non-alphanumeric characters collapsed to a
+// single hyphen, trimmed, forced to start with a letter, and truncated. An
+// empty ref yields "preview".
+func previewSlug(ref string) string {
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range strings.ToLower(ref) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			prevHyphen = false
+		default:
+			if b.Len() > 0 && !prevHyphen {
+				b.WriteByte('-')
+				prevHyphen = true
+			}
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if slug == "" {
+		return "preview"
+	}
+	if slug[0] >= '0' && slug[0] <= '9' {
+		slug = "p-" + slug
+	}
+	const maxLen = 40
+	if len(slug) > maxLen {
+		slug = strings.Trim(slug[:maxLen], "-")
+	}
+	return slug
+}
+
+// garHost returns the registry host of a GAR URL (the segment before the
+// first slash), which is what `gcloud auth configure-docker` expects.
+func garHost(registry string) string {
+	if i := strings.IndexByte(registry, '/'); i >= 0 {
+		return registry[:i]
+	}
+	return registry
+}
+
+// parseEnv turns a "KEY=VAL,KEY=VAL" parameter into the env map the deploy
+// passes to --set-env-vars. An empty string yields no env vars. Keep
+// credentials out of it; those belong in sparkwing secrets.
+func parseEnv(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	env := map[string]string{}
+	for _, pair := range strings.Split(raw, ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		env[strings.TrimSpace(k)] = v
+	}
+	return env
+}
+
+// truthy reports whether a string parameter means "yes". Empty, "false",
+// "0", "no", and "off" (any case) are false; every other value is true, so a
+// stray allow-unauthenticated=false yields a private preview rather than a
+// public one.
+func truthy(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "false", "0", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

@@ -1,0 +1,106 @@
+name: db-backup-restore-drill
+description: |
+  Disaster-recovery drill: dump the source Postgres database, restore
+  that dump into a throwaway ephemeral instance, and run a verification
+  query against the restore to prove the backup is actually usable.
+  Reports pass/fail through an optional webhook. Intended to run on a
+  schedule. Needs a Docker daemon plus pg_dump and psql on PATH; no cloud
+  or cluster.
+whenToUse: |
+  Reach for this to continuously prove your backups restore -- catching
+  silent backup corruption or a broken dump before a real outage, not
+  during one. Distinct from scheduled-db-backup, which only produces and
+  ships a dump: this one restores it and verifies. A snapshot-then-migrate
+  safety net is a documentable composition of db-migrate-updown plus this
+  template's dbbackup block, not a reason to pick this. For an integration
+  suite that needs a live database use integration-test-with-service.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: backup-drill
+  - name: dsn-secret
+    type: string
+    description: |
+      Name of the sparkwing secret holding the source Postgres DSN to back
+      up. Unconfigured falls back to an ephemeral seeded Postgres source,
+      so the drill runs with no setup.
+    default: DATABASE_URL
+  - name: backup-dest
+    type: string
+    description: |
+      Where the dump is written before it is restored: a local dir,
+      s3://bucket/prefix, or gs://bucket/prefix. Empty uses a run-local
+      temp dir that is removed afterward.
+    default: ""
+  - name: aws-profile
+    type: string
+    description: |
+      AWS profile for an s3:// backup-dest; empty uses the runner's default
+      credential chain (or IRSA on EKS). Ignored for gs:// and local.
+    default: ""
+  - name: project
+    type: string
+    description: GCP project ID for a gs:// backup-dest. Ignored for s3:// and local.
+    default: ""
+  - name: verify-query
+    type: string
+    description: |
+      SQL run against the restored database on the real-source path. With
+      verify-min-rows at 0 a non-error result passes; set a
+      "SELECT count(*) ..." with verify-min-rows above 0 to assert rows
+      survived. The ephemeral-source fallback asserts its own seeded rows
+      instead.
+    default: SELECT 1
+  - name: verify-min-rows
+    type: string
+    description: |
+      When above 0, require verify-query's first cell to be an integer at
+      least this large -- turning a "SELECT count(*)" into a real
+      non-empty assertion. 0 accepts any error-free result.
+    default: "0"
+  - name: timeout
+    type: string
+    description: |
+      Max wall-clock for the drill Job as a Go duration (e.g. 30m). A hung
+      dump or restore against a large or wedged source fails the run
+      instead of hanging.
+    default: 30m
+  - name: schedule
+    type: string
+    description: |
+      Cron expression for the intended schedule. Informational here
+      (shown in help); add it to sparkwing.yaml under `on: schedule:` to
+      actually trigger -- see the template README.
+    default: "0 6 * * *"
+  - name: notify-webhook-secret
+    type: string
+    description: |
+      Name of the sparkwing secret holding a webhook URL posted the drill
+      result (pass or fail) as JSON. Empty skips the notification. Reading
+      the URL from a secret keeps the token out of your committed source.
+    default: ""
+prerequisite: |
+  A Docker daemon plus pg_dump and psql on PATH. Set the dsn-secret to
+  drill a real Postgres database; leave it unconfigured to drill an
+  ephemeral seeded Postgres. An s3:// backup-dest needs the aws CLI; a
+  gs:// one needs gcloud.
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: database
+verify: runnable
+verify_fixture: none
+verify_tools: [docker, pg_dump, psql]
+verify_params:
+  pipeline-name: backup-drill
+  dsn-secret: DATABASE_URL
+  backup-dest: ""
+  aws-profile: ""
+  project: ""
+  verify-query: SELECT 1
+  verify-min-rows: "0"
+  timeout: 30m
+  schedule: "0 6 * * *"
+  notify-webhook-secret: ""

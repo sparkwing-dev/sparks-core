@@ -58,7 +58,7 @@ func TestList_AllHaveWhenToUse(t *testing.T) {
 func TestRender_GoTestBuildDeployK8s_TestCmdEmpty(t *testing.T) {
 	out, err := Render("go-test-build-deploy-k8s", map[string]string{
 		"image":      "x",
-		"ecr":        "1234.dkr.ecr.us-west-2.amazonaws.com",
+		"registry":   "1234.dkr.ecr.us-west-2.amazonaws.com",
 		"namespace":  "x",
 		"health-url": "https://x/healthz",
 		"app-name":   "x",
@@ -133,7 +133,7 @@ func TestRender_StaticDeployS3CloudFront_Substitutes(t *testing.T) {
 func TestRender_DockerDeployECR_Substitutes(t *testing.T) {
 	out, err := Render("docker-deploy-ecr-eks", map[string]string{
 		"image":       "my-app",
-		"ecr":         "1234.dkr.ecr.us-west-2.amazonaws.com",
+		"registry":    "1234.dkr.ecr.us-west-2.amazonaws.com",
 		"gitops-repo": "git@github.com:org/gitops.git",
 		"gitops-path": "apps/my-app",
 		"app-name":    "my-app",
@@ -160,7 +160,7 @@ func TestRender_DockerDeployECR_Substitutes(t *testing.T) {
 func TestRender_DockerDeployGAR_TestCmdEmpty(t *testing.T) {
 	out, err := Render("docker-deploy-gar-gke", map[string]string{
 		"image":       "x",
-		"gar":         "us-west1-docker.pkg.dev/p/r",
+		"registry":    "us-west1-docker.pkg.dev/p/r",
 		"gitops-repo": "git@github.com:o/g.git",
 		"gitops-path": "x",
 		"app-name":    "x",
@@ -211,7 +211,7 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 		}},
 		{"docker-deploy-ecr-eks", map[string]string{
 			"image":       "test-app",
-			"ecr":         "1234.dkr.ecr.us-west-2.amazonaws.com",
+			"registry":    "1234.dkr.ecr.us-west-2.amazonaws.com",
 			"gitops-repo": "git@github.com:org/gitops.git",
 			"gitops-path": "apps/test",
 			"app-name":    "test-app",
@@ -219,7 +219,7 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 		}},
 		{"docker-deploy-gar-gke", map[string]string{
 			"image":       "test-app",
-			"gar":         "us-west1-docker.pkg.dev/proj/repo",
+			"registry":    "us-west1-docker.pkg.dev/proj/repo",
 			"gitops-repo": "git@github.com:org/gitops.git",
 			"gitops-path": "apps/test",
 			"app-name":    "test-app",
@@ -227,14 +227,14 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 		}},
 		{"go-test-build-deploy-k8s", map[string]string{
 			"image":      "test-app",
-			"ecr":        "1234.dkr.ecr.us-west-2.amazonaws.com",
+			"registry":   "1234.dkr.ecr.us-west-2.amazonaws.com",
 			"namespace":  "test",
 			"health-url": "https://test-app.example.com/healthz",
 			"app-name":   "test-app",
 		}},
 		{"go-test-migrate-deploy-argo", map[string]string{
 			"image":       "test-app",
-			"ecr":         "1234.dkr.ecr.us-west-2.amazonaws.com",
+			"registry":    "1234.dkr.ecr.us-west-2.amazonaws.com",
 			"gitops-repo": "git@github.com:org/gitops.git",
 			"gitops-path": "apps/test",
 			"app-name":    "test-app",
@@ -269,6 +269,88 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 				t.Errorf("rendered body is not valid Go: %v\n%s", err, out)
 			}
 		})
+	}
+}
+
+// TestList_AllHaveVerificationMetadata enforces the backfill contract:
+// every registered template resolves to a known verification tier and,
+// because the loader validates on read, List() only succeeds when every
+// required parameter has a verify_params sample.
+func TestList_AllHaveVerificationMetadata(t *testing.T) {
+	all, err := List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, tmpl := range all {
+		m := tmpl.Manifest
+		switch m.Tier() {
+		case VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly:
+		default:
+			t.Errorf("%s: unresolved verify tier %q", m.Name, m.Tier())
+		}
+		if strings.TrimSpace(m.Verify) == "" {
+			t.Errorf("%s: verify tier not backfilled (should be explicit, not defaulted)", m.Name)
+		}
+		for _, p := range m.Parameters {
+			if p.Required {
+				if _, ok := m.VerifyParams[p.Name]; !ok {
+					t.Errorf("%s: required param %q missing from verify_params", m.Name, p.Name)
+				}
+			}
+		}
+	}
+}
+
+func TestValidateVerification_RejectsUnknownTier(t *testing.T) {
+	err := validateVerification(Manifest{Name: "x", Verify: "sometimes"})
+	if err == nil || !strings.Contains(err.Error(), "unknown verify") {
+		t.Fatalf("expected unknown-tier error, got %v", err)
+	}
+}
+
+func TestValidateVerification_RejectsUnknownFixture(t *testing.T) {
+	err := validateVerification(Manifest{Name: "x", Verify: VerifyRunnable, VerifyFixture: "podman"})
+	if err == nil || !strings.Contains(err.Error(), "unknown verify_fixture") {
+		t.Fatalf("expected unknown-fixture error, got %v", err)
+	}
+}
+
+func TestValidateVerification_RequiresSampleForRequiredParam(t *testing.T) {
+	m := Manifest{
+		Name:       "x",
+		Verify:     VerifyCompileOnly,
+		Parameters: []Parameter{{Name: "bucket", Required: true}},
+	}
+	err := validateVerification(m)
+	if err == nil || !strings.Contains(err.Error(), "bucket") {
+		t.Fatalf("expected missing-sample error naming bucket, got %v", err)
+	}
+	m.VerifyParams = map[string]string{"bucket": "example-verify-bucket"}
+	if err := validateVerification(m); err != nil {
+		t.Fatalf("expected pass once required param sampled, got %v", err)
+	}
+}
+
+func TestValidateVerification_RejectsUndeclaredSample(t *testing.T) {
+	m := Manifest{
+		Name:         "x",
+		Verify:       VerifyCompileOnly,
+		Parameters:   []Parameter{{Name: "bucket", Required: true}},
+		VerifyParams: map[string]string{"bucket": "b", "typo": "v"},
+	}
+	err := validateVerification(m)
+	if err == nil || !strings.Contains(err.Error(), "typo") {
+		t.Fatalf("expected undeclared-sample error naming typo, got %v", err)
+	}
+}
+
+func TestManifest_TierAndFixtureDefaults(t *testing.T) {
+	var m Manifest
+	if m.Tier() != VerifyCompileOnly {
+		t.Errorf("Tier default = %q, want %q", m.Tier(), VerifyCompileOnly)
+	}
+	if m.Fixture() != FixtureNone {
+		t.Errorf("Fixture default = %q, want %q", m.Fixture(), FixtureNone)
 	}
 }
 

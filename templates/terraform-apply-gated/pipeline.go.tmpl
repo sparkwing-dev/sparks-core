@@ -1,0 +1,135 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// terraform-apply-gated`. Edit freely -- nothing here re-runs.
+//
+// terraform plan -> human approval gate -> terraform apply. The plan
+// runs and reports its add/change/destroy summary, the run blocks at a
+// human approval gate, and only after someone approves does the exact
+// saved plan get applied. An optional Slack announce reports the result.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/notify"
+	"github.com/sparkwing-dev/sparks-core/terraform"
+)
+
+const (
+	tfDir       = {{quote .tf_dir}}
+	tfWorkspace = {{quote .workspace}}
+	tfVarFiles  = {{quote .var_file}}
+	tfVars      = {{quote .vars}}
+	tfBackend   = {{quote .backend_config}}
+	environment = {{quote .environment}}
+	slackSecret = {{quote .slack_webhook_secret}}
+)
+
+// {{pascal .pipeline_name}} plans the Terraform root at tfDir, blocks at
+// a human approval gate showing the plan's change summary, then applies
+// exactly that saved plan once a person approves.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	planFile string
+	summary  string
+}
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "terraform plan -> approval gate -> apply ({{.environment}})"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	tfPlan := sparkwing.Job(plan, "plan", p.plan)
+	approve := sparkwing.JobApproval(plan, "approve-apply", sparkwing.ApprovalConfig{
+		Message:  "Apply the Terraform plan to {{.environment}}? Review the plan step's change summary first.",
+		Timeout:  {{.timeout_hours}} * time.Hour,
+		OnExpiry: sparkwing.ApprovalDeny,
+	}).Needs(tfPlan)
+	sparkwing.Job(plan, "apply", p.apply).Needs(approve)
+	return nil
+}
+
+// plan runs terraform init + plan, saves the plan file, and annotates the
+// run with the add/change/destroy summary the approver reviews.
+func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
+	res, err := terraform.Plan(ctx, tfConfig())
+	if err != nil {
+		return err
+	}
+	p.planFile, p.summary = res.PlanFile, res.Summary
+	sparkwing.Annotate(ctx, fmt.Sprintf("terraform plan: %s", res.Summary))
+	return nil
+}
+
+// apply applies exactly the saved plan the approver signed off on, then
+// posts an optional Slack announce read from the slack-webhook-secret
+// sparkwing secret (an unset secret or a dry run skips it). Apply honors
+// SPARKWING_DRY_RUN, echoing its argv instead of mutating real state.
+func (p *{{pascal .pipeline_name}}) apply(ctx context.Context) error {
+	// safety: apply Needs the approval gate, which Needs plan, so planFile is set.
+	err := terraform.Apply(ctx, tfConfig(), terraform.ApplyOptions{PlanFile: p.planFile})
+	if slackSecret == "" || os.Getenv("SPARKWING_DRY_RUN") != "" {
+		return err
+	}
+	hook, secretErr := sparkwing.Secret(ctx, slackSecret)
+	if secretErr != nil {
+		return err
+	}
+	outcome := "succeeded"
+	if err != nil {
+		outcome = "failed: " + err.Error()
+	}
+	_ = notify.Slack(ctx, hook, fmt.Sprintf("terraform apply to %s %s (%s)", environment, outcome, p.summary))
+	return err
+}
+
+// tfConfig is the shared terraform working-directory config. The same
+// config backs both plan and apply so the workspace and directory match
+// the saved plan.
+func tfConfig() terraform.Config {
+	return terraform.Config{
+		Dir:       tfDir,
+		Workspace: tfWorkspace,
+		VarFiles:  splitList(tfVarFiles),
+		Vars:      parseKeyVals(tfVars),
+		Backend:   parseKeyVals(tfBackend),
+	}
+}
+
+// splitList turns a comma-separated parameter into a trimmed slice,
+// dropping blank entries. An empty string yields nil.
+func splitList(raw string) []string {
+	var out []string
+	for _, item := range strings.Split(raw, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// parseKeyVals turns a "KEY=VAL,KEY=VAL" parameter into a map, dropping
+// entries without an '='. An empty string yields nil.
+func parseKeyVals(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, pair := range strings.Split(raw, ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		out[strings.TrimSpace(k)] = v
+	}
+	return out
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

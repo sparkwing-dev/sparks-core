@@ -5,11 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/sparkwing-dev/sparkwing/sparkwing"
-
-	"github.com/sparkwing-dev/sparks-core/aws"
-	"github.com/sparkwing-dev/sparks-core/step"
 )
 
 // IsECR returns true if the registry URL is an AWS ECR endpoint.
@@ -28,32 +23,11 @@ func ECRRegion(registry string) string {
 	return "us-west-2"
 }
 
-// ECRLogin authenticates docker with an ECR registry. Safe to call
-// repeatedly; the pipe-through-shell shape mirrors the AWS docs so
-// failures surface with useful context.
+// ECRLogin authenticates docker with an ECR registry. It is a thin
+// wrapper over RegistryLogin retained for existing callers; new code can
+// call RegistryLogin directly with RegistryECR. Honors SPARKWING_DRY_RUN.
 func ECRLogin(ctx context.Context, registry, awsProfile string) error {
-	return step.Run(ctx, "ecr login", func(ctx context.Context) error {
-		region := ECRRegion(registry)
-		profileFlag := aws.ProfileFlag(awsProfile)
-		sparkwing.Info(ctx, "authenticating with ECR (region=%s)", region)
-		// Pipe is a real bash feature, so this stays as a Bash call;
-		// the dynamic values come through .Env() so the shell expands
-		// them safely. PROFILE_FLAG is intentionally unquoted so its
-		// " --profile <name>" expansion word-splits into two argv
-		// tokens (or vanishes when empty).
-		if _, err := sparkwing.Bash(
-			ctx,
-			`aws ecr get-login-password --region "$REGION"${PROFILE_FLAG} | docker login --username AWS --password-stdin "$REGISTRY"`,
-		).
-			Env("REGION", region).
-			Env("PROFILE_FLAG", profileFlag).
-			Env("REGISTRY", registry).
-			Run(); err != nil {
-			return err
-		}
-		sparkwing.Info(ctx, "authenticated with %s", registry)
-		return nil
-	})
+	return RegistryLogin(ctx, LoginConfig{Kind: RegistryECR, Registry: registry, AWSProfile: awsProfile})
 }
 
 // TryDetectLocalRegistries returns a user-specified local registry via

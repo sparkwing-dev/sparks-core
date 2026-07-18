@@ -1,0 +1,80 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// scheduled-db-backup`. Edit freely -- nothing here re-runs.
+//
+// Dump the {{.engine}} database behind the {{.dsn_secret}} secret, gzip
+// it, and upload a timestamped object to {{.backup_dest}}. Intended to
+// run on a schedule ("{{.schedule}}") -- add the trigger to
+// .sparkwing/sparkwing.yaml (see the template README). Retention is an
+// object-store lifecycle rule ({{.max_age_days}} days), not an
+// in-pipeline delete.
+package jobs
+
+import (
+	"context"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/dbbackup"
+)
+
+const (
+	{{pascal .pipeline_name}}Secret  = {{quote .dsn_secret}}
+	{{pascal .pipeline_name}}Engine  = {{quote .engine}}
+	{{pascal .pipeline_name}}Dest    = {{quote .backup_dest}}
+	{{pascal .pipeline_name}}Profile = {{quote .aws_profile}}
+	{{pascal .pipeline_name}}Project = {{quote .project}}
+	{{pascal .pipeline_name}}WorkDir = {{quote .work_dir}}
+	{{pascal .pipeline_name}}Timeout = {{quote .timeout}}
+)
+
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Dump the {{.engine}} database and upload a timestamped backup to {{.backup_dest}} (intended cron {{.schedule}}; wire on: schedule: to activate)"
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Dry-run the upload (still dumps the real database)", Command: "SPARKWING_DRY_RUN=1 sparkwing run {{.pipeline_name}}"},
+		{Comment: "Run the backup now", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	timeout, err := time.ParseDuration({{pascal .pipeline_name}}Timeout)
+	if err != nil {
+		return err
+	}
+	sparkwing.Job(plan, "backup", p.backup).Timeout(timeout)
+	return nil
+}
+
+// backup reads the source DSN from a sparkwing secret so it never lands
+// in the pipeline source, then dumps, compresses, and ships the artifact
+// to the configured destination. The cloud upload honors SPARKWING_DRY_RUN;
+// the dump itself always runs, which is why this template is compile-only
+// in the registry (it needs a reachable database).
+func (p *{{pascal .pipeline_name}}) backup(ctx context.Context) error {
+	dsn, err := sparkwing.Secret(ctx, {{pascal .pipeline_name}}Secret)
+	if err != nil {
+		return err
+	}
+	art, err := dbbackup.Dump(ctx, dbbackup.Config{
+		Engine:     {{pascal .pipeline_name}}Engine,
+		DSN:        dsn,
+		Dest:       {{pascal .pipeline_name}}Dest,
+		AWSProfile: {{pascal .pipeline_name}}Profile,
+		Project:    {{pascal .pipeline_name}}Project,
+		WorkDir:    {{pascal .pipeline_name}}WorkDir,
+	})
+	if err != nil {
+		return err
+	}
+	sparkwing.Annotate(ctx, "backup uploaded to "+art.URI)
+	return nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

@@ -7,6 +7,9 @@ package jobs
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
@@ -21,24 +24,53 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
-	sparkwing.Job(plan, "build", p.build).Verify(p.smokeTest)
+	timeout, err := time.ParseDuration({{quote .build_timeout}})
+	if err != nil {
+		return fmt.Errorf("build-timeout: %w", err)
+	}
+	sparkwing.Job(plan, "build", p.build).
+		Verify(p.smokeTest).
+		Retry(1, sparkwing.RetryAuto()).
+		Timeout(timeout)
 	return nil
 }
 
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
-	_, err := sparkwing.Exec(ctx, "docker", "build",
-		"-t", {{quote .image_tag}},
-		"-f", {{quote .dockerfile}},
-		{{quote .build_context}},
-	).Run()
+	args := []string{"build", "-t", {{quote .image_tag}}, "-f", {{quote .dockerfile}}}
+	args = append(args, buildArgFlags({{quote .build_args}})...)
+	if target := {{quote .target}}; target != "" {
+		args = append(args, "--target", target)
+	}
+	args = append(args, {{quote .build_context}})
+	_, err := sparkwing.Exec(ctx, "docker", args...).Run()
 	return err
 }
 
-// smokeTest runs the freshly-built image; a non-zero exit (or a
-// container that can't start) fails the node at the verify stage.
+// smokeTest runs the freshly-built image so a container that can't
+// start fails the node at the verify stage. A non-empty verify-cmd is
+// split on whitespace into arguments appended to the image's own
+// entrypoint, so the real startup path is exercised and shell-less
+// images still work.
 func (p *{{pascal .pipeline_name}}) smokeTest(ctx context.Context) error {
-	{{if .verify_cmd}}_, err := sparkwing.Exec(ctx, "docker", "run", "--rm", "--entrypoint", "sh", {{quote .image_tag}}, "-c", {{quote .verify_cmd}}).Run(){{else}}_, err := sparkwing.Exec(ctx, "docker", "run", "--rm", {{quote .image_tag}}).Run(){{end}}
+	args := []string{"run", "--rm", {{quote .image_tag}}}
+	args = append(args, strings.Fields({{quote .verify_cmd}})...)
+	_, err := sparkwing.Exec(ctx, "docker", args...).Run()
 	return err
+}
+
+// buildArgFlags parses a KEY=VAL,KEY=VAL string into a flat
+// --build-arg KEY=VAL argv slice. Blank entries are skipped, so an
+// empty spec yields no flags.
+func buildArgFlags(spec string) []string {
+	var out []string
+	for _, pair := range strings.Split(spec, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		out = append(out, "--build-arg", pair)
+	}
+	return out
 }
 
 func init() {

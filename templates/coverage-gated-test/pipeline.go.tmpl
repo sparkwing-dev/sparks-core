@@ -1,0 +1,57 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// coverage-gated-test`. Edit freely -- nothing here re-runs.
+//
+// Run a test suite that emits a coverage report, then gate the node on
+// a total-coverage floor: a Verify postcondition parses the report and
+// fails the run when coverage drops below the threshold.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/coverage"
+)
+
+// {{pascal .pipeline_name}} runs the test command, which writes a
+// coverage report, then a Verify postcondition parses the report's
+// total line coverage and fails the node when it falls below the floor.
+// The parser understands Go coverprofiles, lcov, and Cobertura XML, so
+// the same gate covers a Go, Node, Python, or Rust suite.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run tests and fail the run when total coverage is below {{.min_coverage}}%"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Runs the test command, then parses the coverage report ({{.coverage_format}} format) at {{.coverage_file}} and fails the run when total line coverage is below {{.min_coverage}}%. The parser also reads lcov and Cobertura XML, so the same gate covers non-Go suites."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run the coverage gate", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "test", p.test).
+		Verify(coverage.GateAtLeast({{.min_coverage}}, coverage.Report{
+			Format: {{quote .coverage_format}},
+			Path:   {{quote .coverage_file}},
+		}))
+	return nil
+}
+
+// test runs the coverage-producing test command. It must emit the report
+// the Verify gate reads afterward; the gate resolves a relative path
+// against the repo root.
+func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	return err
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

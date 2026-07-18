@@ -27,12 +27,23 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 	return "Delete files under {{.target_dir}} older than {{.max_age_days}} days (cron: {{.schedule}})"
 }
 
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Prune now", Command: "sparkwing run {{.pipeline_name}}"},
+		{Comment: "Preview without deleting", Command: "sparkwing run {{.pipeline_name}} --sw-dry-run"},
+	}
+}
+
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 	sparkwing.Job(plan, "prune", p.prune)
 	return nil
 }
 
 func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
+	if {{pascal .pipeline_name}}MaxDays <= 0 {
+		return fmt.Errorf("max-age-days must be a positive integer, got %d", {{pascal .pipeline_name}}MaxDays)
+	}
+	dry := sparkwing.IsDryRun(ctx)
 	dir := sparkwing.Path({{pascal .pipeline_name}}Dir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		sparkwing.Info(ctx, "%s does not exist; nothing to prune", dir)
@@ -52,6 +63,11 @@ func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
 			return err
 		}
 		if info.ModTime().Before(cutoff) {
+			if dry {
+				sparkwing.Info(ctx, "would remove %s", path)
+				removed++
+				return nil
+			}
 			if rerr := os.Remove(path); rerr != nil {
 				return rerr
 			}
@@ -62,8 +78,12 @@ func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sparkwing.Info(ctx, "pruned %d file(s) older than %d days from %s", removed, {{pascal .pipeline_name}}MaxDays, dir)
-	sparkwing.Annotate(ctx, fmt.Sprintf("pruned %d file(s)", removed))
+	verb := "pruned"
+	if dry {
+		verb = "would prune"
+	}
+	sparkwing.Info(ctx, "%s %d file(s) older than %d days from %s", verb, removed, {{pascal .pipeline_name}}MaxDays, dir)
+	sparkwing.Annotate(ctx, fmt.Sprintf("%s %d file(s)", verb, removed))
 	return nil
 }
 

@@ -1,24 +1,36 @@
 name: docker-deploy-ecr-eks
 description: |
-  Build a Docker image, push to ECR, and deploy via gitops to EKS
-  (or kubectl/kind on local). Mirrors the consumer apps
-  build-test-deploy pattern: tests run before build, image gets
-  multi-tag (sha + branch + prod), gitops bumps kustomize, ArgoCD
-  syncs.
+  Build a Docker image, push to a registry, and deploy via gitops to EKS
+  (or kubectl/kind on local). Tests run before build, the image is pushed
+  multi-tag (sha + branch + prod), gitops bumps the kustomize image tag,
+  and ArgoCD syncs.
 whenToUse: |
   Containerized app to ECR + gitops/EKS on AWS, no database migrations.
-  Use for a stateless service deploy. If the deploy needs migrations and
+  Use for a stateless service deploy. On GCP (GAR + gitops/GKE) use
+  docker-deploy-gar-gke instead. If the deploy needs migrations and
   integration tests, use go-test-migrate-deploy-argo. If you apply k8s
   YAML directly with kubectl (no gitops), use go-test-build-deploy-k8s.
+  For a container on ECS/Fargate with no Kubernetes use
+  container-deploy-ecs-fargate; for a scale-to-zero request function use
+  lambda-deploy.
+prerequisite: |
+  A Dockerfile at the build context, an existing ECR repository, an SSH
+  deploy key for the gitops repo, a pre-created ArgoCD application named
+  app-name, and an EKS cluster with kubectl on PATH. Pushes authenticate
+  via AWS credentials (AWS_PROFILE locally, or IRSA on an in-cluster
+  runner) that have ECR push access.
 parameters:
   - name: image
     type: string
     required: true
     description: Image name (e.g. myapp)
-  - name: ecr
+  - name: registry
     type: string
     required: true
-    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+    description: |
+      Container registry URL to push to (e.g.
+      <acct>.dkr.ecr.<region>.amazonaws.com,
+      us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org).
   - name: gitops-repo
     type: string
     required: true
@@ -35,14 +47,37 @@ parameters:
     type: string
     required: true
     description: Kubernetes namespace
+  - name: dockerfile
+    type: string
+    description: Path to the Dockerfile, relative to the repo root.
+    default: Dockerfile
+  - name: build-context
+    type: string
+    description: Docker build context directory, relative to the repo root.
+    default: "."
+  - name: platform
+    type: string
+    description: |
+      Docker build target platform (e.g. linux/amd64). Empty uses the host
+      default; set linux/amd64 to match typical EKS nodes when building on
+      an arm64 machine.
+    default: ""
   - name: pipeline-name
     type: string
     description: Pipeline registration name -- the verb users type after `sparkwing run`.
     default: build-test-deploy
   - name: test-cmd
     type: string
-    description: Pre-build test command. Empty disables the test step.
+    description: Pre-build test command. Empty disables the test node.
     default: go test ./...
 applicability:
   cloud: [aws]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  gitops-repo: git@github.com:example/gitops.git
+  gitops-path: apps/example
+  app-name: example-app
+  namespace: example

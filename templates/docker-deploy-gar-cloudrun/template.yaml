@@ -1,0 +1,87 @@
+name: docker-deploy-gar-cloudrun
+description: |
+  Test, build a Docker image, push it to Google Artifact Registry, and
+  deploy the image to a Cloud Run service. A post-deploy HTTP probe
+  against the URL the deploy returns verifies the new revision; a
+  definitively-unhealthy result shifts traffic back to the prior
+  revision. The flagship GCP serverless-container deploy.
+whenToUse: |
+  The default GCP container deploy. Pick over cloudrun-deploy-source when
+  you build and test the exact image in CI and want it pushed to GAR (a
+  reproducible artifact you can scan) before it goes live. Pick over
+  gke-deploy-gar-kubectl when you want managed serverless Cloud Run, not a
+  GKE cluster. For an SSR Next.js app (output: standalone) set
+  test-cmd=`npm test`, point dockerfile at your Node Dockerfile, and set
+  port. For AWS containers use container-deploy-ecs-fargate.
+prerequisite: |
+  A Dockerfile (at the repo root by default; override with dockerfile and
+  build-context) and the gcloud CLI on PATH for GAR auth and the Cloud Run
+  deploy.
+parameters:
+  - name: service
+    type: string
+    required: true
+    description: Cloud Run service name (e.g. api)
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. my-service)
+  - name: registry
+    type: string
+    required: true
+    description: Container registry URL to push to (e.g. <acct>.dkr.ecr.<region>.amazonaws.com, us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org).
+  - name: region
+    type: string
+    required: true
+    description: Cloud Run region (e.g. us-west1)
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: dockerfile
+    type: string
+    default: Dockerfile
+    description: Path to the Dockerfile, relative to the build context.
+  - name: build-context
+    type: string
+    default: "."
+    description: Docker build context directory.
+  - name: port
+    type: string
+    default: "8080"
+    description: Container port the service listens on (set 3000 for a Next.js standalone server). Empty leaves Cloud Run's default in place.
+  - name: health-path
+    type: string
+    default: /
+    description: Path appended to the service URL for the post-deploy probe (e.g. /healthz)
+  - name: allow-unauthenticated
+    type: string
+    default: "true"
+    description: Whether the service is publicly reachable (adds --allow-unauthenticated). Set false (or empty) for an authenticated, private service.
+  - name: env
+    type: string
+    default: ""
+    description: Runtime env vars as "KEY=VAL,KEY=VAL", passed via --set-env-vars. Empty leaves them unset.
+  - name: secrets
+    type: string
+    default: ""
+    description: Runtime secrets as "KEY=SECRET:VERSION,KEY=SECRET" referencing Secret Manager, passed via --set-secrets. Put credentials here, not in env.
+  - name: pipeline-name
+    type: string
+    default: build-test-deploy
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: test-cmd
+    type: string
+    default: go test ./...
+    description: "Pre-build test command. Empty disables the test node (language-agnostic: pytest, npm test, cargo test...)."
+applicability:
+  cloud: [gcp]
+  category: container-service-deploy
+verify: dry-runnable
+verify_fixture: docker
+verify_params:
+  service: example-api
+  image: example-service
+  registry: us-central1-docker.pkg.dev/example-project/example-repo
+  region: us-central1
+  project: example-project

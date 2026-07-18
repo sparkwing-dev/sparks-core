@@ -34,6 +34,14 @@ deletes regular files whose mtime is older than `max-age-days`. A
 missing directory is a no-op, not an error. Edit the body into whatever
 scheduled work you need (reporting, rotation, syncs).
 
+Preview before you enable the cron: `sparkwing run scheduled-cleanup
+--sw-dry-run` logs every file it would remove and deletes nothing.
+
+`max-age-days` must be a positive integer. It is baked into the scaffold
+as a Go constant, so a non-integer value fails at compile time and a
+zero or negative value is rejected at run time (it would otherwise match
+every file and empty the tree).
+
 ## Parameters
 
 | name | required | default | description |

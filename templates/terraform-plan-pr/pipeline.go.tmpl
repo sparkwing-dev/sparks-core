@@ -1,0 +1,72 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// terraform-plan-pr`. Edit freely -- nothing here re-runs.
+//
+// Run terraform init + terraform plan against {{.tf_dir}} and surface the
+// add/change/destroy summary as a run annotation and an optional webhook
+// comment. This pipeline never applies -- plan is the whole point, so a
+// reviewer sees exactly what a merge would do before anyone touches
+// infrastructure.
+package jobs
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/notify"
+	"github.com/sparkwing-dev/sparks-core/terraform"
+)
+
+const (
+	tfDir         = {{quote .tf_dir}}
+	tfVarFile     = {{quote .var_file}}
+	tfWorkspace   = {{quote .workspace}}
+	notifyWebhook = {{quote .notify_webhook}}
+)
+
+// {{pascal .pipeline_name}} runs terraform plan against tfDir and reports
+// the add/change/destroy summary. It never applies.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	summary string
+}
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "terraform plan {{.tf_dir}} and report the change summary (never applies)"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	planned := sparkwing.Job(plan, "plan", p.plan)
+	sparkwing.Job(plan, "report", p.report).Needs(planned)
+	return nil
+}
+
+// plan runs terraform init + plan against tfDir (never apply), parses the
+// change summary, and records it as a run annotation for reviewers.
+func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
+	cfg := terraform.Config{Dir: tfDir, Workspace: tfWorkspace}
+	if tfVarFile != "" {
+		cfg.VarFiles = []string{tfVarFile}
+	}
+	res, err := terraform.Plan(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	p.summary = fmt.Sprintf("terraform plan (%s): %d to add, %d to change, %d to destroy",
+		tfDir, res.Adds, res.Changes, res.Destroys)
+	sparkwing.Annotate(ctx, p.summary)
+	return nil
+}
+
+// report POSTs the plan summary to the configured webhook. An empty
+// notify-webhook is a safe no-op, so the node stays green when no webhook
+// is set.
+func (p *{{pascal .pipeline_name}}) report(ctx context.Context) error {
+	// safety: report Needs plan, so p.summary is set.
+	return notify.Slack(ctx, notifyWebhook, p.summary)
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

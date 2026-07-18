@@ -6,8 +6,9 @@ description: |
   sparkwing.JobApproval.
 whenToUse: |
   Any deploy that must pause for a human "go" before the irreversible
-  step -- prod releases, destructive migrations. For unattended deploys
-  use a docker-deploy or static-deploy template instead.
+  step -- prod releases, destructive migrations. For a human-gated
+  Terraform apply specifically use terraform-apply-gated. For unattended
+  deploys use a docker-deploy or static-deploy template instead.
 parameters:
   - name: pipeline-name
     type: string
@@ -17,14 +18,31 @@ parameters:
     type: string
     description: Environment name shown in the approval prompt.
     default: prod
+  - name: build-cmd
+    type: string
+    description: Shell command the build step runs (replace the placeholder).
+    default: echo "build"
+  - name: test-cmd
+    type: string
+    description: Shell command the test step runs (replace the placeholder).
+    default: echo "test"
   - name: deploy-cmd
     type: string
     description: Shell command the deploy step runs after approval (replace the placeholder).
     default: echo "deploying"
   - name: timeout-hours
     type: string
-    description: Hours the gate waits for a human answer before it expires (denied).
+    description: Hours the gate waits for a human answer before it expires (denied). A value of 0 disables the timeout, so the gate waits indefinitely; otherwise pass a positive number.
     default: "2"
 applicability:
   cloud: []
   category: deploy
+verify: compile-only
+verify_fixture: none
+verify_params:
+  pipeline-name: gated-deploy
+  environment: prod
+  build-cmd: go build ./...
+  test-cmd: go test ./...
+  deploy-cmd: ./bin/deploy.sh prod
+  timeout-hours: "4"

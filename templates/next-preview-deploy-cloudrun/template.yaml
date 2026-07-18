@@ -1,0 +1,92 @@
+name: next-preview-deploy-cloudrun
+description: |
+  Per-branch preview deploys for a server-rendered Next.js app on Cloud
+  Run using tagged revisions. Build the branch image, push it to a
+  container registry, and deploy it as a `--tag <branch-slug> --no-traffic`
+  revision -- a stable preview URL that never shifts production traffic --
+  then print the tagged URL for the pull request. Cloud Run revision tags
+  give per-branch preview environments with no extra infrastructure.
+whenToUse: |
+  Reach for this for ephemeral per-PR or per-branch preview environments of
+  an SSR app on GCP: it reuses one Cloud Run service and spins a tagged
+  revision per branch, so previews cost nothing when idle and need no
+  teardown job. Choose docker-deploy-gar-cloudrun instead for the
+  production (traffic-serving) deploy -- that one shifts live traffic and
+  rolls it back on a failed probe, whereas this one deploys `--no-traffic`
+  and never touches production. Static-export previews (S3/GCS) are a
+  documented follow-up, not shipped here.
+prerequisite: |
+  A Dockerfile that builds the Next.js standalone server (at the repo root
+  by default; override with dockerfile and build-context), plus the docker
+  and gcloud CLIs on PATH for the build, GAR auth, and the Cloud Run deploy.
+  The default test-cmd (`npm test`) needs Node and npm on PATH; empty it to
+  skip that node.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. web)
+  - name: registry
+    type: string
+    required: true
+    description: Container registry URL to push to (e.g. <acct>.dkr.ecr.<region>.amazonaws.com, us-west1-docker.pkg.dev/proj/repo, or ghcr.io/org).
+  - name: service
+    type: string
+    required: true
+    description: Base Cloud Run service; previews land as tagged revisions on it
+  - name: region
+    type: string
+    required: true
+    description: GCP region (e.g. us-west1)
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: dockerfile
+    type: string
+    default: Dockerfile
+    description: Path to the Dockerfile, relative to the build context.
+  - name: build-context
+    type: string
+    default: "."
+    description: Docker build context directory.
+  - name: port
+    type: string
+    default: "3000"
+    description: Container port the Next server listens on. Empty leaves Cloud Run's default in place.
+  - name: health-path
+    type: string
+    default: /
+    description: Path appended to the preview URL for the post-deploy probe (e.g. /healthz)
+  - name: allow-unauthenticated
+    type: string
+    default: "true"
+    description: 'Whether the preview is publicly reachable (adds --allow-unauthenticated). "true" (default) is public; "false" (or 0/no/empty) deploys an authenticated, private preview.'
+  - name: env
+    type: string
+    default: ""
+    description: Runtime env vars as "KEY=VAL,KEY=VAL", passed via --set-env-vars. Empty leaves them unset.
+  - name: branch-ref
+    type: string
+    default: ""
+    description: Branch/ref the preview slug derives from; empty reads the dispatch-time branch (RunContext git snapshot).
+  - name: test-cmd
+    type: string
+    default: npm test
+    description: Pre-build test command. Empty disables the test node.
+  - name: pipeline-name
+    type: string
+    default: preview
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+applicability:
+  cloud: [gcp]
+  category: container-service-deploy
+verify: dry-runnable
+verify_fixture: docker
+verify_params:
+  image: web
+  registry: us-central1-docker.pkg.dev/example-project/example-repo
+  service: example-web
+  region: us-central1
+  project: example-project
+  branch-ref: feature-login

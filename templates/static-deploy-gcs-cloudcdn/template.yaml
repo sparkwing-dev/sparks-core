@@ -1,14 +1,21 @@
 name: static-deploy-gcs-cloudcdn
 description: |
   Build a Next.js (or any static-output) app and sync to a Google
-  Cloud Storage bucket fronted by Cloud CDN. Multi-cloud parity for
-  static-deploy-s3-cloudfront -- same shape, GCP backends. Useful for
-  teams that want to ship the marketing-site shape on GCP without
-  inventing the pattern from scratch.
+  Cloud Storage bucket fronted by Cloud CDN. The GCP counterpart of
+  static-deploy-s3-cloudfront: the same build/sync/invalidate shape,
+  but the build runs on the host (npm ci) and the sync and cache
+  invalidation go through gsutil and gcloud rather than the S3 twin's
+  containerized build.
 whenToUse: |
   Static / Next.js export to GCS + Cloud CDN on GCP. The GCP twin of
   static-deploy-s3-cloudfront. Use for static sites on GCP; for AWS use
   the S3/CloudFront one.
+prerequisite: |
+  A Next.js or other static-output app at the repo root that builds to
+  the output directory via `npm ci && npm run build`, a pre-provisioned
+  GCS bucket, a Cloud CDN URL map fronting it, and node/npm + gsutil +
+  gcloud on PATH. The bucket must be dedicated to this site: the sync
+  prunes objects it did not upload.
 parameters:
   - name: bucket
     type: string
@@ -22,6 +29,10 @@ parameters:
     type: string
     required: true
     description: GCP project ID
+  - name: out-dir
+    type: string
+    description: Build output directory to sync (e.g. out, dist, build).
+    default: out
   - name: url
     type: string
     description: Deployed site URL; logged after a successful deploy.
@@ -33,3 +44,8 @@ parameters:
 applicability:
   cloud: [gcp]
   category: static-site-deploy
+verify: compile-only
+verify_params:
+  bucket: example-verify-bucket
+  url-map: example-cdn-url-map
+  project: example-project

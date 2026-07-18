@@ -7,6 +7,8 @@ description: |
 whenToUse: |
   CI hygiene only (gofmt / vet / test), no build or deploy. Use as a PR
   gate, or as the first template to read when learning the SDK shape.
+  For the same hygiene gate in other stacks use lint-test-node or
+  lint-test-python.
 parameters:
   - name: go-version
     type: string
@@ -20,7 +22,12 @@ parameters:
     type: string
     description: Additional args appended to `go test`.
     default: ./...
-prerequisite: A Go module at the repo root (gofmt/vet/test run there); scaffolding into an empty repo runs but has nothing to check.
+prerequisite: A Go module at the repo root, with the Go toolchain (go and gofmt on PATH) on the runner; gofmt/vet/test run there. Scaffolding into an empty repo runs but has nothing to check.
 applicability:
   cloud: []
   category: ci-hygiene
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  pipeline-name: lint-test
+  test-args: -count=1 ./...

@@ -1,0 +1,167 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// db-backup-restore-drill`. Edit freely -- nothing here re-runs.
+//
+// Disaster-recovery drill for a Postgres database: dump the source,
+// restore the dump into a throwaway ephemeral instance, and run a
+// verification query against the restore to prove the backup is usable.
+// Intended to run on a schedule ("{{.schedule}}") -- add the trigger to
+// .sparkwing/sparkwing.yaml (see the template README). Needs a Docker
+// daemon plus pg_dump and psql on PATH.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/dbbackup"
+	"github.com/sparkwing-dev/sparks-core/notify"
+	"github.com/sparkwing-dev/sparks-core/services"
+)
+
+const (
+	{{pascal .pipeline_name}}Secret        = {{quote .dsn_secret}}
+	{{pascal .pipeline_name}}Dest          = {{quote .backup_dest}}
+	{{pascal .pipeline_name}}AWSProfile    = {{quote .aws_profile}}
+	{{pascal .pipeline_name}}Project       = {{quote .project}}
+	{{pascal .pipeline_name}}Query         = {{quote .verify_query}}
+	{{pascal .pipeline_name}}MinRows       = {{.verify_min_rows}}
+	{{pascal .pipeline_name}}WebhookSecret = {{quote .notify_webhook_secret}}
+)
+
+// drillSmokeTable and drillSmokeRows describe the fixture the ephemeral
+// fallback seeds, so the no-setup drill proves seeded rows survive a
+// dump/restore round trip rather than only that psql can connect.
+const (
+	drillSmokeTable = "drill_smoke"
+	drillSmokeRows  = 3
+)
+
+// {{pascal .pipeline_name}} dumps a Postgres source, restores the dump
+// into a throwaway instance, and verifies the restore -- a repeatable
+// proof that the backup path actually works, not just that a dump file
+// exists.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Dump, restore into a throwaway Postgres, and verify the backup (cron: {{.schedule}})"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	timeout, err := time.ParseDuration({{quote .timeout}})
+	if err != nil {
+		return fmt.Errorf("timeout: %w", err)
+	}
+	sparkwing.Job(plan, "drill", p.drill).Timeout(timeout)
+	return nil
+}
+
+// drill runs the dump/restore/verify round trip and reports the result,
+// so an infrastructure failure (no Docker, unreachable source) annotates
+// and notifies the same as a dump/restore/verify failure.
+func (p *{{pascal .pipeline_name}}) drill(ctx context.Context) error {
+	return p.report(ctx, p.roundTrip(ctx))
+}
+
+// roundTrip resolves the source DSN -- the configured secret when set,
+// otherwise an ephemeral seeded Postgres so the drill runs with no setup
+// -- then dumps it, restores into a throwaway instance, and asserts the
+// verify query against the restore.
+func (p *{{pascal .pipeline_name}}) roundTrip(ctx context.Context) error {
+	if src, err := sparkwing.Secret(ctx, {{pascal .pipeline_name}}Secret); err == nil && src != "" {
+		return p.dumpRestoreVerify(ctx, src, {{pascal .pipeline_name}}Query, {{pascal .pipeline_name}}MinRows)
+	}
+	sparkwing.Info(ctx, "source secret %q not configured; drilling an ephemeral seeded Postgres source", {{pascal .pipeline_name}}Secret)
+	return services.WithPostgres(ctx, services.Postgres{DB: "drill_source"}, func(ctx context.Context, srcDSN string) error {
+		rows, err := seedSource(ctx, srcDSN)
+		if err != nil {
+			return err
+		}
+		return p.dumpRestoreVerify(ctx, srcDSN, "SELECT count(*) FROM "+drillSmokeTable, rows)
+	})
+}
+
+// dumpRestoreVerify dumps srcDSN into a throwaway ephemeral Postgres and
+// asserts query (with minRows) against the restore. The restore target
+// is always ephemeral, so the drill never writes to a real database.
+func (p *{{pascal .pipeline_name}}) dumpRestoreVerify(ctx context.Context, srcDSN, query string, minRows int) error {
+	return services.WithPostgres(ctx, services.Postgres{DB: "drill_restore"}, func(ctx context.Context, targetDSN string) error {
+		dest := {{pascal .pipeline_name}}Dest
+		if dest == "" {
+			tmp, err := os.MkdirTemp("", "backup-drill-*")
+			if err != nil {
+				return fmt.Errorf("create temp dest: %w", err)
+			}
+			defer os.RemoveAll(tmp)
+			dest = tmp
+		}
+		art, err := dbbackup.Dump(ctx, dbbackup.Config{
+			Engine:     dbbackup.EnginePostgres,
+			DSN:        srcDSN,
+			Dest:       dest,
+			AWSProfile: {{pascal .pipeline_name}}AWSProfile,
+			Project:    {{pascal .pipeline_name}}Project,
+		})
+		if err != nil {
+			return fmt.Errorf("dump source: %w", err)
+		}
+		if err := dbbackup.Restore(ctx, dbbackup.Config{
+			Engine:     dbbackup.EnginePostgres,
+			DSN:        targetDSN,
+			Source:     art.URI,
+			AWSProfile: {{pascal .pipeline_name}}AWSProfile,
+			Project:    {{pascal .pipeline_name}}Project,
+		}); err != nil {
+			return fmt.Errorf("restore into throwaway: %w", err)
+		}
+		if err := dbbackup.VerifyRestore(ctx, dbbackup.VerifyConfig{
+			Engine:  dbbackup.EnginePostgres,
+			DSN:     targetDSN,
+			Query:   query,
+			MinRows: minRows,
+		}); err != nil {
+			return fmt.Errorf("verify restore: %w", err)
+		}
+		return nil
+	})
+}
+
+// seedSource creates and populates drillSmokeTable in the ephemeral
+// fallback source and returns the row count it seeded, so the verify
+// step asserts those rows survive the dump/restore.
+func seedSource(ctx context.Context, dsn string) (int, error) {
+	stmt := fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY); INSERT INTO %s (id) VALUES (1), (2), (3);", drillSmokeTable, drillSmokeTable)
+	if _, err := sparkwing.Exec(ctx, "psql", "--dbname="+dsn, "-v", "ON_ERROR_STOP=1", "-c", stmt).Run(); err != nil {
+		return 0, fmt.Errorf("seed ephemeral source: %w", err)
+	}
+	return drillSmokeRows, nil
+}
+
+// report annotates the run with the drill result and posts it to the
+// webhook secret (a no-op when unset), then returns cause so a failed
+// drill still fails the Job.
+func (p *{{pascal .pipeline_name}}) report(ctx context.Context, cause error) error {
+	status, text := "passed", "backup restore drill passed"
+	if cause != nil {
+		status, text = "failed", fmt.Sprintf("backup restore drill failed: %v", cause)
+	}
+	sparkwing.Annotate(ctx, text)
+	if name := {{pascal .pipeline_name}}WebhookSecret; name != "" {
+		if url, err := sparkwing.Secret(ctx, name); err == nil && url != "" {
+			_ = notify.Webhook(ctx, notify.WebhookConfig{
+				URL:     url,
+				Payload: map[string]string{"status": status, "text": text},
+			})
+		}
+	}
+	return cause
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

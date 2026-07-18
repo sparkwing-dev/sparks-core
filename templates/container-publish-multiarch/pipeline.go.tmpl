@@ -1,0 +1,100 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// container-publish-multiarch`. Edit freely -- nothing here re-runs.
+//
+// Build a multi-arch container image with `docker buildx` and push a
+// single manifest to {{.registry}}. No cluster deploy: the pipeline
+// stops at a pushed image.
+package jobs
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+)
+
+// {{pascal .pipeline_name}} authenticates with the {{.registry_kind}}
+// registry, then builds {{.image}} for {{.platforms}} and pushes one
+// multi-arch manifest to {{.registry}}.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build a multi-arch image and push it to {{.registry}}"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "publish", p.publish).Timeout(45 * time.Minute)
+	return nil
+}
+
+// publish logs the docker client into the registry (auth dispatches on
+// registry kind) and then builds + pushes the multi-arch manifest with a
+// BuildKit layer cache. Under SPARKWING_DRY_RUN both blocks echo their
+// argv instead of touching the registry.
+func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
+	if err := docker.RegistryLogin(ctx, docker.LoginConfig{
+		Kind:        docker.RegistryKind({{quote .registry_kind}}),
+		Registry:    {{quote .registry}},
+		TokenSecret: {{quote .token_secret}},
+		Username:    {{quote .ghcr_username}},
+	}); err != nil {
+		return err
+	}
+
+	cacheFrom, cacheTo, err := docker.BuildCacheRef({{quote .cache_backend}}, {{quote .cache_ref}})
+	if err != nil {
+		return err
+	}
+
+	return docker.BuildxPublish(ctx, docker.BuildxConfig{
+		Image:      {{quote .image}},
+		Registry:   {{quote .registry}},
+		Tags:       splitTags({{quote .tags}}),
+		Platforms:  {{quote .platforms}},
+		Dockerfile: {{quote .dockerfile}},
+		Context:    {{quote .build_context}},
+		BuildArgs:  parseBuildArgs({{quote .build_args}}),
+		CacheFrom:  []string{cacheFrom},
+		CacheTo:    []string{cacheTo},
+	})
+}
+
+// splitTags parses a comma-separated tag list into the slice
+// BuildxConfig.Tags wants, dropping blank entries.
+func splitTags(spec string) []string {
+	var out []string
+	for _, tag := range strings.Split(spec, ",") {
+		if tag = strings.TrimSpace(tag); tag != "" {
+			out = append(out, tag)
+		}
+	}
+	return out
+}
+
+// parseBuildArgs parses a KEY=VAL,KEY=VAL string into the map
+// BuildxConfig.BuildArgs wants. Blank and malformed entries are skipped, so
+// an empty spec yields a nil map and no --build-arg flags.
+func parseBuildArgs(spec string) map[string]string {
+	out := map[string]string{}
+	for _, pair := range strings.Split(spec, ",") {
+		if pair = strings.TrimSpace(pair); pair == "" {
+			continue
+		}
+		key, val, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		out[strings.TrimSpace(key)] = strings.TrimSpace(val)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

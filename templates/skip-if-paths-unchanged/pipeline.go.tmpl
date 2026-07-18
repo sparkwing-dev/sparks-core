@@ -1,0 +1,73 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// skip-if-paths-unchanged`. Edit freely -- nothing here re-runs.
+//
+// One job guarded by contentkey.Unchanged: it runs {{.work_cmd}} only
+// when a tracked file under {{.watch_paths}} differs from {{.base_ref}},
+// otherwise the node soft-skips. A `git diff` decides; nothing is
+// stored or replayed.
+package jobs
+
+import (
+	"context"
+	"strings"
+
+	"github.com/sparkwing-dev/sparks-core/contentkey"
+	"github.com/sparkwing-dev/sparks-core/step"
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+const (
+	{{pascal .pipeline_name}}BaseRef    = {{quote .base_ref}}
+	{{pascal .pipeline_name}}WatchPaths = {{quote .watch_paths}}
+	{{pascal .pipeline_name}}WorkCmd    = {{quote .work_cmd}}
+)
+
+// {{pascal .pipeline_name}} runs a single guarded job. The
+// contentkey.Unchanged predicate compares the watched paths against the
+// base ref and skips the job when nothing under them moved, so an
+// unrelated change never pays for this work. A base ref that does not
+// resolve fails safe: the predicate reports changed and the job runs.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run {{.work_cmd}} only when {{.watch_paths}} changed vs {{.base_ref}}"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Guards one job with contentkey.Unchanged: it runs {{.work_cmd}} when a tracked file under {{.watch_paths}} differs from {{.base_ref}}, and soft-skips otherwise. A missing base ref fails safe and runs the job."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Skip when the watched paths match the base ref", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	paths := watchPaths{{pascal .pipeline_name}}()
+	sparkwing.Job(plan, "work", p.work).
+		SkipIf(contentkey.Unchanged({{pascal .pipeline_name}}BaseRef, paths...))
+	return nil
+}
+
+// watchPaths{{pascal .pipeline_name}} splits the comma-listed watch paths
+// into git pathspecs, dropping empty entries.
+func watchPaths{{pascal .pipeline_name}}() []string {
+	var out []string
+	for _, p := range strings.Split({{pascal .pipeline_name}}WatchPaths, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (p *{{pascal .pipeline_name}}) work(ctx context.Context) error {
+	return step.Run(ctx, "work", func(ctx context.Context) error {
+		return step.Sh(ctx, {{pascal .pipeline_name}}WorkCmd)
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

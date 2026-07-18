@@ -1,0 +1,89 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// lint-test-node`. Edit freely -- nothing here re-runs.
+//
+// Node CI hygiene: install, then lint + typecheck + test in a parallel
+// independent-node DAG. No external concerns; the Node twin of
+// lint-test-go.
+package jobs
+
+import (
+	"context"
+{{- if .install_cmd}}
+	"time"
+{{- end}}
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} installs dependencies, then runs lint,
+// typecheck, and test as independent parallel nodes gated on install.
+// The checks don't stop each other, so a single CI run surfaces every
+// failure at once. Any of the check commands can be blanked out to drop
+// its node (an empty typecheck-cmd is the plain-JS path).
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Node CI hygiene: lint + typecheck + test"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Installs dependencies, then runs lint, typecheck, and test in parallel. Targets Node {{.node_version}}+. Each check is independent so a single run surfaces every problem at once."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run locally", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+{{ $hasCheck := or .lint_cmd .typecheck_cmd .test_cmd }}
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{- if .install_cmd}}
+{{- if $hasCheck}}
+	install := sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(10 * time.Minute)
+{{- else}}
+	sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(10 * time.Minute)
+{{- end}}
+{{- end}}
+{{- if .lint_cmd}}
+	sparkwing.Job(plan, "lint", p.lint){{if .install_cmd}}.Needs(install){{end}}
+{{- end}}
+{{- if .typecheck_cmd}}
+	sparkwing.Job(plan, "typecheck", p.typecheck){{if .install_cmd}}.Needs(install){{end}}
+{{- end}}
+{{- if .test_cmd}}
+	sparkwing.Job(plan, "test", p.test){{if .install_cmd}}.Needs(install){{end}}
+{{- end}}
+	return nil
+}
+{{- if .install_cmd}}
+
+func ({{pascal .pipeline_name}}) install(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .install_cmd}}).Run()
+	return err
+}
+{{- end}}
+{{- if .lint_cmd}}
+
+func ({{pascal .pipeline_name}}) lint(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .lint_cmd}}).Run()
+	return err
+}
+{{- end}}
+{{- if .typecheck_cmd}}
+
+func ({{pascal .pipeline_name}}) typecheck(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .typecheck_cmd}}).Run()
+	return err
+}
+{{- end}}
+{{- if .test_cmd}}
+
+func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	return err
+}
+{{- end}}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
