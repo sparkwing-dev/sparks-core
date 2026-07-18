@@ -1,0 +1,55 @@
+name: npm-publish-package
+description: |
+  Build an npm package and publish it with `npm publish`, gated so the
+  package.json version must not already be tagged. Optionally emits build
+  provenance. Build runs local and the publish step defaults to echoing
+  its argv (dry-run), so the scaffold is green before a token or registry
+  access.
+whenToUse: |
+  The Node/JS registry publish: reach for it when consumers install via
+  `npm i your-pkg`, not by downloading a binary. Pick over
+  github-release-go, which cuts a GitHub Release of downloadable
+  cross-compiled binaries rather than pushing to a registry. The sibling
+  registry template is pypi-publish-wheel (Python). For a monorepo of many
+  packages, run one instance per package-dir.
+prerequisite: A Node package with a package.json declaring name and version at package-dir (default the repo root), and node/npm on PATH for a real (non-dry-run) publish.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: publish-npm
+  - name: package-dir
+    type: string
+    description: Directory containing package.json, relative to the repo root.
+    default: "."
+  - name: build-cmd
+    type: string
+    description: Build command run before publish. Empty disables the build step.
+    default: npm run build
+  - name: registry
+    type: string
+    description: Target npm registry URL.
+    default: https://registry.npmjs.org
+  - name: access
+    type: string
+    description: "`npm publish --access` value: public or restricted."
+    default: public
+  - name: provenance
+    type: string
+    description: When non-empty, publishes with --provenance. Empty disables.
+    default: "true"
+  - name: token-secret
+    type: string
+    description: Name of the sparkwing secret holding the npm auth token, exported as NODE_AUTH_TOKEN.
+    default: NPM_TOKEN
+  - name: dry-run
+    type: string
+    description: When non-empty, the publish step echoes the `npm publish` command instead of running it. Empty to actually publish.
+    default: "true"
+applicability:
+  cloud: []
+  category: release-publish
+verify: dry-runnable
+verify_fixture: node-module
+verify_params:
+  build-cmd: ""
