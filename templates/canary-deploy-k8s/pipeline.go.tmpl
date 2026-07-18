@@ -1,0 +1,175 @@
+// Scaffolded from the canary-deploy-k8s template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition canary DAG: build the image, roll it out to a small
+// canary alongside the stable Deployment, probe the canary's own
+// endpoint, then promote the stable Deployment on success or delete the
+// canary (leaving stable untouched) on failure. Each node calls a
+// sparks-core block directly, so the control flow is visible and editable.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/kube"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} builds {{.image}}, rolls it out to a canary
+// Deployment, and probes the canary before promoting the stable
+// Deployment to the same image. A definitively-unhealthy canary is torn
+// down and the stable Deployment is left untouched, so a bad revision is
+// caught on the canary slice before it reaches everyone.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}
+	canary := sparkwing.Job(plan, "canary", p.canary).
+		Needs(build).
+		Verify(probe.HTTP({{quote .canary_health_url}}).Retry(30).Interval(2 * time.Second).Check).
+		OnFailure("abort", p.abort)
+
+	sparkwing.Job(plan, "promote", p.promote).Needs(canary)
+	return nil
+}
+
+// build builds and pushes the image the canary and the stable Deployment
+// both roll out.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	push, _, err := p.resolveImage(tags)
+	if err != nil {
+		return err
+	}
+	return docker.BuildAndPush(ctx, docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Registries: push,
+		Tags:       tags,
+	})
+}
+
+// canary applies the canary manifest (creating its Deployment and Service)
+// and pins the canary Deployment to the freshly built image. Returning
+// means the canary rollout succeeded; the node's Verify probe then decides
+// whether the new revision is healthy on the canary slice.
+func (p *{{pascal .pipeline_name}}) canary(ctx context.Context) error {
+	if err := kube.Apply(ctx, kube.ApplyConfig{
+		Paths:     []string{ {{quote .canary_manifest}} },
+		Namespace: {{quote .namespace}},
+	}); err != nil {
+		return err
+	}
+	ref, err := p.imageRef(ctx)
+	if err != nil {
+		return err
+	}
+	return kube.SetImage(ctx, kube.SetImageConfig{
+		Deployment: {{quote .canary_deployment}},
+		Container:  {{quote .container}},
+		Image:      ref,
+		Namespace:  {{quote .namespace}},
+	})
+}
+
+// promote points the stable Deployment at the same image the canary just
+// proved healthy, waits for its rollout, then tears the canary down. It
+// runs only when the canary node's Verify probe passed.
+func (p *{{pascal .pipeline_name}}) promote(ctx context.Context) error {
+	ref, err := p.imageRef(ctx)
+	if err != nil {
+		return err
+	}
+	if err := kube.SetImage(ctx, kube.SetImageConfig{
+		Deployment: {{quote .stable_deployment}},
+		Container:  {{quote .container}},
+		Image:      ref,
+		Namespace:  {{quote .namespace}},
+	}); err != nil {
+		return err
+	}
+	return p.teardownCanary(ctx)
+}
+
+// abort runs when the canary node fails. If the Verify probe could not
+// even determine health (unreachable, timeout, auth -- probe.Indeterminate)
+// that is not evidence the new revision is bad, so it leaves the canary
+// running for investigation and surfaces the error. On a definitive
+// failure it tears the canary down; the stable Deployment is never
+// touched, so nothing needs rolling back.
+func (p *{{pascal .pipeline_name}}) abort(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "canary health check could not determine health (%v) - leaving the canary in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "canary failed at %s stage - tearing down the canary, stable left untouched", f.Stage)
+	return p.teardownCanary(ctx)
+}
+
+// teardownCanary removes the canary Deployment and Service idempotently,
+// so promote and abort can both call it without a double delete failing.
+func (p *{{pascal .pipeline_name}}) teardownCanary(ctx context.Context) error {
+	return kube.Delete(ctx, kube.DeleteConfig{
+		Paths:          []string{ {{quote .canary_manifest}} },
+		Resources:      []string{ {{quote .canary_deployment}} },
+		Namespace:      {{quote .namespace}},
+		IgnoreNotFound: true,
+	})
+}
+
+// imageRef recomputes the content-addressed image reference the build node
+// produced, so canary and promote roll out the exact tag that was pushed
+// rather than a floating one.
+func (p *{{pascal .pipeline_name}}) imageRef(ctx context.Context) (string, error) {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return "", err
+	}
+	_, ref, err := p.resolveImage(tags)
+	return ref, err
+}
+
+// resolveImage picks the push registries and the image reference to roll
+// out, keeping the two consistent. Order: a kind cluster (load by name, no
+// push) -> SPARKWING_REGISTRY -> the registry param. ECR registries carry
+// the ProdTag, every other registry the DeployTag, matching what
+// docker.BuildAndPush pushes. It errors when none resolve rather than
+// pushing an unqualified name (which would target Docker Hub).
+func (p *{{pascal .pipeline_name}}) resolveImage(tags sparkwingDocker.ImageTag) (push []string, ref string, err error) {
+	image := {{quote .image}}
+	if os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
+		return nil, image + ":" + tags.DeployTag(), nil
+	}
+	if reg := os.Getenv("SPARKWING_REGISTRY"); reg != "" {
+		return []string{reg}, reg + "/" + image + ":" + tags.DeployTag(), nil
+	}
+	if reg := {{quote .registry}}; reg != "" {
+		if docker.IsECR(reg) {
+			return []string{reg}, reg + "/" + image + ":" + tags.ProdTag(), nil
+		}
+		return []string{reg}, reg + "/" + image + ":" + tags.DeployTag(), nil
+	}
+	return nil, "", fmt.Errorf("no image registry resolved for %s: set SPARKWING_KIND_CLUSTER, SPARKWING_REGISTRY, or the registry param", image)
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}
