@@ -1,0 +1,30 @@
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+
+Terraform will perform the following actions:
+
+  # aws_s3_bucket.assets will be created
+  + resource "aws_s3_bucket" "assets" {
+      + bucket = "example-assets"
+      + id     = (known after apply)
+    }
+
+  # aws_s3_bucket.logs will be created
+  + resource "aws_s3_bucket" "logs" {
+      + bucket = "example-logs"
+    }
+
+  # aws_iam_role.app will be updated in-place
+  ~ resource "aws_iam_role" "app" {
+        id = "app-role"
+      ~ description = "old" -> "new"
+    }
+
+Plan: 2 to add, 1 to change, 0 to destroy.
+
+Saved the plan to: tfplan
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "tfplan"

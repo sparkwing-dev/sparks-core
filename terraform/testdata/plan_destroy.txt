@@ -1,0 +1,22 @@
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # null_resource.legacy will be destroyed
+  - resource "null_resource" "legacy" {
+      - id = "8823409834" -> null
+    }
+
+  # null_resource.old_cache will be destroyed
+  - resource "null_resource" "old_cache" {
+      - id = "1120349811" -> null
+    }
+
+  # null_resource.temp will be destroyed
+  - resource "null_resource" "temp" {
+      - id = "5540912340" -> null
+    }
+
+Plan: 0 to add, 0 to change, 3 to destroy.
