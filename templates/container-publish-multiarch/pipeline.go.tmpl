@@ -1,0 +1,54 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// container-publish-multiarch`. Edit freely -- nothing here re-runs.
+//
+// Build a multi-arch container image with `docker buildx` and push a
+// single manifest to {{.registry}}. No cluster deploy: the pipeline
+// stops at a pushed image.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+)
+
+// {{pascal .pipeline_name}} authenticates with the {{.registry_kind}}
+// registry, then builds {{.image}} for {{.platforms}} and pushes one
+// multi-arch manifest to {{.registry}}.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build a multi-arch image and push it to {{.registry}}"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "publish", p.publish)
+	return nil
+}
+
+// publish logs the docker client into the registry (auth dispatches on
+// registry kind) and then builds + pushes the multi-arch manifest.
+// Under SPARKWING_DRY_RUN both blocks echo their argv instead of touching
+// the registry.
+func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
+	if err := docker.RegistryLogin(ctx, docker.LoginConfig{
+		Kind:        docker.RegistryKind({{quote .registry_kind}}),
+		Registry:    {{quote .registry}},
+		TokenSecret: {{quote .token_secret}},
+	}); err != nil {
+		return err
+	}
+	return docker.BuildxPublish(ctx, docker.BuildxConfig{
+		Image:      {{quote .image}},
+		Registry:   {{quote .registry}},
+		Platforms:  {{quote .platforms}},
+		Dockerfile: {{quote .dockerfile}},
+		Context:    {{quote .build_context}},
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
