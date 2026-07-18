@@ -7,7 +7,8 @@ description: |
 whenToUse: |
   Periodic maintenance/cleanup/reporting jobs that run on a cron rather
   than on push. Edit the prune body into whatever scheduled work you
-  need. For push/PR CI use lint-test-go or test-shards.
+  need. For a scheduled database backup specifically use
+  scheduled-db-backup. For push/PR CI use lint-test-go or test-shards.
 parameters:
   - name: pipeline-name
     type: string

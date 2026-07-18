@@ -6,8 +6,9 @@ description: |
   sparkwing.JobApproval.
 whenToUse: |
   Any deploy that must pause for a human "go" before the irreversible
-  step -- prod releases, destructive migrations. For unattended deploys
-  use a docker-deploy or static-deploy template instead.
+  step -- prod releases, destructive migrations. For a human-gated
+  Terraform apply specifically use terraform-apply-gated. For unattended
+  deploys use a docker-deploy or static-deploy template instead.
 parameters:
   - name: pipeline-name
     type: string

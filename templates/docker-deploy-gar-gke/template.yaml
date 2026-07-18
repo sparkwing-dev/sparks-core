@@ -5,7 +5,11 @@ description: |
   GCP backends.
 whenToUse: |
   Containerized app to GAR + gitops/GKE on GCP. The GCP twin of
-  docker-deploy-ecr-eks. Use for stateless services on GCP.
+  docker-deploy-ecr-eks. Use for stateless services on GCP. If you apply
+  k8s YAML directly with kubectl (no gitops/ArgoCD), use
+  gke-deploy-gar-kubectl. For a serverless container with no cluster use
+  docker-deploy-gar-cloudrun (from a prebuilt image) or
+  cloudrun-deploy-source (deploy from source).
 parameters:
   - name: image
     type: string

@@ -7,7 +7,9 @@ description: |
 whenToUse: |
   Speed up a large test suite by sharding it across parallel jobs, or
   as a worked example of JobFanOut + an all-pass gate. For a single
-  unsharded CI-hygiene gate use lint-test-go.
+  unsharded CI-hygiene gate use lint-test-go. To run the suite across a
+  version or OS matrix (rather than splitting one suite) use test-matrix;
+  to fail the build under a coverage threshold use coverage-gated-test.
 parameters:
   - name: pipeline-name
     type: string

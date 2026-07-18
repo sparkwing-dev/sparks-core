@@ -10,6 +10,9 @@ whenToUse: |
   Use for a stateless service deploy. If the deploy needs migrations and
   integration tests, use go-test-migrate-deploy-argo. If you apply k8s
   YAML directly with kubectl (no gitops), use go-test-build-deploy-k8s.
+  For a container on ECS/Fargate with no Kubernetes use
+  container-deploy-ecs-fargate; for a scale-to-zero request function use
+  lambda-deploy.
 parameters:
   - name: image
     type: string

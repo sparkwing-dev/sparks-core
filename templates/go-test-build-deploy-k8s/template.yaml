@@ -14,7 +14,9 @@ whenToUse: |
   Dockerfile builds -- set test-cmd to your stack's test command
   (pytest, npm test, cargo test, ...) or empty to skip the test node.
   If you deploy through a gitops repo + ArgoCD, use
-  go-test-migrate-deploy-argo (or docker-deploy-ecr-eks) instead.
+  go-test-migrate-deploy-argo (or docker-deploy-ecr-eks) instead. For a
+  progressive/canary rollout with automatic health-gated promotion use
+  canary-deploy-k8s.
 parameters:
   - name: image
     type: string

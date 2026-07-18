@@ -6,8 +6,11 @@ description: |
   image and fails the node if it can't start.
 whenToUse: |
   Validate that an image builds and its container actually starts
-  before you push or deploy it. For pushing to a registry + deploying,
-  use docker-deploy-ecr-eks (AWS) or docker-deploy-gar-gke (GCP).
+  before you push or deploy it. To speed rebuilds with a persisted layer
+  cache use docker-build-layer-cache; to build and push a multi-arch
+  image use container-publish-multiarch. For pushing to a registry +
+  deploying, use docker-deploy-ecr-eks (AWS) or docker-deploy-gar-gke
+  (GCP).
 parameters:
   - name: pipeline-name
     type: string

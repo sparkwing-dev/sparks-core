@@ -12,7 +12,8 @@ whenToUse: |
   integration tests on a throwaway database, migrations on the real one,
   then a verified, self-rolling-back gitops deploy. If you have no
   migrations, use docker-deploy-ecr-eks. If you apply k8s YAML directly
-  with kubectl, use go-test-build-deploy-k8s.
+  with kubectl, use go-test-build-deploy-k8s. To run migrations on their
+  own (up/down, no build or deploy) use db-migrate-updown.
 parameters:
   - name: image
     type: string

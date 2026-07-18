@@ -8,7 +8,8 @@ whenToUse: |
   Tests that need a real dependency (database, cache, broker) running
   locally. The service is published to 127.0.0.1:<port> so your test
   reaches it at localhost:<port> on every platform. For CI hygiene with
-  no dependency use lint-test-go; for sharded suites use test-shards.
+  no dependency use lint-test-go; for sharded suites use test-shards; to
+  gate on a coverage threshold use coverage-gated-test.
 parameters:
   - name: pipeline-name
     type: string
