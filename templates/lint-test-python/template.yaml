@@ -1,0 +1,56 @@
+name: lint-test-python
+description: |
+  CI hygiene gate for a Python project on the uv/ruff/pytest stack: uv
+  sync, then ruff format --check, ruff check, optional mypy, and pytest
+  in a parallel independent-node DAG. Thin inline SDK, no cloud. The
+  Python twin of lint-test-go.
+whenToUse: |
+  CI hygiene for a Python repo (uv-managed, ruff + pytest), no build or
+  deploy. Pick over lint-test-go / lint-test-node when the toolchain is
+  Python. Swap the defaults to pip/poetry forms if you don't use uv. For
+  a suite needing live Postgres/Redis use integration-test-with-service.
+prerequisite: |
+  A Python project at the repo root with your toolchain (uv/ruff/mypy/pytest,
+  or the pip/poetry forms you set) available on PATH; scaffolding into an
+  empty repo runs but has nothing to check.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: lint-test-python
+  - name: python-version
+    type: string
+    description: Python version banner (informational; real version pinned in pyproject/uv).
+    default: "3.12"
+  - name: install-cmd
+    type: string
+    description: Environment install, run before the checks. `pip install -e '.[dev]'` for pip; empty to skip.
+    default: uv sync --frozen
+  - name: format-cmd
+    type: string
+    description: Formatter check (fails on unformatted files). Empty disables the node.
+    default: uv run ruff format --check .
+  - name: lint-cmd
+    type: string
+    description: Lint command (ruff). Empty disables the lint node.
+    default: uv run ruff check .
+  - name: typecheck-cmd
+    type: string
+    description: Type-check command (mypy/pyright). Empty disables the node.
+    default: uv run mypy .
+  - name: test-cmd
+    type: string
+    description: Test command. Empty disables the test node.
+    default: uv run pytest
+applicability:
+  cloud: []
+  category: ci-hygiene
+verify: runnable
+verify_fixture: python-module
+verify_params:
+  pipeline-name: lint-test-python
+  install-cmd: 'python3 -c "import sys; print(sys.version)"'
+  format-cmd: 'python3 -c "import ast; ast.parse(''x = 1'')"'
+  lint-cmd: 'python3 -c "import ast; ast.parse(''x = 1'')"'
+  typecheck-cmd: 'python3 -c "import typing; assert typing"'
+  test-cmd: python3 -m unittest discover
