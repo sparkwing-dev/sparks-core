@@ -1,0 +1,68 @@
+name: terraform-apply-gated
+description: |
+  terraform plan -> human approval gate -> terraform apply. The plan runs
+  and reports its add/change/destroy summary, the run blocks at a
+  sparkwing.JobApproval, and only after a person approves does it apply
+  that exact saved plan file. An optional webhook announces the result.
+whenToUse: |
+  Ship Terraform changes that must pause for a human "go" after the plan
+  is visible and before anything mutates. Pick terraform-plan-pr instead
+  when you only want plan visibility with no apply. Pick
+  approval-gated-deploy instead when the gated artifact is a generic
+  deploy -- this template is Terraform-aware and applies the exact saved
+  plan, not a fresh (possibly drifted) one.
+prerequisite: |
+  A Terraform root (the .tf files and backend config) at tf-dir, and the
+  `terraform` CLI on PATH. Apply needs write credentials for the backend;
+  plan needs read access.
+parameters:
+  - name: pipeline-name
+    type: string
+    required: false
+    default: tf-apply
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: tf-dir
+    type: string
+    required: false
+    default: "."
+    description: Terraform root directory (where the .tf files and backend config live).
+  - name: var-file
+    type: string
+    required: false
+    default: ""
+    description: Optional tfvars file passed to plan as -var-file (e.g. prod.tfvars). Empty omits it.
+  - name: workspace
+    type: string
+    required: false
+    default: ""
+    description: Optional terraform workspace to select before planning. Empty uses the current/default workspace.
+  - name: environment
+    type: string
+    required: false
+    default: prod
+    description: Environment name shown in the approval prompt.
+  - name: timeout-hours
+    type: string
+    required: false
+    default: "2"
+    description: Hours the gate waits for a human answer before it expires (denied, no apply).
+  - name: notify-webhook
+    type: string
+    required: false
+    default: ""
+    description: Optional Slack-style webhook URL the apply result is POSTed to. Empty skips it.
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: terraform
+verify: compile-only
+verify_fixture: none
+verify_params:
+  pipeline-name: tf-apply
+  tf-dir: infra
+  var-file: prod.tfvars
+  workspace: prod
+  environment: prod
+  timeout-hours: "2"
+  notify-webhook: https://example.com/hooks/terraform

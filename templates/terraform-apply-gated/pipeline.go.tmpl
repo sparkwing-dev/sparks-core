@@ -1,0 +1,96 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// terraform-apply-gated`. Edit freely -- nothing here re-runs.
+//
+// terraform plan -> human approval gate -> terraform apply. The plan
+// runs and reports its add/change/destroy summary, the run blocks at a
+// human approval gate, and only after someone approves does the exact
+// saved plan get applied. An optional webhook announces the result.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/notify"
+	"github.com/sparkwing-dev/sparks-core/terraform"
+)
+
+const (
+	tfDir       = {{quote .tf_dir}}
+	tfWorkspace = {{quote .workspace}}
+	tfVarFile   = {{quote .var_file}}
+	environment = {{quote .environment}}
+	webhookURL  = {{quote .notify_webhook}}
+)
+
+// {{pascal .pipeline_name}} plans the Terraform root at tfDir, blocks at
+// a human approval gate showing the plan's change summary, then applies
+// exactly that saved plan once a person approves.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	planFile string
+	summary  string
+}
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "terraform plan -> approval gate -> apply ({{.environment}})"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	tfPlan := sparkwing.Job(plan, "plan", p.plan)
+	approve := sparkwing.JobApproval(plan, "approve-apply", sparkwing.ApprovalConfig{
+		Message:  "Apply the Terraform plan to {{.environment}}? Review the plan step's change summary first.",
+		Timeout:  {{.timeout_hours}} * time.Hour,
+		OnExpiry: sparkwing.ApprovalDeny,
+	}).Needs(tfPlan)
+	sparkwing.Job(plan, "apply", p.apply).Needs(approve)
+	return nil
+}
+
+// plan runs terraform init + plan, saves the plan file, and annotates the
+// run with the add/change/destroy summary the approver reviews.
+func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
+	res, err := terraform.Plan(ctx, tfConfig())
+	if err != nil {
+		return err
+	}
+	p.planFile, p.summary = res.PlanFile, res.Summary
+	sparkwing.Annotate(ctx, fmt.Sprintf("terraform plan: %s", res.Summary))
+	return nil
+}
+
+// apply applies exactly the saved plan the approver signed off on, then
+// announces the outcome to the optional webhook (an empty URL is a
+// no-op). Apply honors SPARKWING_DRY_RUN, echoing its argv instead of
+// mutating real state.
+func (p *{{pascal .pipeline_name}}) apply(ctx context.Context) error {
+	// safety: apply Needs the approval gate, which Needs plan, so planFile is set.
+	err := terraform.Apply(ctx, tfConfig(), terraform.ApplyOptions{PlanFile: p.planFile})
+	outcome := "succeeded"
+	if err != nil {
+		outcome = "failed: " + err.Error()
+	}
+	_ = notify.Slack(ctx, webhookURL, fmt.Sprintf("terraform apply to %s %s (%s)", environment, outcome, p.summary))
+	return err
+}
+
+// tfConfig is the shared terraform working-directory config. The same
+// config backs both plan and apply so the workspace and directory match
+// the saved plan.
+func tfConfig() terraform.Config {
+	cfg := terraform.Config{
+		Dir:       tfDir,
+		Workspace: tfWorkspace,
+	}
+	if tfVarFile != "" {
+		cfg.VarFiles = []string{tfVarFile}
+	}
+	return cfg
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
