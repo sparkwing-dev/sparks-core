@@ -100,6 +100,14 @@ const (
 	// FixtureDocker is the go-module contents plus a Dockerfile, for
 	// templates whose steps build or run a container image.
 	FixtureDocker = "docker"
+	// FixtureNodeModule is a package.json with a passing test script,
+	// for templates whose steps run npm / node tooling at the scratch
+	// repo root.
+	FixtureNodeModule = "node-module"
+	// FixturePythonModule is a pyproject.toml plus a trivial package and
+	// a passing test, for templates whose steps run python tooling at
+	// the scratch repo root.
+	FixturePythonModule = "python-module"
 )
 
 // Manifest is the parsed template.yaml shape. Name + Description are
@@ -132,8 +140,9 @@ type Manifest struct {
 	VerifyParams map[string]string `yaml:"verify_params,omitempty" json:"verify_params,omitempty"`
 	// VerifyFixture names the scratch-repo scaffolding the harness
 	// synthesizes before a runnable/dry-runnable run (FixtureNone /
-	// FixtureGoModule / FixtureDocker). Ignored for the compile-only
-	// tier. Defaults to FixtureNone; read it through Fixture().
+	// FixtureGoModule / FixtureDocker / FixtureNodeModule /
+	// FixturePythonModule). Ignored for the compile-only tier.
+	// Defaults to FixtureNone; read it through Fixture().
 	VerifyFixture string `yaml:"verify_fixture,omitempty" json:"verify_fixture,omitempty"`
 }
 
@@ -250,10 +259,11 @@ func validateVerification(m Manifest) error {
 			m.Name, m.Verify, VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly)
 	}
 	switch m.Fixture() {
-	case FixtureNone, FixtureGoModule, FixtureDocker:
+	case FixtureNone, FixtureGoModule, FixtureDocker, FixtureNodeModule, FixturePythonModule:
 	default:
-		return fmt.Errorf("manifest for %s: unknown verify_fixture %q (want %s|%s|%s)",
-			m.Name, m.VerifyFixture, FixtureNone, FixtureGoModule, FixtureDocker)
+		return fmt.Errorf("manifest for %s: unknown verify_fixture %q (want %s|%s|%s|%s|%s)",
+			m.Name, m.VerifyFixture, FixtureNone, FixtureGoModule, FixtureDocker,
+			FixtureNodeModule, FixturePythonModule)
 	}
 	declared := map[string]bool{}
 	for _, p := range m.Parameters {
