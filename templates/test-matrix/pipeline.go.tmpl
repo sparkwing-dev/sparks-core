@@ -1,0 +1,126 @@
+// Code scaffolded by `sparkwing pipeline new --template test-matrix`.
+// Edit freely -- nothing here re-runs.
+//
+// Run the whole test suite across a matrix of toolchain versions{{if .os_labels}} and
+// OS runner labels{{end}}, one parallel job per combination, gated by an
+// all-pass node.
+package jobs
+
+import (
+	"context"
+	"strings"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+// {{pascal .pipeline_name}} fans the test suite out across every
+// version{{if .os_labels}} x OS{{end}} combination as one parallel job per cell, then a
+// gate node that Needs the whole group so the run passes only when
+// every cell passed. Each cell exports MATRIX_VERSION into the test
+// command's environment.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run the test suite across a version{{if .os_labels}} x OS{{end}} matrix with an all-pass gate"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	cells := {{pascal .pipeline_name}}Cells()
+	matrix := sparkwing.JobFanOut(plan, "matrix", cells, func(c {{pascal .pipeline_name}}Cell) (string, any) {
+		cell := c
+		return cell.id(), &cell
+	})
+	sparkwing.Job(plan, "gate", p.gate).Needs(matrix)
+	return nil
+}
+
+// {{pascal .pipeline_name}}Cell is one matrix combination: a toolchain
+// version and an optional OS runner label. The OS label is applied as
+// a soft Prefers so the default single-dimension matrix still
+// dispatches every cell on a single-runner laptop.
+type {{pascal .pipeline_name}}Cell struct {
+	sparkwing.Base
+	version string
+	osLabel string
+}
+
+// {{pascal .pipeline_name}}Cells builds the Cartesian product of the
+// configured versions and OS labels. With no OS labels it is one cell
+// per version.
+func {{pascal .pipeline_name}}Cells() []{{pascal .pipeline_name}}Cell {
+	versions := {{pascal .pipeline_name}}SplitList({{quote .versions}})
+	osLabels := {{pascal .pipeline_name}}SplitList({{quote .os_labels}})
+	var cells []{{pascal .pipeline_name}}Cell
+	for _, v := range versions {
+		if len(osLabels) == 0 {
+			cells = append(cells, {{pascal .pipeline_name}}Cell{version: v})
+			continue
+		}
+		for _, os := range osLabels {
+			cells = append(cells, {{pascal .pipeline_name}}Cell{version: v, osLabel: os})
+		}
+	}
+	return cells
+}
+
+func (c {{pascal .pipeline_name}}Cell) id() string {
+	if c.osLabel == "" {
+		return "cell-" + c.version
+	}
+	return "cell-" + c.version + "-" + c.osLabel
+}
+
+// Prefers biases this cell onto a runner advertising its OS label. It
+// is a soft preference, not a hard Requires, so a single-runner setup
+// still dispatches the cell.
+func (c {{pascal .pipeline_name}}Cell) Prefers() []string {
+	if c.osLabel == "" {
+		return nil
+	}
+	return []string{c.osLabel}
+}
+
+func (c *{{pascal .pipeline_name}}Cell) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	version := c.version
+	sparkwing.Step(w, "test", func(ctx context.Context) error {
+{{- if .setup_cmd}}
+		if _, err := sparkwing.Bash(ctx, {{quote .setup_cmd}}).Env("MATRIX_VERSION", version).Run(); err != nil {
+			return err
+		}
+{{- end}}
+{{- if .container_image_repo}}
+		_, err := sparkwing.Exec(ctx, "docker", "run", "--rm",
+			"-v", sparkwing.WorkDir()+":/src",
+			"-w", "/src",
+			"-e", "MATRIX_VERSION="+version,
+			{{quote .container_image_repo}}+":"+version,
+			"bash", "-lc", {{quote .test_cmd}}).Run()
+		return err
+{{- else}}
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Env("MATRIX_VERSION", version).Run()
+		return err
+{{- end}}
+	})
+	return nil, nil
+}
+
+// {{pascal .pipeline_name}}SplitList splits a comma-separated parameter
+// into its non-empty, space-trimmed elements.
+func {{pascal .pipeline_name}}SplitList(csv string) []string {
+	var out []string
+	for _, part := range strings.Split(csv, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (p *{{pascal .pipeline_name}}) gate(ctx context.Context) error {
+	sparkwing.Info(ctx, "all matrix cells passed")
+	return nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
