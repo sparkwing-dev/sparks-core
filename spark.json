@@ -77,6 +77,51 @@
       "path": "templates",
       "module": "github.com/sparkwing-dev/sparks-core/templates",
       "description": "Curated pipeline template registry: deterministic starters consumed by sparkwing pipeline new --template"
+    },
+    {
+      "path": "gcp",
+      "module": "github.com/sparkwing-dev/sparks-core/gcp",
+      "description": "GCP project/auth resolution and Workload Identity detection, twin of the aws module"
+    },
+    {
+      "path": "cloudrun",
+      "module": "github.com/sparkwing-dev/sparks-core/cloudrun",
+      "description": "Cloud Run deploy, traffic shifting, URL discovery, and rollback via gcloud"
+    },
+    {
+      "path": "ecs",
+      "module": "github.com/sparkwing-dev/sparks-core/ecs",
+      "description": "ECS/Fargate task-definition rollout, wait-for-stable, and rollback"
+    },
+    {
+      "path": "lambda",
+      "module": "github.com/sparkwing-dev/sparks-core/lambda",
+      "description": "AWS Lambda deploys (container image and zip), version publish, alias shift and rollback"
+    },
+    {
+      "path": "release",
+      "module": "github.com/sparkwing-dev/sparks-core/release",
+      "description": "Release and publish helpers: version gating, changelog parsing, checksums, GitHub/npm/PyPI publish flows"
+    },
+    {
+      "path": "contentkey",
+      "module": "github.com/sparkwing-dev/sparks-core/contentkey",
+      "description": "Content-addressed cache keys and skip predicates for path-scoped work"
+    },
+    {
+      "path": "coverage",
+      "module": "github.com/sparkwing-dev/sparks-core/coverage",
+      "description": "Coverage report parsing (Go coverprofile, lcov, cobertura) and threshold gating"
+    },
+    {
+      "path": "terraform",
+      "module": "github.com/sparkwing-dev/sparks-core/terraform",
+      "description": "Terraform init, plan-to-saved-file, apply-saved-plan, and change summaries"
+    },
+    {
+      "path": "dbbackup",
+      "module": "github.com/sparkwing-dev/sparks-core/dbbackup",
+      "description": "Database dump, backup upload, and restore helpers for scheduled backups and restore drills"
     }
   ]
 }
