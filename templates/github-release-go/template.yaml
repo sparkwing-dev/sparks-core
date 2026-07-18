@@ -1,0 +1,70 @@
+name: github-release-go
+description: |
+  Cross-compile a Go binary for a GOOS/GOARCH matrix, write a SHA-256
+  checksums file, and cut a GitHub Release with the artifacts and
+  changelog notes via `gh release create`. Cross-build, checksum, and
+  notes derivation run locally; the publish defaults to a dry-run that
+  echoes the `gh` invocation, so a fresh scaffold runs green with no
+  token.
+whenToUse: |
+  Publish an actual GitHub Release with cross-platform binary assets and
+  release notes. Pick over build-publish-binary when you want a real
+  GitHub Release (tag, notes, uploaded assets) rather than just a local
+  dist/ directory. For a language-registry publish use
+  npm-publish-package (Node) or pypi-publish-wheel (Python); for a
+  container image use container-publish-multiarch.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: release-github
+  - name: main-package
+    type: string
+    description: Go package path to build, relative to the repo root.
+    default: ./cmd/app
+  - name: binary-name
+    type: string
+    description: Base output binary name; each artifact is `<binary>_<version>_<goos>_<goarch>`.
+    default: app
+  - name: platforms
+    type: string
+    description: Comma-separated GOOS/GOARCH pairs to cross-compile.
+    default: linux/amd64,linux/arm64,darwin/arm64
+  - name: release-dir
+    type: string
+    description: Directory (relative to the repo root) the artifacts and checksums.txt are written into.
+    default: dist
+  - name: notes-source
+    type: string
+    description: >-
+      Release notes source: `changelog` (top released CHANGELOG.md
+      section, which also supplies the version) or `git` (commit subjects
+      since the previous tag, with the version from `git describe`).
+      Branched at render time.
+    default: changelog
+  - name: token-secret
+    type: string
+    description: Name of the sparkwing secret holding the GitHub token `gh` authenticates with.
+    default: GITHUB_TOKEN
+  - name: dry-run
+    type: string
+    description: When non-empty, the publish step echoes the `gh release create` command instead of running it. Empty to actually publish.
+    default: "true"
+prerequisite: >-
+  A Go module at the repo root and the package named by main-package
+  (default ./cmd/app). For notes-source=changelog a Keep a Changelog
+  CHANGELOG.md whose top released section names the version. To publish
+  for real, a GitHub token in the token-secret sparkwing secret and `gh`
+  on PATH.
+applicability:
+  cloud: []
+  category: release-publish
+verify: dry-runnable
+verify_fixture: go-module
+verify_params:
+  main-package: "."
+  binary-name: app
+  platforms: linux/amd64,darwin/arm64
+  release-dir: dist
+  notes-source: git
+  dry-run: "true"

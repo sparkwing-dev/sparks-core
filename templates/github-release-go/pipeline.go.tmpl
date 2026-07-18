@@ -1,0 +1,161 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// github-release-go`. Edit freely -- nothing here re-runs.
+//
+// Cross-compile a Go binary across a GOOS/GOARCH matrix, write a SHA-256
+// checksums file, and cut a GitHub Release with the artifacts and notes
+// attached. The cross-build and checksum run locally; the publish honors
+// the SPARKWING_DRY_RUN convention, so a fresh scaffold runs green with
+// no token configured.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/notify"
+	"github.com/sparkwing-dev/sparks-core/release"
+)
+
+const (
+	mainPkg      = {{quote .main_package}}
+	binaryName   = {{quote .binary_name}}
+	releaseDir   = {{quote .release_dir}}
+	platformList = {{quote .platforms}}
+	tokenSecret  = {{quote .token_secret}}
+)
+
+// publishDryRun echoes the `gh release create` argv instead of cutting a
+// real release. Rendered from the dry-run parameter; a non-empty
+// SPARKWING_DRY_RUN forces echo-and-skip regardless of this value.
+const publishDryRun = {{if .dry_run}}true{{else}}false{{end}}
+
+// {{pascal .pipeline_name}} cross-compiles {{.main_package}} across the
+// configured GOOS/GOARCH matrix, writes a SHA-256 checksums file, and
+// cuts a GitHub Release with the artifacts and notes attached.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	version   string
+	notes     string
+	artifacts []string
+}
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Cross-build {{.binary_name}}, checksum, and cut a GitHub Release"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	build := sparkwing.Job(plan, "cross-build", p.build)
+	checksum := sparkwing.Job(plan, "checksum", p.checksum).Needs(build)
+	sparkwing.Job(plan, "github-release", p.release).Needs(checksum)
+	return nil
+}
+
+// build resolves the release version and notes, then cross-compiles the
+// GOOS/GOARCH matrix into releaseDir, recording the artifact paths for
+// the release step.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+{{- if eq .notes_source "git" }}
+	version, err := release.DeriveVersion(ctx, release.VersionConfig{
+		Describe:       true,
+		Match:          "v*",
+		DevFallback:    "v0.0.0-dev",
+		AllowNonSemver: true,
+	})
+	if err != nil {
+		return err
+	}
+	notes, err := gitLogNotes(ctx)
+	if err != nil {
+		return err
+	}
+{{- else }}
+	notes, version, err := release.ChangelogEntry(ctx, release.NotesConfig{})
+	if err != nil {
+		return err
+	}
+{{- end }}
+	p.version, p.notes = version, notes
+
+	artifacts, err := release.CrossBuildGo(ctx, release.CrossBuildConfig{
+		MainPkg:    mainPkg,
+		BinaryName: binaryName,
+		Version:    version,
+		Platforms:  platforms(),
+		OutDir:     releaseDir,
+	})
+	if err != nil {
+		return err
+	}
+	p.artifacts = artifacts
+	sparkwing.Annotate(ctx, fmt.Sprintf("built %d artifacts for %s", len(artifacts), version))
+	return nil
+}
+
+// checksum writes a sha256sum-format manifest over every artifact in the
+// release directory.
+func (p *{{pascal .pipeline_name}}) checksum(ctx context.Context) error {
+	return release.Checksums(ctx, release.ChecksumConfig{Dir: releaseDir})
+}
+
+// release cuts the GitHub Release with the artifacts and checksums
+// attached. Under publishDryRun (or SPARKWING_DRY_RUN) the publish echoes
+// its argv instead of reaching GitHub; a live publish then posts an
+// optional Slack announce read from SLACK_WEBHOOK_URL (an empty URL is a
+// no-op).
+func (p *{{pascal .pipeline_name}}) release(ctx context.Context) error {
+	// safety: checksum Needs cross-build, so p.version/p.artifacts are set.
+	assets := append(append([]string{}, p.artifacts...), filepath.Join(releaseDir, "checksums.txt"))
+	if err := release.GitHubRelease(ctx, release.GitHubReleaseConfig{
+		Tag:         p.version,
+		Notes:       p.notes,
+		Assets:      assets,
+		TokenSecret: tokenSecret,
+		DryRun:      publishDryRun,
+	}); err != nil {
+		return err
+	}
+	if publishDryRun || os.Getenv("SPARKWING_DRY_RUN") != "" {
+		return nil
+	}
+	return notify.Slack(ctx, os.Getenv("SLACK_WEBHOOK_URL"), fmt.Sprintf("released %s %s", binaryName, p.version))
+}
+
+// platforms splits the comma-separated GOOS/GOARCH parameter into the
+// pairs CrossBuildGo expects, dropping blank entries.
+func platforms() []string {
+	var out []string
+	for _, p := range strings.Split(platformList, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+{{- if eq .notes_source "git" }}
+
+// gitLogNotes builds release notes from the commit subjects since the
+// most recent tag, falling back to the full history when the repo has no
+// tags yet.
+func gitLogNotes(ctx context.Context) (string, error) {
+	notes, err := sparkwing.Bash(ctx, `set -euo pipefail
+prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+if [ -n "$prev" ]; then
+  git log --no-merges --pretty=format:'- %s (%h)' "$prev"..HEAD
+else
+  git log --no-merges --pretty=format:'- %s (%h)'
+fi`).String()
+	if err != nil {
+		return "", fmt.Errorf("git log notes: %w", err)
+	}
+	return strings.TrimSpace(notes), nil
+}
+{{- end }}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
