@@ -1,0 +1,172 @@
+// Scaffolded from the docker-deploy-gar-cloudrun template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly, so
+// the orchestration (what runs when, what verifies, what rolls back) is
+// visible and editable. The blocks do the heavy lifting: docker builds the
+// image, gcp authenticates the push to Artifact Registry, and cloudrun
+// rolls the image out to Cloud Run and shifts traffic back on a failed
+// health check.
+package jobs
+
+import (
+	"context"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/cloudrun"
+	"github.com/sparkwing-dev/sparks-core/gcp"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} tests, builds {{.image}}, pushes it to GAR
+// ({{.gar}}), and deploys the image to the Cloud Run service {{.service}}.
+// After the rollout a health probe verifies the new revision at the URL the
+// deploy returns; a definitively-unhealthy result shifts traffic back to the
+// previous revision.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// tag is the image tag computed once in build and reused by push and
+	// deploy so all three name the same image. No lock is needed: build
+	// Needs-precedes push, which Needs-precedes deploy.
+	tag string
+	// url is the service URL the deploy resolves at run time; the Verify
+	// probe reads it. Empty under SPARKWING_DRY_RUN, which skips the probe.
+	url string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}	push := sparkwing.Job(plan, "push", p.push).Needs(build)
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Needs(push).
+		Verify(p.verify).
+		OnFailure("rollback", p.rollback)
+	return nil
+}
+
+// build compiles the image from the repo's Dockerfile with a fresh
+// timestamp tag. It runs for real even under SPARKWING_DRY_RUN so a broken
+// Dockerfile still fails the pipeline; only the registry and Cloud Run
+// mutations echo.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	p.tag = time.Now().UTC().Format("20060102-150405")
+	_, err := sparkwing.Exec(ctx, "docker", "build",
+		"-t", {{quote .image}}+":"+p.tag,
+		"-f", "Dockerfile", ".").Run()
+	return err
+}
+
+// push authenticates docker with Artifact Registry via gcloud, tags the
+// freshly built image for the registry, and pushes it. Under
+// SPARKWING_DRY_RUN the auth and the push echo their argv and skip the
+// registry round-trip, so the pipeline is exercisable with no GCP access.
+func (p *{{pascal .pipeline_name}}) push(ctx context.Context) error {
+	if err := gcp.ConfigureDockerAuth(ctx, garHost({{quote .gar}})); err != nil {
+		return err
+	}
+	local := {{quote .image}} + ":" + p.tag
+	remote := {{quote .gar}} + "/" + {{quote .image}} + ":" + p.tag
+	if _, err := sparkwing.Exec(ctx, "docker", "tag", local, remote).Run(); err != nil {
+		return err
+	}
+	if os.Getenv("SPARKWING_DRY_RUN") != "" {
+		sparkwing.Info(ctx, "DRY RUN: docker push %s", remote)
+		return nil
+	}
+	_, err := sparkwing.Exec(ctx, "docker", "push", remote).Run()
+	return err
+}
+
+// deploy rolls the pushed image out to Cloud Run and records the returned
+// service URL for the Verify probe. Returning nil means the rollout
+// succeeded; the node's Verify then decides whether the new revision is
+// actually healthy.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	port, _ := strconv.Atoi({{quote .port}})
+	res, err := cloudrun.Deploy(ctx, cloudrun.DeployConfig{
+		Service:              {{quote .service}},
+		Image:                {{quote .gar}} + "/" + {{quote .image}} + ":" + p.tag,
+		Region:               {{quote .region}},
+		Project:              {{quote .project}},
+		Port:                 port,
+		Env:                  parseEnv({{quote .env}}),
+		AllowUnauthenticated: {{quote .allow_unauthenticated}} != "",
+	})
+	if err != nil {
+		return err
+	}
+	p.url = res.URL
+	return nil
+}
+
+// verify probes the freshly deployed service. Under SPARKWING_DRY_RUN the
+// deploy echoes its argv and returns no URL, so there is nothing live to
+// probe and the check passes.
+func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
+	if p.url == "" {
+		sparkwing.Info(ctx, "no service URL resolved (dry-run) - skipping health probe")
+		return nil
+	}
+	return probe.HTTP(p.url + {{quote .health_path}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+// rollback runs when deploy fails. It rolls back only on a definitive
+// failure. If the verify probe could not even *determine* health
+// (unreachable, timeout, auth -- probe.Indeterminate), that is not evidence
+// the new revision is bad, so shifting traffic back would revert a
+// possibly-healthy deploy because the check itself could not run. In that
+// case it surfaces the error instead.
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "deploy failed at %s stage - shifting traffic back to the prior revision", f.Stage)
+	return cloudrun.Rollback(cloudrun.RollbackConfig{
+		Service: {{quote .service}},
+		Region:  {{quote .region}},
+		Project: {{quote .project}},
+	})(ctx)
+}
+
+// garHost returns the registry host of a GAR URL (the segment before the
+// first slash), which is what `gcloud auth configure-docker` expects.
+func garHost(registry string) string {
+	if i := strings.IndexByte(registry, '/'); i >= 0 {
+		return registry[:i]
+	}
+	return registry
+}
+
+// parseEnv turns a "KEY=VAL,KEY=VAL" parameter into the env map the deploy
+// passes to --set-env-vars. An empty string yields no env vars.
+func parseEnv(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	env := map[string]string{}
+	for _, pair := range strings.Split(raw, ",") {
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		env[strings.TrimSpace(k)] = v
+	}
+	return env
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

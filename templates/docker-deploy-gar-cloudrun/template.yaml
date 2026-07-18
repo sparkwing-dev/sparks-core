@@ -1,0 +1,80 @@
+name: docker-deploy-gar-cloudrun
+description: |
+  Test, build a Docker image, push it to Google Artifact Registry, and
+  deploy the image to a Cloud Run service. A post-deploy HTTP probe
+  against the URL the deploy returns verifies the new revision; a
+  definitively-unhealthy result shifts traffic back to the prior
+  revision. The flagship GCP serverless-container deploy.
+whenToUse: |
+  The default GCP container deploy. Pick over cloudrun-deploy-source when
+  you build and test the exact image in CI and want it pushed to GAR (a
+  reproducible artifact you can scan) before it goes live. Pick over
+  gke-deploy-gar-kubectl when you want managed serverless Cloud Run, not a
+  GKE cluster. For an SSR Next.js app (output: standalone) set
+  test-cmd=`npm test`, point at your Node Dockerfile, and set port. For
+  AWS containers use container-deploy-ecs-fargate.
+prerequisite: |
+  A Dockerfile at the repo root and the gcloud CLI on PATH (for GAR auth
+  and the Cloud Run deploy).
+parameters:
+  - name: service
+    type: string
+    required: true
+    description: Cloud Run service name (e.g. api)
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. my-service)
+  - name: gar
+    type: string
+    required: true
+    description: GAR registry URL (e.g. us-west1-docker.pkg.dev/my-project/my-repo)
+  - name: region
+    type: string
+    required: true
+    description: Cloud Run region (e.g. us-west1)
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: port
+    type: string
+    required: false
+    default: "8080"
+    description: Container port the service listens on (set 3000 for a Next.js standalone server)
+  - name: health-path
+    type: string
+    required: false
+    default: /
+    description: Path appended to the service URL for the post-deploy probe (e.g. /healthz)
+  - name: allow-unauthenticated
+    type: string
+    required: false
+    default: "true"
+    description: Pass --allow-unauthenticated on deploy. Set empty for an authenticated (private) service.
+  - name: env
+    type: string
+    required: false
+    default: ""
+    description: Runtime env vars as "KEY=VAL,KEY=VAL", passed via --set-env-vars. Empty leaves them unset.
+  - name: pipeline-name
+    type: string
+    required: false
+    default: build-test-deploy
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: test-cmd
+    type: string
+    required: false
+    default: go test ./...
+    description: Pre-build test command. Empty disables the test node (language-agnostic: pytest, npm test, cargo test...).
+applicability:
+  cloud: [gcp]
+  category: container-service-deploy
+verify: dry-runnable
+verify_fixture: docker
+verify_params:
+  service: example-api
+  image: example-service
+  gar: us-central1-docker.pkg.dev/example-project/example-repo
+  region: us-central1
+  project: example-project
