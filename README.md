@@ -84,33 +84,33 @@ Discipline:
 
 ## Releasing
 
-The release dance is automated by sparkwing's `release-sparks`
-pipeline (lives in the sparkwing repo). It:
+Releases are cut by this repo's own `release-modules` pipeline (in
+`.sparkwing/`). It:
 
-1. Detects which modules have changed since their last `<module>/v*` tag.
-2. Expands the changed set transitively over the inter-module dep graph
-   (a change to `step` forces a re-tag of `checks`, `docker`, `gitops`,
-   `kube`, and `pipelines` because their `go.mod` requires must update).
-3. Topo-sorts the expanded set leaves-first.
-4. Walks the order: bumps each module's version, rewrites its
-   dependents' `go.mod` to require the new version, runs tests, tags
-   `<module>/<version>`, and pushes.
+1. Verifies a clean working tree.
+2. Reads the module list from `spark.json` and, for a single lockstep
+   version, creates one `<module>/<version>` tag per module.
+3. Pushes the new tags to origin.
 
-Manual single-module release:
+The repo root is intentionally never tagged with a bare `vX.Y.Z` -- that
+would expose the umbrella directory as a module and misroute iterated
+`go get`. Every module ships at the same version in a given release, and
+sparks-core is locked to `v0.x` (the pipeline refuses `v1.0.0+`).
 
-```
-sparkwing run release-sparks --module pipelines --version v0.2.0
-```
-
-Or auto-detect everything that changed:
+Cut a release:
 
 ```
-sparkwing run release-sparks --all
+sparkwing run release-modules --version v0.2.0
 ```
 
-Per-module CHANGELOG entries are required -- the release pipeline
-refuses to ship a module without a matching `[<version>]` heading in
-that module's `CHANGELOG.md`.
+Preview the tags without creating or pushing them:
+
+```
+sparkwing run release-modules --version v0.2.0 --preview
+```
+
+Each module keeps its own `CHANGELOG.md`; add the new `[<version>]`
+heading to every module you are shipping before cutting the release.
 
 ## Layout
 
