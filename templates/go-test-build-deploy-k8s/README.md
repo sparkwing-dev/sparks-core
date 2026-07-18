@@ -52,7 +52,7 @@ blocks do the work; the scaffolded file is just the shape.
 The `deploy` node runs `kubectl apply -f <k8s-path>` and then `kubectl set
 image deploy/<app-name> <app-name>=<built-image>`. So your `k8s-path`
 directory must contain a Deployment (plus a Service) and **three names
-must agree** — a mismatch compiles fine and only fails at deploy time:
+must agree**. A mismatch compiles fine and only fails at deploy time:
 
 - the Deployment's `metadata.name` and its container `name` must both be
   `<app-name>` (the pipeline rolls `deploy/<app-name>` and sets the image

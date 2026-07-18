@@ -20,7 +20,7 @@ expires as **denied** (deploy never runs).
 
 ## Approving a run
 
-Local `sparkwing run` blocks in the foreground at the gate — approve
+Local `sparkwing run` blocks in the foreground at the gate. Approve
 from a second terminal (or the dashboard):
 
 ```sh
@@ -28,7 +28,7 @@ sparkwing runs approvals                 # find the pending run id + node
 sparkwing runs approvals approve --run <run-id> --node approve-deploy
 ```
 
-(Keep the original `run` process alive while you approve — closing it
+(Keep the original `run` process alive while you approve; closing it
 strands the run.)
 
 ## Parameters

@@ -1,8 +1,8 @@
 # integration-test-with-service
 
 Run integration tests against a throwaway service container (Postgres,
-Redis, …) started before the tests and torn down after — even on
-failure or panic — via `services.WithServices`. Needs a Docker daemon;
+Redis, and the like) started before the tests and torn down after, even
+on failure or panic, via `services.WithServices`. Needs a Docker daemon;
 no cloud or cluster.
 
 ## Scaffold
@@ -24,12 +24,12 @@ One `integration` Job whose body calls `services.WithServices`:
 
 1. Starts `service-image`, published to `127.0.0.1:<service-port>`.
 2. Polls `ready-cmd` **inside the container** (`docker exec`) until it
-   exits 0 — so the probe needs no host-side client.
+   exits 0, so the probe needs no host-side client.
 3. Runs `test-cmd` on the host. Reach the service at
    `localhost:<service-port>`.
 4. Tears the container down on the way out, including on failure/panic.
 
-This is the blessed setup/teardown idiom — don't use `AfterRun` (an
+This is the blessed setup/teardown idiom. Don't use `AfterRun` (an
 observer that can't guarantee cleanup) or a downstream `Needs` node
 (skipped when the upstream fails).
 

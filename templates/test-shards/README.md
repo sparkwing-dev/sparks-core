@@ -1,8 +1,8 @@
 # test-shards
 
 Run a test suite split into N parallel shards, gated by a node that
-passes only when every shard passes. Fully local — runs end-to-end with
-`sparkwing run`, no cloud or cluster.
+passes only when every shard passes. Fully local: it runs end-to-end
+with `sparkwing run`, no cloud or cluster.
 
 ## Scaffold
 
@@ -14,10 +14,10 @@ sparkwing pipeline new --name test-shards --template test-shards \
 ## What it does
 
 - A Plan-layer `JobFanOut` registers one shard Job per index
-  (`shard-0` … `shard-{N-1}`), all dependency-free so they dispatch in
-  parallel.
+  (`shard-0` through `shard-{N-1}`), all dependency-free so they
+  dispatch in parallel.
 - Each shard runs `test-cmd` with `SHARD_INDEX` (0-based) and
-  `SHARD_TOTAL` exported, so the command can select its slice — via a
+  `SHARD_TOTAL` exported, so the command can select its slice: via a
   test runner's native `--shard` flag, or `go test -run` over a subset.
 - A `gate` Job `Needs` the whole shard group, so it runs (and the run
   succeeds) only when every shard passed. If any shard fails, the gate

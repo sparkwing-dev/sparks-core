@@ -1,8 +1,8 @@
 # build-publish-binary
 
 Build a versioned Go binary, write a SHA-256 checksum, and publish both
-into a local release directory. Fully local — no cloud, registry, or
-cluster — so it runs end-to-end with `sparkwing run` on a laptop.
+into a local release directory. Fully local, with no cloud, registry,
+or cluster, so it runs end-to-end with `sparkwing run` on a laptop.
 
 ## Scaffold
 
