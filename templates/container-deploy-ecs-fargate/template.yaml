@@ -1,0 +1,80 @@
+name: container-deploy-ecs-fargate
+description: |
+  Test, build a Docker image, push it to ECR, and roll it out to an
+  ECS/Fargate service: register a new task-definition revision from the
+  running one with the fresh image, update the service, wait for it to
+  stabilize, then verify with a post-deploy HTTP probe. A definitively
+  unhealthy result rolls the service back to the previous task
+  definition. A raw-composition test -> build -> deploy DAG over
+  sparks-core blocks -- edit any node freely.
+whenToUse: |
+  Ship a long-running container to AWS ECS on Fargate with no
+  Kubernetes. Pick over docker-deploy-ecr-eks or gke-deploy-gar-kubectl
+  when the service runs on ECS, not an EKS/GKE cluster. The GCP
+  serverless-container equivalent is docker-deploy-gar-cloudrun. For a
+  request/event-driven workload that should scale to zero use
+  lambda-deploy instead. Language-agnostic: set test-cmd to your stack's
+  test command or leave it empty to skip the test node.
+prerequisite: |
+  A Dockerfile at the repo root, and an existing ECS service on the named
+  cluster whose task-definition family already has a revision -- the
+  deploy registers a new revision from that current definition with the
+  image swapped.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. myapp)
+  - name: ecr
+    type: string
+    required: true
+    description: ECR registry URL (e.g. 633280902600.dkr.ecr.us-west-2.amazonaws.com)
+  - name: cluster
+    type: string
+    required: true
+    description: ECS cluster name the service runs in
+  - name: service
+    type: string
+    required: true
+    description: ECS service name to update
+  - name: task-family
+    type: string
+    required: true
+    description: Task-definition family; a new revision is registered from its current definition with the fresh image
+  - name: container-name
+    type: string
+    required: true
+    description: Name of the container within the task definition whose image is swapped
+  - name: health-url
+    type: string
+    required: true
+    description: URL the post-deploy probe checks for a 2xx (e.g. https://myapp.example.com/healthz)
+  - name: region
+    type: string
+    description: AWS region of the ECS cluster
+    default: us-west-2
+  - name: aws-profile
+    type: string
+    description: AWS profile for local runs; empty resolves via AWS_PROFILE or IRSA on an in-cluster runner
+    default: ""
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: build-test-deploy
+  - name: test-cmd
+    type: string
+    description: Pre-build test command. Empty disables the test node.
+    default: go test ./...
+applicability:
+  cloud: [aws]
+  category: container-service-deploy
+verify: dry-runnable
+verify_fixture: docker
+verify_params:
+  image: example-app
+  ecr: 123456789012.dkr.ecr.us-west-2.amazonaws.com
+  cluster: example-cluster
+  service: example-service
+  task-family: example-task
+  container-name: example-app
+  health-url: https://example.com/healthz

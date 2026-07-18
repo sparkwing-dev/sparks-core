@@ -1,0 +1,145 @@
+// Scaffolded from the container-deploy-ecs-fargate template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly, so
+// the orchestration (what runs when, what verifies, what rolls back) is
+// visible and editable. The blocks do the heavy lifting.
+package jobs
+
+import (
+	"context"
+	"os"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/ecs"
+	"github.com/sparkwing-dev/sparks-core/probe"
+)
+
+// {{pascal .pipeline_name}} tests, builds {{.image}}, pushes it to ECR, and
+// rolls it out to an ECS/Fargate service. After the rollout a health probe
+// verifies the new task set; a definitively-unhealthy result rolls the
+// service back to the previous task definition.
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// prevTaskDef is the prior task-definition ARN captured by the deploy
+	// node so rollback can restore it.
+	//
+	// safety: written by deploy and read by rollback on the same job, which
+	// run sequentially, so no synchronization is required.
+	prevTaskDef string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+	build := sparkwing.Job(plan, "build", p.build).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", p.build)
+{{end}}
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Needs(build).
+		Verify(p.verify).
+		OnFailure("rollback", p.rollback)
+	return nil
+}
+
+// build builds the image and, outside dry-run, pushes it to ECR (login is
+// handled inside docker.BuildAndPush). Under dry-run it builds locally with
+// no registry so the scaffold exercises a real build with no AWS access.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	cfg := docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Tags:       tags,
+		AWSProfile: {{quote .aws_profile}},
+	}
+	if !dryRun() {
+		cfg.Registries = []string{ {{quote .ecr}} }
+	}
+	return docker.BuildAndPush(ctx, cfg)
+}
+
+// deploy rolls the freshly built image out to the ECS service, capturing the
+// prior task-definition ARN so rollback can restore it. Returning nil means
+// the rollout stabilized; the node's Verify then decides real health.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	prev, err := ecs.Deploy(ctx, ecs.DeployConfig{
+		Cluster:       {{quote .cluster}},
+		Service:       {{quote .service}},
+		TaskFamily:    {{quote .task_family}},
+		ContainerName: {{quote .container_name}},
+		Image:         p.imageRef(tags),
+		Region:        {{quote .region}},
+		AWSProfile:    {{quote .aws_profile}},
+	})
+	p.prevTaskDef = prev
+	return err
+}
+
+// verify is the post-deploy health check. Under dry-run the probe is skipped
+// (the deploy echoed its argv and rolled nothing out) so the scaffold runs
+// green; otherwise it probes health-url for a 2xx, retrying while the new
+// task set comes up.
+func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
+	if dryRun() {
+		sparkwing.Info(ctx, "[dry-run] skipping post-deploy health probe of %s", {{quote .health_url}})
+		return nil
+	}
+	return probe.HTTP({{quote .health_url}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+// rollback runs when deploy fails. It restores the previous task definition
+// only on a definitive failure. If the verify probe could not even determine
+// health (unreachable, timeout, auth -- probe.Indeterminate), that is not
+// evidence the new revision is bad, so reverting could roll back a healthy
+// deploy; in that case it surfaces the error instead.
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
+		return f.Err
+	}
+	if p.prevTaskDef == "" {
+		sparkwing.Warn(ctx, "no prior task definition captured (deploy did not reach the service update) - nothing to roll back to")
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "deploy failed at %s stage - rolling %s back to %s", f.Stage, {{quote .service}}, p.prevTaskDef)
+	return ecs.Rollback(ctx, ecs.RollbackConfig{
+		Cluster:        {{quote .cluster}},
+		Service:        {{quote .service}},
+		TaskDefinition: p.prevTaskDef,
+		Region:         {{quote .region}},
+		AWSProfile:     {{quote .aws_profile}},
+	})
+}
+
+// imageRef is the fully-qualified ECR reference the ECS task definition
+// points at -- the same tag docker.BuildAndPush pushes for an ECR registry.
+func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) string {
+	return {{quote .ecr}} + "/" + {{quote .image}} + ":" + tags.ProdTag()
+}
+
+// dryRun reports whether SPARKWING_DRY_RUN is set, matching the echo mode the
+// ecs and docker blocks honor. Under dry-run the build skips its push and the
+// post-deploy probe is skipped, so a scaffold runs green with no AWS access.
+func dryRun() bool {
+	return os.Getenv("SPARKWING_DRY_RUN") != ""
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}
