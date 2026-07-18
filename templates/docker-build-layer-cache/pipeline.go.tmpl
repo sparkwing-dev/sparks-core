@@ -1,0 +1,70 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// docker-build-layer-cache`. Edit freely -- nothing here re-runs.
+//
+// Build a Docker image with BuildKit layer caching. The build reads
+// prior layers via --cache-from and exports fresh ones via --cache-to
+// so a repeat build replays unchanged layers instead of rebuilding
+// them. No registry push, no cluster deploy.
+package jobs
+
+import (
+	"context"
+	"strings"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/docker"
+)
+
+// {{pascal .pipeline_name}} builds {{.image_tag}} from {{.dockerfile}}
+// with a {{.cache_backend}} BuildKit layer cache: it reads prior layers
+// via --cache-from and writes fresh ones via --cache-to, so an unchanged
+// layer replays instead of rebuilding.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build {{.image_tag}} with a {{.cache_backend}} BuildKit layer cache"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "build", p.build)
+	return nil
+}
+
+// build resolves the cache backend into BuildKit --cache-from /
+// --cache-to specs and runs a single BuildKit `docker build` that reads
+// and writes that cache. DOCKER_BUILDKIT is forced on so the cache flags
+// and --build-arg forwarding are honored.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	cacheFrom, cacheTo, err := docker.BuildCacheRef({{quote .cache_backend}}, {{quote .cache_ref}})
+	if err != nil {
+		return err
+	}
+
+	args := []string{"build", "-f", {{quote .dockerfile}}}
+	args = append(args, "--cache-from", cacheFrom, "--cache-to", cacheTo)
+	args = append(args, buildArgFlags({{quote .build_args}})...)
+	args = append(args, "-t", {{quote .image_tag}}, {{quote .build_context}})
+
+	_, err = sparkwing.Exec(ctx, "docker", args...).Env("DOCKER_BUILDKIT", "1").Run()
+	return err
+}
+
+// buildArgFlags parses a KEY=VAL,KEY=VAL string into a flat
+// --build-arg KEY=VAL argv slice. Blank entries are skipped, so an empty
+// spec yields no flags.
+func buildArgFlags(spec string) []string {
+	var out []string
+	for _, pair := range strings.Split(spec, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		out = append(out, "--build-arg", pair)
+	}
+	return out
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
