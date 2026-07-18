@@ -23,6 +23,17 @@ multi-module repo conventions).
   `RolloutUndoConfig` with an explicit `Context`, so a rollback targets
   the same cluster the deploy did rather than the current kubeconfig
   context.
+- `Delete` removes manifest paths and/or named resources via `kubectl
+  delete`, with `IgnoreNotFound` for idempotent teardown -- so a canary
+  can be torn down on both the promote and abort paths without the
+  second delete failing on an already-gone object.
+- `Scale` sets a deployment's replica count via `kubectl scale` and
+  waits for the rollout, widening or narrowing a canary slice (zero
+  replicas is valid).
+- Cloud-mutating helpers (`Delete`, `Scale`) honor `SPARKWING_DRY_RUN`:
+  when it is non-empty they echo the exact `kubectl` argv they would run
+  and return success without contacting the cluster, so a template
+  verify run stays green with no reachable cluster.
 
 - `ResolveContext` centralizes kube context selection for every kubectl
   call in the package and **fails closed**: explicit `Context` >
