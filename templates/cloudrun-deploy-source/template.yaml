@@ -1,0 +1,68 @@
+name: cloudrun-deploy-source
+description: |
+  Deploy a service to Cloud Run directly from source with
+  `gcloud run deploy --source` -- Cloud Build + buildpacks build the
+  container server-side, so there is no Dockerfile to own and no local
+  Docker build. A post-deploy HTTP probe verifies the new revision at the
+  service URL returned by the deploy; a definitively-unhealthy result
+  shifts traffic back to the prior revision. A single-node DAG
+  (deploy -> verify -> rollback-on-failure) composed from sparks-core
+  blocks -- edit it freely.
+whenToUse: |
+  Reach for this when you want to ship a Cloud Run service without owning
+  a Dockerfile or running an image build in CI -- let Cloud Build's
+  buildpacks detect the language and build the container.
+  Pick docker-deploy-gar-cloudrun instead when you want to build and test
+  the exact image in CI and push it to Artifact Registry (a reproducible,
+  scannable artifact) before it goes live; source deploys build the image
+  server-side, so there is no local image to unit-test or scan first.
+  Distinct from cloud-functions-deploy, which deploys a single event
+  handler rather than a full HTTP service.
+prerequisite: |
+  A source tree Cloud Build's buildpacks can detect and build at
+  source-dir (a Go module, a package.json, a requirements.txt, ...), the
+  gcloud CLI on PATH, and Cloud Build + Cloud Run enabled on the project.
+parameters:
+  - name: service
+    type: string
+    required: true
+    description: Cloud Run service name (e.g. api)
+  - name: region
+    type: string
+    required: true
+    description: Cloud Run region (e.g. us-west1)
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: source-dir
+    type: string
+    description: Source directory passed to --source, relative to the repo root.
+    default: "."
+  - name: health-path
+    type: string
+    description: Path appended to the service URL for the post-deploy probe (e.g. /healthz).
+    default: "/"
+  - name: allow-unauthenticated
+    type: string
+    description: Pass --allow-unauthenticated (public). Empty for an authenticated (private) service.
+    default: "true"
+  - name: env
+    type: string
+    description: Runtime env vars as "KEY=VAL,KEY=VAL", passed via --set-env-vars. Empty leaves them unset.
+    default: ""
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: deploy
+applicability:
+  cloud: [gcp]
+  category: container-service-deploy
+verify: dry-runnable
+verify_fixture: none
+verify_params:
+  service: example-api
+  region: us-west1
+  project: example-project
+  source-dir: "."
+  health-path: /healthz
