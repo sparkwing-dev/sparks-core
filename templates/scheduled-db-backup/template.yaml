@@ -1,0 +1,77 @@
+name: scheduled-db-backup
+description: |
+  A cron-scheduled database backup: dump the database behind a sparkwing
+  secret DSN, gzip it, and upload a timestamped `<db>-<timestamp>.sql.gz`
+  object to a backup destination (a local dir, s3://bucket/prefix, or
+  gs://bucket/prefix). Retention is left to the object store's lifecycle
+  rule -- the README shows the matching S3/GCS policy. One dump->upload
+  Job intended to run on `on: schedule:`. Unifies the AWS and GCP backup
+  twins behind a single backup-dest param.
+whenToUse: |
+  Reach for this for periodic offsite database backups on AWS or GCP --
+  set backup-dest to s3://... or gs://... . Choose over scheduled-cleanup,
+  which only prunes local files: this produces a durable artifact and
+  ships it to object storage. Choose over db-backup-restore-drill when you
+  only need to produce and store the dump; the drill additionally restores
+  and verifies it. For a generic "run something on a cron" starter with no
+  database, scheduled-cleanup is the smaller read.
+prerequisite: |
+  A reachable source database whose DSN is stored as a sparkwing secret,
+  and the engine's dump binary on the runner (pg_dump for postgres,
+  mysqldump for mysql). For an s3:// destination the `aws` CLI; for a
+  gs:// destination the `gcloud` CLI.
+parameters:
+  - name: db-secret
+    type: string
+    description: Name of the sparkwing secret holding the source database DSN.
+    default: DATABASE_URL
+  - name: engine
+    type: string
+    description: "Database engine: 'postgres' (pg_dump) or 'mysql' (mysqldump)."
+    default: postgres
+  - name: backup-dest
+    type: string
+    required: true
+    description: |
+      Destination for the timestamped <db>-<timestamp>.sql.gz object: a
+      local dir, s3://bucket/prefix (via aws), or gs://bucket/prefix (via
+      gcloud).
+  - name: aws-profile
+    type: string
+    description: |
+      AWS profile for s3:// destinations; empty uses the runner's default
+      credential chain (or IRSA on EKS). Ignored for gs:// and local.
+    default: ""
+  - name: project
+    type: string
+    description: GCP project ID for gs:// destinations. Ignored for s3:// and local.
+    default: ""
+  - name: schedule
+    type: string
+    description: |
+      Cron expression for the intended schedule. Informational here (shown
+      in help); add it to sparkwing.yaml under `on: schedule:` to actually
+      trigger -- see the template README.
+    default: "0 4 * * *"
+  - name: retention-days
+    type: string
+    description: |
+      Retention window; the README shows the matching S3/GCS lifecycle rule
+      (object-store lifecycle handles expiry, not in-pipeline deletes).
+    default: "30"
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: db-backup
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: maintenance
+verify: compile-only
+verify_fixture: none
+verify_params:
+  backup-dest: s3://example-db-backups/nightly
+  db-secret: DATABASE_URL
+  engine: postgres
+  pipeline-name: db-backup
