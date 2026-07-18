@@ -1,0 +1,58 @@
+name: db-migrate-updown
+description: |
+  Run golang-migrate as its own pipeline, decoupled from any build or
+  deploy. Apply pending up migrations, or roll back a chosen number of
+  down steps. The target database DSN is read from a sparkwing secret at
+  run time, so it never lands in the pipeline source. When direction is
+  down, a human approval gate guards the destructive rollback before it
+  runs. Direction and the approval gate branch at render time, so the
+  emitted Plan is static.
+whenToUse: |
+  Reach for this to run migrations standalone -- an ad-hoc schema bump,
+  catching staging up to head, or an emergency down-rollback -- without
+  rebuilding or redeploying the app. Pick go-test-migrate-deploy-argo
+  instead when migrations belong inside a full build + deploy DAG (tests
+  on an ephemeral database, then a gitops/ArgoCD deploy). Pair with
+  db-backup-restore-drill's dbbackup block when you want a restorable
+  snapshot taken before you migrate.
+prerequisite: |
+  A golang-migrate migrations directory in the repo (NNNN_name.up.sql /
+  NNNN_name.down.sql), the `migrate` CLI on the runner PATH, and a
+  sparkwing secret holding the target database DSN.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: db-migrate
+  - name: migrations-dir
+    type: string
+    description: golang-migrate migrations directory (NNNN_name.up.sql / .down.sql).
+    default: db/migrations
+  - name: dsn-secret
+    type: string
+    description: Name of the sparkwing secret holding the target database DSN.
+    default: DATABASE_URL
+  - name: direction
+    type: string
+    description: "Migration direction: 'up' applies pending migrations, 'down' rolls back. Branched at render time."
+    default: up
+  - name: down-steps
+    type: string
+    description: When direction is down, how many migrations to roll back (0 = all). Ignored for up.
+    default: "1"
+  - name: require-approval
+    type: string
+    description: When 'true' and direction is down, insert a human approval gate before the destructive rollback runs.
+    default: "true"
+applicability:
+  cloud: []
+  category: database
+verify: runnable
+verify_fixture: none
+verify_params:
+  pipeline-name: db-migrate
+  migrations-dir: db/migrations
+  dsn-secret: DATABASE_URL
+  direction: up
+  down-steps: "1"
+  require-approval: "true"

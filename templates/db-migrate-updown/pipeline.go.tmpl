@@ -1,0 +1,74 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// db-migrate-updown`. Edit freely -- nothing here re-runs.
+//
+// A standalone golang-migrate pipeline, decoupled from any build or
+// deploy. This scaffold runs migrations {{.direction}}: it resolves the
+// target DSN from a sparkwing secret and drives the migrate block. The
+// direction and the down-path approval gate are fixed at render time, so
+// the Plan is static -- re-render (or edit this file) to change them.
+package jobs
+
+import (
+	"context"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/migrate"
+)
+
+// {{pascal .pipeline_name}} runs golang-migrate against the database
+// named by the {{.dsn_secret}} secret.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+{{- if eq .direction "down"}}
+	return "roll back {{.down_steps}} migration(s) against the {{.dsn_secret}} database"
+{{- else}}
+	return "apply pending up migrations against the {{.dsn_secret}} database"
+{{- end}}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{- if eq .direction "down"}}
+{{- if eq .require_approval "true"}}
+	approve := sparkwing.JobApproval(plan, "approve-rollback", sparkwing.ApprovalConfig{
+		Message:  "Roll back {{.down_steps}} migration(s) against the {{.dsn_secret}} database? This is destructive.",
+		OnExpiry: sparkwing.ApprovalDeny,
+	})
+	sparkwing.Job(plan, "migrate-down", p.migrateDown).Needs(approve)
+{{- else}}
+	sparkwing.Job(plan, "migrate-down", p.migrateDown)
+{{- end}}
+{{- else}}
+	sparkwing.Job(plan, "migrate-up", p.migrateUp)
+{{- end}}
+	return nil
+}
+
+{{if eq .direction "down" -}}
+// migrateDown rolls back {{.down_steps}} applied migration(s) (0 rolls
+// back every migration). The DSN comes from a sparkwing secret so it
+// never lands in the pipeline source.
+func (p *{{pascal .pipeline_name}}) migrateDown(ctx context.Context) error {
+	dsn, err := sparkwing.Secret(ctx, {{quote .dsn_secret}})
+	if err != nil {
+		return err
+	}
+	return migrate.Down(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn}, {{.down_steps}})
+}
+{{- else -}}
+// migrateUp applies every pending up migration; a no-op when the
+// database is already at the latest version. The DSN comes from a
+// sparkwing secret so it never lands in the pipeline source.
+func (p *{{pascal .pipeline_name}}) migrateUp(ctx context.Context) error {
+	dsn, err := sparkwing.Secret(ctx, {{quote .dsn_secret}})
+	if err != nil {
+		return err
+	}
+	return migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn})
+}
+{{- end}}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
