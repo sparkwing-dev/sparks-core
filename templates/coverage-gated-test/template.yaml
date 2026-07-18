@@ -1,0 +1,43 @@
+name: coverage-gated-test
+description: |
+  Run a test suite that emits a coverage report, then a Verify
+  postcondition parses the total coverage and fails the node when it
+  falls below a floor. The parser understands Go coverprofiles, lcov,
+  and Cobertura XML, so one gate covers Go, Node, Python, and Rust
+  suites. The gate is the coverage block; the body is a single
+  test Job whose Verify is coverage.GateAtLeast(min, report).
+whenToUse: |
+  Pick over lint-test-go when passing tests are not enough and you want
+  the run to FAIL when total coverage drops below a threshold; lint-test-go
+  is pass/fail with no coverage notion. If you do not enforce a coverage
+  floor, do not add this. To split a slow suite across parallel shards for
+  speed use test-shards instead.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: coverage-gate
+  - name: test-cmd
+    type: string
+    description: Test command that emits the coverage file below.
+    default: go test -coverprofile=cover.out ./...
+  - name: coverage-file
+    type: string
+    description: Path (relative to the repo root) of the coverage report the gate parses.
+    default: cover.out
+  - name: coverage-format
+    type: string
+    description: "Report format: go | lcov | cobertura. Selects the parser for the total-coverage figure."
+    default: go
+  - name: min-coverage
+    type: string
+    description: Minimum total line coverage percent; the gate fails below this.
+    default: "80"
+prerequisite: A repo whose test command emits a coverage report at coverage-file (the default runs `go test -coverprofile=cover.out ./...` at the repo root).
+applicability:
+  cloud: []
+  category: testing-strategies
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  min-coverage: "0"
