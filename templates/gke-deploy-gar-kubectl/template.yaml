@@ -1,0 +1,84 @@
+name: gke-deploy-gar-kubectl
+description: |
+  Test, build a Docker image to Google Artifact Registry, fetch GKE
+  cluster credentials, and deploy to GKE by applying the repo's own
+  manifests with kubectl. A post-deploy HTTP probe verifies the new
+  revision; a definitively-unhealthy result rolls the deployment back
+  via kubectl rollout undo. A multi-node DAG (test -> build -> deploy)
+  composed from sparks-core blocks -- edit any node freely. The GCP twin
+  of go-test-build-deploy-k8s.
+whenToUse: |
+  Reach for this on GCP when your repo owns its Kubernetes YAML and you
+  apply it directly with kubectl (no gitops repo, no ArgoCD, no kustomize
+  indirection), and you want a deploy that self-rolls-back on a failed
+  health check. GCP twin of go-test-build-deploy-k8s (which targets
+  ECR/EKS on AWS). If you deploy through a gitops repo + ArgoCD, use
+  docker-deploy-gar-gke instead. If you don't run a GKE cluster and want
+  managed serverless containers, use docker-deploy-gar-cloudrun (own the
+  image) or cloudrun-deploy-source (let Cloud Build build). Language
+  agnostic despite the built-in Go test default: set test-cmd to your
+  stack's command (pytest, npm test, cargo test, ...) or empty to skip
+  the test node.
+prerequisite: |
+  A Dockerfile at the repo root, Kubernetes manifests under k8s-path
+  (a Deployment named app-name whose container is also named app-name,
+  plus its Service), and gcloud + docker + kubectl on PATH.
+parameters:
+  - name: image
+    type: string
+    required: true
+    description: Image name (e.g. my-service)
+  - name: gar
+    type: string
+    required: true
+    description: GAR registry URL (e.g. us-west1-docker.pkg.dev/my-project/my-repo)
+  - name: cluster
+    type: string
+    required: true
+    description: GKE cluster name (get-credentials target)
+  - name: region
+    type: string
+    required: true
+    description: Cluster location -- region or zone (e.g. us-west1 or us-west1-a)
+  - name: project
+    type: string
+    required: true
+    description: GCP project ID
+  - name: namespace
+    type: string
+    required: true
+    description: Kubernetes namespace
+  - name: app-name
+    type: string
+    required: true
+    description: Deployment name; the pipeline waits on and rolls back deploy/<app-name>
+  - name: health-url
+    type: string
+    required: true
+    description: URL the post-deploy probe checks for a 2xx (e.g. https://api.example.com/healthz)
+  - name: k8s-path
+    type: string
+    description: Path to the manifests applied with kubectl apply -f.
+    default: k8s
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: build-test-deploy
+  - name: test-cmd
+    type: string
+    description: Pre-build test command. Empty disables the test node.
+    default: go test ./...
+applicability:
+  cloud: [gcp]
+  category: docker-deploy
+verify: compile-only
+verify_fixture: docker
+verify_params:
+  image: example-app
+  gar: us-central1-docker.pkg.dev/example-project/example-repo
+  cluster: example-cluster
+  region: us-central1
+  project: example-project
+  namespace: example
+  app-name: example-app
+  health-url: https://example.com/healthz
