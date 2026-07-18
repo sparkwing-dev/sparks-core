@@ -81,6 +81,8 @@ func TestCrossBuildGo_RequiresBinaryAndVersion(t *testing.T) {
 	}
 }
 
+// TestSHA256File checks sha256File against the known digest of "hello",
+// reproducible with `printf hello | sha256sum`.
 func TestSHA256File(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.txt")
@@ -91,7 +93,6 @@ func TestSHA256File(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sha256File: %v", err)
 	}
-	// echo -n hello | sha256sum
 	want := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 	if got != want {
 		t.Errorf("sha256 = %q, want %q", got, want)

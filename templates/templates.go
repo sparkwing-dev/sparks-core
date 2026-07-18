@@ -247,7 +247,6 @@ func Get(name string) (Template, error) {
 	}
 	readme, err := fs.ReadFile(FS, path.Join(name, "README.md"))
 	if err != nil {
-		// README is required: every template must explain itself.
 		return Template{}, fmt.Errorf("read README for %s: %w", name, err)
 	}
 	return Template{
@@ -268,9 +267,6 @@ func readManifest(name string) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("parse manifest for %s: %w", name, err)
 	}
 	if m.Name == "" {
-		// Defensive: a template directory with an empty manifest is
-		// almost certainly an authoring mistake. Fail loudly so the
-		// `templates` test catches it during PR review.
 		return Manifest{}, fmt.Errorf("manifest for %s has empty name", name)
 	}
 	if m.Name != name {

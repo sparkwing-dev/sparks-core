@@ -83,8 +83,6 @@ func TestGet_UnknownReturnsErrNotExist(t *testing.T) {
 }
 
 func TestRender_RequiresRequiredParams(t *testing.T) {
-	// static-deploy-s3-cloudfront has bucket + distribution as
-	// required. Calling Render with no params must surface both.
 	_, err := Render("static-deploy-s3-cloudfront", map[string]string{})
 	if err == nil {
 		t.Fatal("Render: expected error when required params missing")
@@ -117,7 +115,6 @@ func TestRender_StaticDeployS3CloudFront_Substitutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	// Hard substitutions land verbatim in the rendered body.
 	for _, want := range []string{
 		`"my-test-bucket"`,
 		`"E2ABCDEF"`,
@@ -165,21 +162,17 @@ func TestRender_DockerDeployGAR_TestCmdEmpty(t *testing.T) {
 		"gitops-path": "x",
 		"app-name":    "x",
 		"namespace":   "x",
-		"test-cmd":    "", // explicit empty -- elide the test node
+		"test-cmd":    "",
 	})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	// With test-cmd empty, the rendered body must NOT have a `test`
-	// node call. Otherwise we'd wire up a step that ran nothing.
 	if strings.Contains(out, `"test"`) {
 		t.Errorf("expected no `test` node when test-cmd empty, got:\n%s", out)
 	}
 }
 
 func TestRender_LintTestGo_DefaultsApplied(t *testing.T) {
-	// lint-test-go has go-version with a default; rendering with no
-	// params should still succeed.
 	out, err := Render("lint-test-go", map[string]string{})
 	if err != nil {
 		t.Fatalf("Render with defaults: %v", err)
@@ -261,9 +254,6 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 			if !strings.Contains(out, "sparkwing.Register") {
 				t.Errorf("missing sparkwing.Register call:\n%s", out)
 			}
-			// Hard syntax check: parse the rendered body. Catches any
-			// dangling brace / unbalanced if-end / mistyped identifier
-			// that the substring assertions above would miss.
 			fset := token.NewFileSet()
 			if _, err := parser.ParseFile(fset, "rendered.go", out, parser.AllErrors); err != nil {
 				t.Errorf("rendered body is not valid Go: %v\n%s", err, out)

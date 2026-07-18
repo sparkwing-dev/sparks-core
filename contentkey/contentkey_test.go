@@ -108,8 +108,6 @@ func TestContentKey_HashesUncommittedWorkingTree(t *testing.T) {
 	globs := []string{"*.go"}
 	committed := mustKey(t, r.dir, "", globs)
 
-	// Edit but do not stage or commit: the working-tree content is what
-	// the key must reflect.
 	r.write("main.go", "package main // dirty\n")
 	dirty := mustKey(t, r.dir, "", globs)
 	if committed == dirty {
@@ -142,9 +140,8 @@ func TestContentKey_IgnoresUntrackedAndGitignored(t *testing.T) {
 	globs := []string{"*.go", "*.log"}
 	before := mustKey(t, r.dir, "", globs)
 
-	// An ignored file and an untracked file must not perturb the key.
 	r.write("debug.log", "noise\n")
-	r.write("scratch.go", "package scratch\n") // untracked, never added
+	r.write("scratch.go", "package scratch\n")
 	after := mustKey(t, r.dir, "", globs)
 	if before != after {
 		t.Fatalf("untracked/ignored files changed key: %q != %q", before, after)
@@ -205,10 +202,11 @@ func TestContentKey_EmptyMatchIsStableNotError(t *testing.T) {
 	}
 }
 
+// TestContentKey_LargeFileSetChunksArgv uses enough long-named files that a
+// single argv would blow past the per-exec byte budget, forcing hashObjects to
+// batch. It checks the key is stable and still reflects a one-file edit.
 func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
 	r := newRepo(t)
-	// Enough long-named files that a single argv would blow past the
-	// per-exec byte budget, forcing hashObjects to batch.
 	const n = 4000
 	for i := 0; i < n; i++ {
 		r.write(filepath.Join("pkg", padName(i)+".go"), "package p\n")
@@ -232,6 +230,10 @@ func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
 	}
 }
 
+// TestContentKey_DeletedTrackedFileDropsFromKey removes a tracked file from the
+// working tree without staging the removal, so `git ls-files` still lists it.
+// The key must still compute (not degrade to NoCache) and must change to
+// reflect the deletion.
 func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	r := newRepo(t)
 	r.write("a.go", "package p\n")
@@ -240,9 +242,6 @@ func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	globs := []string{"*.go"}
 	before := mustKey(t, r.dir, "", globs)
 
-	// Delete a tracked file from the working tree without staging the
-	// removal: `git ls-files` still lists it. The key must still compute
-	// (not degrade to an error) and must change to reflect the deletion.
 	if err := os.Remove(filepath.Join(r.dir, "b.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +369,7 @@ func TestChanged_IsInverseOfUnchanged(t *testing.T) {
 }
 
 func TestOfPaths_NoCacheOutsideRepo(t *testing.T) {
-	dir := t.TempDir() // not a git repo
+	dir := t.TempDir()
 	sparkwing.SetWorkDir(dir)
 
 	key := OfPaths("*.go")(context.Background())
