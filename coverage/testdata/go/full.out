@@ -1,0 +1,3 @@
+mode: count
+example.com/pkg/a.go:1.1,4.10 4 7
+example.com/pkg/b.go:1.1,2.2 6 2
