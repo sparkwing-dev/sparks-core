@@ -27,7 +27,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	approve := sparkwing.JobApproval(plan, "approve-deploy", sparkwing.ApprovalConfig{
 		Message:  "Approve deploy to {{.environment}}?",
 		Timeout:  {{.timeout_hours}} * time.Hour,
-		OnExpiry: sparkwing.ApprovalDeny, // unanswered = do not deploy
+		OnExpiry: sparkwing.ApprovalDeny,
 	}).Needs(test)
 	sparkwing.Job(plan, "deploy", p.deploy).Needs(approve)
 	return nil

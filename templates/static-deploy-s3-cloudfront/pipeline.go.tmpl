@@ -22,9 +22,6 @@ type {{pascal .pipeline_name}} struct{ pipelines.StaticDeploy }
 func init() {
 	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
 		sd := pipelines.StaticDeploy{
-			// Forward NEXT_PUBLIC_* env vars into the build container so
-			// next.config.* can read them at compile time. Add prefixes
-			// here as your site grows.
 			BuildEnvPrefixes: []string{"NEXT_PUBLIC_", "NEXT_EXPORT"},
 			BuildExtraEnv:    map[string]string{"NEXT_EXPORT": "1"},
 			Bucket:           {{quote .bucket}},
@@ -32,12 +29,6 @@ func init() {
 			URL:              {{quote .url}},
 			Delete:           true,
 		}
-		// NextJSBuild applies the build phase. Strategy defaults to
-		// "container" -- docker build with the shared sparks-npm cache
-		// + an optional per-site .next cache. Set Strategy: "host" to
-		// opt into the laptop fast-path (npm install on the host,
-		// no docker). Typically wired from a typed Config field per
-		// target.
 		pipelines.NextJSBuild{SiteCache: {{quote .site_cache}}}.Apply(&sd)
 		return &{{pascal .pipeline_name}}{StaticDeploy: sd}
 	})
