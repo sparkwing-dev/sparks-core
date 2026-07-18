@@ -10,6 +10,30 @@ multi-module repo conventions).
 ## [Unreleased]
 
 ### Added
+- 24 new templates, growing the registry to 38: container and serverless
+  deploys (`container-deploy-ecs-fargate`, `lambda-deploy`,
+  `docker-deploy-gar-cloudrun`, `cloudrun-deploy-source`,
+  `gke-deploy-gar-kubectl`, `cloud-functions-deploy`,
+  `next-preview-deploy-cloudrun`, `canary-deploy-k8s`), release and
+  publish flows (`github-release-go`, `npm-publish-package`,
+  `pypi-publish-wheel`, `container-publish-multiarch`), polyglot CI
+  hygiene (`lint-test-node`, `lint-test-python`), testing strategies
+  (`test-matrix`, `coverage-gated-test`), caching and skip patterns
+  (`cached-test-suite`, `skip-if-paths-unchanged`,
+  `docker-build-layer-cache`), terraform discipline
+  (`terraform-plan-pr`, `terraform-apply-gated`), and database
+  operations (`db-migrate-updown`, `db-backup-restore-drill`,
+  `scheduled-db-backup`). Every template ships verification metadata
+  and composes sparks-core block modules; cloud mutations honor the
+  `SPARKWING_DRY_RUN` echo convention.
+- `node-module` and `python-module` verification fixtures for templates
+  whose steps run npm or python tooling.
+- `test-shards` and `integration-test-with-service` recategorized to
+  `testing-strategies`; `whenToUse` guidance across the catalog now
+  cross-references sibling templates for discrimination.
+- `static-deploy-gcs-cloudcdn` now sets per-object Cache-Control
+  headers (long-lived immutable hashed assets, no-cache HTML) matching
+  its S3 twin.
 - `go-test-build-deploy-k8s` template: a raw-composition test -> build ->
   deploy DAG that builds to ECR and applies the repo's k8s manifests
   with kubectl, with a post-deploy probe and automatic rollout-undo on
