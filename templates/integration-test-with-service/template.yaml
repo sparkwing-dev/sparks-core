@@ -42,6 +42,6 @@ parameters:
 prerequisite: A Go module + tests at ./integration (the default test-cmd) and a running Docker daemon.
 applicability:
   cloud: []
-  category: ci-hygiene
+  category: testing-strategies
 verify: runnable
 verify_fixture: docker

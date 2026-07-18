@@ -26,6 +26,6 @@ parameters:
 prerequisite: A Go module + tests at the repo root (the default test-cmd runs `go test ./...` there); scaffolding into an empty repo runs but the shards have nothing to test.
 applicability:
   cloud: []
-  category: ci-hygiene
+  category: testing-strategies
 verify: runnable
 verify_fixture: go-module
