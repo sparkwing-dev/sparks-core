@@ -1,0 +1,154 @@
+{{- $isImage := eq .package_type "image" -}}
+{{- $hasBuild := or $isImage (ne .build_cmd "") -}}
+// Scaffolded from the lambda-deploy template. Edit freely -- nothing
+// here re-runs.
+//
+// A raw-composition DAG: each node calls a sparks-core block directly,
+// so the orchestration (what runs when, what verifies, what rolls back)
+// is visible and editable. The blocks do the heavy lifting.
+package jobs
+
+import (
+	"context"
+{{if .health_url}}	"time"
+{{end}}
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+{{if $isImage}}	sparkwingDocker "github.com/sparkwing-dev/sparkwing/sparkwing/docker"
+{{end}}
+{{if $isImage}}	"github.com/sparkwing-dev/sparks-core/docker"
+{{end}}	"github.com/sparkwing-dev/sparks-core/lambda"
+{{if .health_url}}	"github.com/sparkwing-dev/sparks-core/probe"
+{{end}})
+
+// {{pascal .pipeline_name}} deploys {{.function_name}} to AWS Lambda.
+// It updates the function code, publishes an immutable version, and
+// shifts the {{.alias}} alias to it.{{if .health_url}} After the shift a health probe
+// verifies the new version; a definitively-unhealthy result shifts the
+// alias back to the version it pointed at before.{{end}}
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// prevVersion is the version the alias pointed at before this
+	// deploy, captured for rollback.
+	prevVersion string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+{{- if .test_cmd}}
+	test := sparkwing.Job(plan, "test", p.test)
+{{- end}}
+{{- if $hasBuild}}
+	build := sparkwing.Job(plan, "build", p.build){{if .test_cmd}}.Needs(test){{end}}
+{{- end}}
+{{- if .health_url}}
+	deploy := sparkwing.Job(plan, "deploy", p.deploy){{if $hasBuild}}.Needs(build){{else if .test_cmd}}.Needs(test){{end}}
+	deploy.
+		Verify(probe.HTTP({{quote .health_url}}).Retry(30).Interval(2*time.Second).Check).
+		OnFailure("rollback", p.rollback)
+{{- else}}
+	sparkwing.Job(plan, "deploy", p.deploy){{if $hasBuild}}.Needs(build){{else if .test_cmd}}.Needs(test){{end}}
+{{- end}}
+	return nil
+}
+{{if .test_cmd}}
+func (p *{{pascal .pipeline_name}}) test(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+	return err
+}
+{{end}}
+{{- if $isImage}}
+// build builds {{.image}} from ./Dockerfile and pushes it to ECR. The
+// pushed reference is the image the function is pointed at in deploy.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	return docker.BuildAndPush(ctx, docker.BuildConfig{
+		Image:      {{quote .image}},
+		Dockerfile: "Dockerfile",
+		Registries: []string{ {{- quote .ecr -}} },
+		Tags:       tags,
+		AWSProfile: {{quote .aws_profile}},
+	})
+}
+
+// deploy points the function at the freshly pushed image, publishes a
+// version, and shifts the alias to it, recording the prior version for
+// rollback.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	tags, err := sparkwingDocker.ComputeTags(ctx)
+	if err != nil {
+		return err
+	}
+	imageURI := {{quote .ecr}} + "/" + {{quote .image}} + ":" + tags.ProdTag()
+	prev, err := lambda.DeployImage(ctx, lambda.ImageDeployConfig{
+		FunctionName: {{quote .function_name}},
+		ImageURI:     imageURI,
+		Alias:        {{quote .alias}},
+		Region:       {{quote .region}},
+		AWSProfile:   {{quote .aws_profile}},
+	})
+	if err != nil {
+		return err
+	}
+	p.prevVersion = prev
+	return nil
+}
+{{- else}}
+{{- if .build_cmd}}
+// build runs the packager that produces the deployment archive at
+// {{.zip_path}}.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, {{quote .build_cmd}}).Run()
+	return err
+}
+{{end}}
+// deploy uploads the archive, publishes a version, and shifts the alias
+// to it, recording the prior version for rollback. When artifact-bucket
+// is set the archive is staged through S3 first; otherwise it is
+// uploaded inline.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	prev, err := lambda.DeployZip(ctx, lambda.ZipDeployConfig{
+		FunctionName:   {{quote .function_name}},
+		ZipPath:        {{quote .zip_path}},
+		ArtifactBucket: {{quote .artifact_bucket}},
+		Alias:          {{quote .alias}},
+		Region:         {{quote .region}},
+		AWSProfile:     {{quote .aws_profile}},
+	})
+	if err != nil {
+		return err
+	}
+	p.prevVersion = prev
+	return nil
+}
+{{- end}}
+{{- if .health_url}}
+
+// rollback runs when deploy or its verify probe fails. It shifts the
+// alias back only on a definitive failure. If the probe could not even
+// determine health (unreachable, timeout, auth -- probe.Indeterminate),
+// that is not evidence the new version is bad, so shifting the alias
+// back would revert a possibly-healthy deploy; it surfaces the error
+// instead.
+func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
+	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
+		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the alias in place; investigate", f.Err)
+		return f.Err
+	}
+	sparkwing.Warn(ctx, "deploy failed at %s stage - shifting alias %s back", f.Stage, {{quote .alias}})
+	return lambda.Rollback(ctx, lambda.RollbackConfig{
+		FunctionName: {{quote .function_name}},
+		Alias:        {{quote .alias}},
+		Version:      p.prevVersion,
+		Region:       {{quote .region}},
+		AWSProfile:   {{quote .aws_profile}},
+	})
+}
+{{- end}}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}

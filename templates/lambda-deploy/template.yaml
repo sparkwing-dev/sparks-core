@@ -1,0 +1,100 @@
+name: lambda-deploy
+description: |
+  Deploy an AWS Lambda from either a container image (build + push to
+  ECR) or a zip archive (build with any runtime's packager, staged
+  through S3 for large artifacts). Each deploy updates the function
+  code, publishes an immutable version, and shifts a named alias (e.g.
+  live) to it. An optional post-deploy HTTP probe verifies the new
+  version and rolls the alias back on a definitive failure. One
+  package-type param unifies the image and zip paths, branched at
+  render time so the emitted Plan stays static.
+whenToUse: |
+  AWS Lambda deploys in both packaging modes. Set package-type=image
+  for a container-image function (dependencies exceed the zip limit or
+  you need a custom runtime); package-type=zip (node/python/go/rust)
+  when the bundle fits and you want faster cold starts. Pick over
+  container-deploy-ecs-fargate when the workload is request- or
+  event-driven and should scale to zero, not a long-running container.
+  The GCP source-function twin is cloud-functions-deploy. health-url is
+  optional because many Lambdas have no HTTP surface.
+prerequisite: |
+  An existing Lambda function and the alias named by `alias` (created
+  out of band by the function's infrastructure). For package-type=image,
+  a Dockerfile at the repo root and a Docker daemon; for package-type=zip,
+  a `build-cmd` that produces the archive at `zip-path`.
+parameters:
+  - name: function-name
+    type: string
+    required: true
+    description: Lambda function name to update
+  - name: package-type
+    type: string
+    default: zip
+    description: >-
+      Deploy path: image (build + push ECR, update --image-uri) or zip
+      (build + package, update code). Branched at render time.
+  - name: image
+    type: string
+    default: ""
+    description: Image name (package-type=image, e.g. myfunc)
+  - name: ecr
+    type: string
+    default: ""
+    description: ECR registry URL Lambda pulls the image from (package-type=image)
+  - name: build-cmd
+    type: string
+    default: ""
+    description: >-
+      Command producing the deployment zip at zip-path (package-type=zip,
+      e.g. `npm ci && npm run bundle`, `GOOS=linux go build`). Empty
+      disables the build node.
+  - name: zip-path
+    type: string
+    default: function.zip
+    description: Path to the zip build-cmd produces, relative to the repo root (package-type=zip)
+  - name: artifact-bucket
+    type: string
+    default: ""
+    description: >-
+      S3 bucket to stage the zip through (required for zips above the
+      direct-upload limit); empty updates code directly with --zip-file
+      (package-type=zip)
+  - name: alias
+    type: string
+    default: live
+    description: Alias shifted to the freshly published version; what your trigger invokes
+  - name: health-url
+    type: string
+    default: ""
+    description: >-
+      Optional function URL / API Gateway URL the post-deploy probe
+      checks; empty skips verification and alias rollback
+  - name: region
+    type: string
+    default: us-west-2
+    description: AWS region of the function
+  - name: aws-profile
+    type: string
+    default: ""
+    description: AWS profile for local runs; empty resolves via AWS_PROFILE or IRSA
+  - name: pipeline-name
+    type: string
+    default: build-deploy
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: test-cmd
+    type: string
+    default: ""
+    description: Optional pre-build/pre-package test command; empty disables the test node.
+applicability:
+  cloud: [aws]
+  category: serverless-function-deploy
+verify: dry-runnable
+verify_fixture: none
+verify_params:
+  function-name: example-function
+  package-type: zip
+  build-cmd: echo packaging function
+  test-cmd: echo running tests
+  zip-path: function.zip
+  alias: live
+  region: us-west-2
