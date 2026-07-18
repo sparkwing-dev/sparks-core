@@ -24,3 +24,6 @@ parameters:
 applicability:
   cloud: [aws, gcp]
   category: build-only
+verify: compile-only
+verify_params:
+  artifact-bucket: example-verify-bucket

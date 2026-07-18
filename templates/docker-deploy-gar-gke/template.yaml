@@ -42,3 +42,11 @@ parameters:
 applicability:
   cloud: [gcp]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  gar: us-central1-docker.pkg.dev/example-project/example-repo
+  gitops-repo: git@github.com:example/gitops.git
+  gitops-path: apps/example
+  app-name: example-app
+  namespace: example

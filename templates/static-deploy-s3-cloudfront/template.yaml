@@ -38,3 +38,7 @@ parameters:
 applicability:
   cloud: [aws]
   category: static-site-deploy
+verify: compile-only
+verify_params:
+  bucket: example-verify-bucket
+  distribution: E1234567890ABC

@@ -54,3 +54,9 @@ parameters:
 applicability:
   cloud: [aws]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  namespace: example
+  health-url: https://example.com/healthz
+  app-name: example-app

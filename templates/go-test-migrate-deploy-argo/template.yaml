@@ -61,3 +61,12 @@ parameters:
 applicability:
   cloud: [aws]
   category: docker-deploy
+verify: compile-only
+verify_params:
+  image: example-app
+  ecr: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  gitops-repo: git@github.com:example/gitops.git
+  gitops-path: apps/example
+  app-name: example-app
+  namespace: example
+  health-url: https://example.com/healthz

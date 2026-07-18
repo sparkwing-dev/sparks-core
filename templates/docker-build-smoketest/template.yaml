@@ -36,3 +36,8 @@ prerequisite: A Dockerfile at the configured path (default ./Dockerfile) and a r
 applicability:
   cloud: []
   category: build
+verify: runnable
+verify_fixture: docker
+verify_params:
+  image-tag: sparkwing-verify:local
+  verify-cmd: echo ok

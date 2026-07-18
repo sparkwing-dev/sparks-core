@@ -31,3 +31,9 @@ prerequisite: The Go package named by main-package (default ./cmd/app) plus a go
 applicability:
   cloud: []
   category: build
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  main-package: "."
+  binary-name: app
+  release-dir: dist

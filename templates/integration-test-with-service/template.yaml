@@ -43,3 +43,5 @@ prerequisite: A Go module + tests at ./integration (the default test-cmd) and a 
 applicability:
   cloud: []
   category: ci-hygiene
+verify: runnable
+verify_fixture: docker

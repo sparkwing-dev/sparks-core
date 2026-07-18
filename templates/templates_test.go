@@ -272,6 +272,88 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 	}
 }
 
+// TestList_AllHaveVerificationMetadata enforces the backfill contract:
+// every registered template resolves to a known verification tier and,
+// because the loader validates on read, List() only succeeds when every
+// required parameter has a verify_params sample.
+func TestList_AllHaveVerificationMetadata(t *testing.T) {
+	all, err := List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, tmpl := range all {
+		m := tmpl.Manifest
+		switch m.Tier() {
+		case VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly:
+		default:
+			t.Errorf("%s: unresolved verify tier %q", m.Name, m.Tier())
+		}
+		if strings.TrimSpace(m.Verify) == "" {
+			t.Errorf("%s: verify tier not backfilled (should be explicit, not defaulted)", m.Name)
+		}
+		for _, p := range m.Parameters {
+			if p.Required {
+				if _, ok := m.VerifyParams[p.Name]; !ok {
+					t.Errorf("%s: required param %q missing from verify_params", m.Name, p.Name)
+				}
+			}
+		}
+	}
+}
+
+func TestValidateVerification_RejectsUnknownTier(t *testing.T) {
+	err := validateVerification(Manifest{Name: "x", Verify: "sometimes"})
+	if err == nil || !strings.Contains(err.Error(), "unknown verify") {
+		t.Fatalf("expected unknown-tier error, got %v", err)
+	}
+}
+
+func TestValidateVerification_RejectsUnknownFixture(t *testing.T) {
+	err := validateVerification(Manifest{Name: "x", Verify: VerifyRunnable, VerifyFixture: "podman"})
+	if err == nil || !strings.Contains(err.Error(), "unknown verify_fixture") {
+		t.Fatalf("expected unknown-fixture error, got %v", err)
+	}
+}
+
+func TestValidateVerification_RequiresSampleForRequiredParam(t *testing.T) {
+	m := Manifest{
+		Name:       "x",
+		Verify:     VerifyCompileOnly,
+		Parameters: []Parameter{{Name: "bucket", Required: true}},
+	}
+	err := validateVerification(m)
+	if err == nil || !strings.Contains(err.Error(), "bucket") {
+		t.Fatalf("expected missing-sample error naming bucket, got %v", err)
+	}
+	m.VerifyParams = map[string]string{"bucket": "example-verify-bucket"}
+	if err := validateVerification(m); err != nil {
+		t.Fatalf("expected pass once required param sampled, got %v", err)
+	}
+}
+
+func TestValidateVerification_RejectsUndeclaredSample(t *testing.T) {
+	m := Manifest{
+		Name:         "x",
+		Verify:       VerifyCompileOnly,
+		Parameters:   []Parameter{{Name: "bucket", Required: true}},
+		VerifyParams: map[string]string{"bucket": "b", "typo": "v"},
+	}
+	err := validateVerification(m)
+	if err == nil || !strings.Contains(err.Error(), "typo") {
+		t.Fatalf("expected undeclared-sample error naming typo, got %v", err)
+	}
+}
+
+func TestManifest_TierAndFixtureDefaults(t *testing.T) {
+	var m Manifest
+	if m.Tier() != VerifyCompileOnly {
+		t.Errorf("Tier default = %q, want %q", m.Tier(), VerifyCompileOnly)
+	}
+	if m.Fixture() != FixtureNone {
+		t.Errorf("Fixture default = %q, want %q", m.Fixture(), FixtureNone)
+	}
+}
+
 func TestListNames_StableOrder(t *testing.T) {
 	a := ListNames()
 	b := ListNames()

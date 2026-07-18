@@ -27,3 +27,5 @@ prerequisite: A Go module + tests at the repo root (the default test-cmd runs `g
 applicability:
   cloud: []
   category: ci-hygiene
+verify: runnable
+verify_fixture: go-module

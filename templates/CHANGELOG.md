@@ -20,6 +20,15 @@ multi-module repo conventions).
   probe and automatic gitops revert on failure.
 - `Manifest.whenToUse`: a catalog field answering "which template do I
   pick?", populated on every template.
+- Verification metadata on `Manifest`: `verify` (tier: `runnable` |
+  `dry-runnable` | `compile-only`), `verify_params` (a sample value per
+  parameter), and `verify_fixture` (`none` | `go-module` | `docker`),
+  with `Tier()` / `Fixture()` accessors. Backfilled honestly onto all 14
+  templates. The loader now rejects an unknown tier or fixture, a
+  required parameter with no `verify_params` sample, and a
+  `verify_params` key that names no declared parameter. This drives a
+  registry-wide verification harness that scaffolds, compiles, lints,
+  explains, and (for runnable templates) runs each template.
 
 Both new templates use the sparkwing v0.8.0 `Job.Verify` postcondition
 for the post-deploy health check and a failure-aware `OnFailure` that

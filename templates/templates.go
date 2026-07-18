@@ -73,6 +73,35 @@ type Applicability struct {
 	Category string   `yaml:"category,omitempty" json:"category,omitempty"`
 }
 
+// Verification tiers. A manifest's Verify field records how far the
+// registry verification harness can exercise a scaffold of the
+// template without cloud credentials or live infrastructure.
+const (
+	// VerifyRunnable means the scaffolded pipeline runs green on a
+	// laptop with no cloud credentials (a Docker daemon is permitted).
+	VerifyRunnable = "runnable"
+	// VerifyDryRunnable means a side-effect-free run path exists --
+	// e.g. a preview/plan parameter -- that runs green locally.
+	VerifyDryRunnable = "dry-runnable"
+	// VerifyCompileOnly means the template touches real cloud services,
+	// so the harness can only render, compile, lint, and explain it.
+	VerifyCompileOnly = "compile-only"
+)
+
+// Verification fixtures. A manifest's VerifyFixture field names the
+// scratch-repo scaffolding the harness synthesizes before a run.
+const (
+	// FixtureNone is an empty scratch repo (just the scaffolded pipeline).
+	FixtureNone = "none"
+	// FixtureGoModule is a go.mod plus a trivial buildable package and a
+	// passing test at the scratch repo root, for templates whose steps
+	// run go build / vet / test there.
+	FixtureGoModule = "go-module"
+	// FixtureDocker is the go-module contents plus a Dockerfile, for
+	// templates whose steps build or run a container image.
+	FixtureDocker = "docker"
+)
+
 // Manifest is the parsed template.yaml shape. Name + Description are
 // the only required fields; everything else is opt-in metadata that
 // templates use to communicate constraints.
@@ -91,6 +120,39 @@ type Manifest struct {
 	Prerequisite  string        `yaml:"prerequisite,omitempty" json:"prerequisite,omitempty"`
 	Parameters    []Parameter   `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	Applicability Applicability `yaml:"applicability,omitempty" json:"applicability,omitempty"`
+	// Verify is the verification tier (VerifyRunnable / VerifyDryRunnable
+	// / VerifyCompileOnly) the registry harness applies to a scaffold of
+	// this template. Defaults to VerifyCompileOnly when absent; read it
+	// through Tier() to get the resolved value.
+	Verify string `yaml:"verify,omitempty" json:"verify,omitempty"`
+	// VerifyParams supplies a sample value for each parameter the harness
+	// scaffolds with. Every required parameter must have an entry; values
+	// are safe placeholders (fake bucket names, example.com URLs) chosen
+	// so a render/compile/lint/explain never reaches real infrastructure.
+	VerifyParams map[string]string `yaml:"verify_params,omitempty" json:"verify_params,omitempty"`
+	// VerifyFixture names the scratch-repo scaffolding the harness
+	// synthesizes before a runnable/dry-runnable run (FixtureNone /
+	// FixtureGoModule / FixtureDocker). Ignored for the compile-only
+	// tier. Defaults to FixtureNone; read it through Fixture().
+	VerifyFixture string `yaml:"verify_fixture,omitempty" json:"verify_fixture,omitempty"`
+}
+
+// Tier returns the manifest's verification tier, defaulting to
+// VerifyCompileOnly when the manifest leaves Verify unset.
+func (m Manifest) Tier() string {
+	if m.Verify == "" {
+		return VerifyCompileOnly
+	}
+	return m.Verify
+}
+
+// Fixture returns the manifest's verification fixture, defaulting to
+// FixtureNone when the manifest leaves VerifyFixture unset.
+func (m Manifest) Fixture() string {
+	if m.VerifyFixture == "" {
+		return FixtureNone
+	}
+	return m.VerifyFixture
 }
 
 // Template bundles a manifest with its on-disk artifacts. ReadMe is
@@ -170,7 +232,49 @@ func readManifest(name string) (Manifest, error) {
 	if m.Name != name {
 		return Manifest{}, fmt.Errorf("manifest name %q for %s mismatches directory name", m.Name, name)
 	}
+	if err := validateVerification(m); err != nil {
+		return Manifest{}, err
+	}
 	return m, nil
+}
+
+// validateVerification enforces the verification-metadata contract:
+// the tier must be a known value, the fixture (when set) must be a
+// known value, every required parameter must have a verify_params
+// sample, and verify_params may only reference declared parameters.
+func validateVerification(m Manifest) error {
+	switch m.Tier() {
+	case VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly:
+	default:
+		return fmt.Errorf("manifest for %s: unknown verify %q (want %s|%s|%s)",
+			m.Name, m.Verify, VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly)
+	}
+	switch m.Fixture() {
+	case FixtureNone, FixtureGoModule, FixtureDocker:
+	default:
+		return fmt.Errorf("manifest for %s: unknown verify_fixture %q (want %s|%s|%s)",
+			m.Name, m.VerifyFixture, FixtureNone, FixtureGoModule, FixtureDocker)
+	}
+	declared := map[string]bool{}
+	for _, p := range m.Parameters {
+		declared[p.Name] = true
+		if p.Required {
+			if _, ok := m.VerifyParams[p.Name]; !ok {
+				return fmt.Errorf("manifest for %s: required parameter %q has no verify_params entry", m.Name, p.Name)
+			}
+		}
+	}
+	var unknown []string
+	for k := range m.VerifyParams {
+		if !declared[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return fmt.Errorf("manifest for %s: verify_params references undeclared parameter(s) %v", m.Name, unknown)
+	}
+	return nil
 }
 
 func known(name string) bool {

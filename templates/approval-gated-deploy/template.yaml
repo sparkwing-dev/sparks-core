@@ -28,3 +28,4 @@ parameters:
 applicability:
   cloud: []
   category: deploy
+verify: compile-only

@@ -24,3 +24,5 @@ prerequisite: A Go module at the repo root (gofmt/vet/test run there); scaffoldi
 applicability:
   cloud: []
   category: ci-hygiene
+verify: runnable
+verify_fixture: go-module

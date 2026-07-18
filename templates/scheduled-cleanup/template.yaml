@@ -31,3 +31,5 @@ parameters:
 applicability:
   cloud: []
   category: maintenance
+verify: runnable
+verify_fixture: none

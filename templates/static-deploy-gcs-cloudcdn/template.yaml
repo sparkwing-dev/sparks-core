@@ -33,3 +33,8 @@ parameters:
 applicability:
   cloud: [gcp]
   category: static-site-deploy
+verify: compile-only
+verify_params:
+  bucket: example-verify-bucket
+  url-map: example-cdn-url-map
+  project: example-project
