@@ -1,0 +1,58 @@
+name: cached-test-suite
+description: |
+  Run a test suite as a single .Cache()-keyed Job whose content key is
+  the hash of the source globs. An unchanged tree replays the recorded
+  pass instead of re-running; the first run computes and stores it,
+  every later run on identical content hits. Fully local -- the replay
+  is observable with two `sparkwing run` invocations.
+whenToUse: |
+  Pick when you want an unchanged commit to skip re-executing tests by
+  replaying a stored pass, keyed on file CONTENT (so it hits across
+  branches and rebases whenever the tree matches). Contrast lint-test-go
+  and test-shards, which always re-run the suite. Contrast
+  skip-if-paths-unchanged, which decides via `git diff` against a base
+  ref and skips the node entirely (storing nothing) rather than
+  replaying a typed pass.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: test
+  - name: test-cmd
+    type: string
+    description: Test command run when the content key misses. Language-agnostic.
+    default: go test ./...
+  - name: source-globs
+    type: string
+    description: |
+      Comma list of tracked-file git pathspecs whose combined content
+      hash forms the cache key. A change to any matched file busts the
+      key and re-runs. Blank leaves it hashing every tracked file. A
+      git pathspec like `*.go` matches recursively (root and nested);
+      `**/*.go` would skip root-level files.
+    default: "*.go,go.mod,go.sum"
+  - name: cache-ttl
+    type: string
+    description: |
+      How long a stored pass stays reusable (Go duration). Clamped to
+      the SDK max (840h). Empty uses the SDK default (168h).
+    default: 168h
+  - name: cache-version
+    type: string
+    description: |
+      Salt folded into the key. Bump to invalidate every stored result
+      at once, e.g. after a toolchain upgrade the content hash cannot
+      see.
+    default: v1
+prerequisite: A git repository whose test sources are tracked (the content key is computed with git ls-files + git hash-object over your globs); a Go module + tests at the repo root for the default test-cmd.
+applicability:
+  cloud: []
+  category: caching-skip
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  pipeline-name: test
+  test-cmd: go test ./...
+  source-globs: "*.go,go.mod,go.sum"
+  cache-ttl: 168h
+  cache-version: v1

@@ -1,0 +1,92 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// cached-test-suite`. Edit freely -- nothing here re-runs.
+//
+// Run the test suite as one content-cached job. The cache key is the
+// combined hash of the tracked files matching source-globs, so an
+// unchanged tree replays the recorded pass instead of re-running the
+// suite; the first run on new content computes and stores it.
+package jobs
+
+import (
+	"context"
+	"strings"
+{{- if .cache_ttl }}
+	"time"
+{{- end }}
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/contentkey"
+	"github.com/sparkwing-dev/sparks-core/step"
+)
+{{- if .cache_ttl }}
+
+// {{pascal .pipeline_name}}CacheTTL bounds how long a stored pass stays
+// reusable before the suite re-runs. Parsed once from the cache-ttl
+// parameter; a malformed duration is an authoring error surfaced at
+// process start, the way regexp.MustCompile treats a bad pattern.
+var {{pascal .pipeline_name}}CacheTTL = mustTTL({{quote .cache_ttl}})
+
+func mustTTL(s string) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		panic("cached-test-suite: invalid cache-ttl " + s + ": " + err.Error())
+	}
+	return d
+}
+{{- end }}
+
+// {{pascal .pipeline_name}} runs the test suite as a single content-cached
+// Job. Its cache key is the content hash of the tracked files matching
+// source-globs (salted with cache-version); an identical tree replays
+// the stored pass instead of re-running, and any change to a matched
+// file busts the key and re-runs.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run the test suite as a content-cached job that replays an unchanged tree"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Runs the test suite as one .Cache()-keyed Job. The key is the content hash of the tracked files matching source-globs, so an unchanged tree replays the recorded pass instead of re-running. Change any matched file, or bump cache-version, to bust the key."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run the suite (first run computes and stores the key)", Command: "sparkwing run {{.pipeline_name}}"},
+		{Comment: "Run again on the same tree (replays the stored pass)", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	globs := splitGlobs({{quote .source_globs}})
+	sparkwing.Job(plan, "test", p.test).
+		Cache(contentkey.Salted({{quote .cache_version}}, globs...){{if .cache_ttl}}, sparkwing.TTL({{pascal .pipeline_name}}CacheTTL){{end}})
+	return nil
+}
+
+// test runs the suite when the content key misses. On a cache hit this
+// body never executes -- the orchestrator replays the stored result.
+func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
+	return step.Run(ctx, "test", func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
+		return err
+	})
+}
+
+// splitGlobs turns the comma-separated source-globs parameter into a
+// git pathspec list. Blank entries are dropped; an empty result makes
+// contentkey hash every tracked file.
+func splitGlobs(csv string) []string {
+	var out []string
+	for _, g := range strings.Split(csv, ",") {
+		if g = strings.TrimSpace(g); g != "" {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}
