@@ -69,6 +69,7 @@ applicability:
   category: database
 verify: runnable
 verify_fixture: none
+verify_tools: [docker, pg_dump, psql]
 verify_params:
   pipeline-name: backup-drill
   source-dsn-secret: DATABASE_URL

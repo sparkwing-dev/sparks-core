@@ -132,6 +132,11 @@ const (
 	// a passing test, for templates whose steps run python tooling at
 	// the scratch repo root.
 	FixturePythonModule = "python-module"
+	// FixturePostgres is the go-module contents plus an ephemeral
+	// Postgres the harness provisions, its DSN injected as the
+	// DATABASE_URL secret, for templates that migrate or query a live
+	// database.
+	FixturePostgres = "postgres"
 )
 
 // Manifest is the parsed template.yaml shape. Name + Description are
@@ -165,9 +170,15 @@ type Manifest struct {
 	// VerifyFixture names the scratch-repo scaffolding the harness
 	// synthesizes before a runnable/dry-runnable run (FixtureNone /
 	// FixtureGoModule / FixtureDocker / FixtureNodeModule /
-	// FixturePythonModule). Ignored for the compile-only tier.
-	// Defaults to FixtureNone; read it through Fixture().
+	// FixturePythonModule / FixturePostgres). Ignored for the
+	// compile-only tier. Defaults to FixtureNone; read it through
+	// Fixture().
 	VerifyFixture string `yaml:"verify_fixture,omitempty" json:"verify_fixture,omitempty"`
+	// VerifyTools lists host commands a runnable/dry-runnable run needs
+	// beyond the fixture's own toolchain (e.g. migrate, pg_dump). The
+	// harness skips the run step, staying green, when one is missing;
+	// "docker" means a reachable daemon, not just the binary.
+	VerifyTools []string `yaml:"verify_tools,omitempty" json:"verify_tools,omitempty"`
 }
 
 // Tier returns the manifest's verification tier, defaulting to
@@ -283,11 +294,11 @@ func validateVerification(m Manifest) error {
 			m.Name, m.Verify, VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly)
 	}
 	switch m.Fixture() {
-	case FixtureNone, FixtureGoModule, FixtureDocker, FixtureNodeModule, FixturePythonModule:
+	case FixtureNone, FixtureGoModule, FixtureDocker, FixtureNodeModule, FixturePythonModule, FixturePostgres:
 	default:
-		return fmt.Errorf("manifest for %s: unknown verify_fixture %q (want %s|%s|%s|%s|%s)",
+		return fmt.Errorf("manifest for %s: unknown verify_fixture %q (want %s|%s|%s|%s|%s|%s)",
 			m.Name, m.VerifyFixture, FixtureNone, FixtureGoModule, FixtureDocker,
-			FixtureNodeModule, FixturePythonModule)
+			FixtureNodeModule, FixturePythonModule, FixturePostgres)
 	}
 	declared := map[string]bool{}
 	for _, p := range m.Parameters {

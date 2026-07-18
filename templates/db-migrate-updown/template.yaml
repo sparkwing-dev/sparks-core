@@ -48,7 +48,8 @@ applicability:
   cloud: []
   category: database
 verify: runnable
-verify_fixture: none
+verify_fixture: postgres
+verify_tools: [docker, migrate]
 verify_params:
   pipeline-name: db-migrate
   migrations-dir: db/migrations
