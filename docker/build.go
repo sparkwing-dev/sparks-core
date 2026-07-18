@@ -21,6 +21,13 @@ type BuildConfig struct {
 	Tags       sparkwingDocker.ImageTag
 	AWSProfile string
 	Platform   string
+	// BuildArgs are forwarded as --build-arg K=V (order-independent). Set
+	// PROXY_URL here to route package installs through a dependency proxy.
+	BuildArgs map[string]string
+	// CacheFrom are BuildKit --cache-from specs; see BuildCacheRef.
+	CacheFrom []string
+	// CacheTo are BuildKit --cache-to specs; see BuildCacheRef.
+	CacheTo []string
 }
 
 // ecrLoginOnce ensures each ECR registry is authenticated exactly
@@ -94,11 +101,19 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 		if cfg.Platform != "" {
 			args = append(args, "--platform", cfg.Platform)
 		}
+		args = append(args, buildArgFlags(cfg.BuildArgs)...)
+		for _, c := range cfg.CacheFrom {
+			args = append(args, "--cache-from", c)
+		}
+		for _, c := range cfg.CacheTo {
+			args = append(args, "--cache-to", c)
+		}
 		for _, t := range buildTags {
 			args = append(args, "-t", t)
 		}
 		args = append(args, cfg.Context)
-		return step.Exec(ctx, "docker", args...)
+		_, err := sparkwing.Exec(ctx, "docker", args...).Env(buildKitEnv, "1").Run()
+		return err
 	}); err != nil {
 		return err
 	}

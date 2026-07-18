@@ -9,6 +9,21 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `RegistryLogin(ctx, LoginConfig)` generalizing ECR auth across three
+  registries via `Kind`: `ecr` (AWS), `gar` (GCP `gcloud auth
+  configure-docker`), and `ghcr` (token login from a sparkwing secret,
+  piped on stdin so it stays out of argv). `ECRLogin` is retained as a
+  thin wrapper. Honors `SPARKWING_DRY_RUN` (echoes argv, no exec).
+- `BuildxPublish(ctx, BuildxConfig)` for multi-arch publishes: `docker
+  buildx build --platform ... --push` emitting a single manifest.
+  Forces BuildKit; honors `SPARKWING_DRY_RUN`.
+- `BuildConfig` gains `BuildArgs`, `CacheFrom`, and `CacheTo`;
+  `BuildAndPush` now emits `--build-arg`/`--cache-from`/`--cache-to` and
+  forces `DOCKER_BUILDKIT=1` so BuildKit cache specs are honored.
+- `BuildCacheRef(backend, ref)` resolving `local`/`ecr`/`gar` into the
+  BuildKit `--cache-from` and `--cache-to` spec strings.
+
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 
