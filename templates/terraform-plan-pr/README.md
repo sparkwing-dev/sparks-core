@@ -70,8 +70,10 @@ instead when the gated artifact is a generic deploy rather than Terraform.
 - State-backend access (credentials, backend config) comes from the ambient
   environment. Plan needs read access to state; it never mutates
   infrastructure.
-- The summary counts come from parsing `-no-color` plan output. An empty or
-  providerless root plans green with a zero summary, so a fresh scaffold runs
-  without cloud credentials.
+- The summary counts come from parsing `-no-color` plan output. A minimal
+  providerless root (for example a single `null_resource`) plans green with no
+  cloud credentials, so you can exercise the pipeline before wiring a real
+  backend. An empty directory has no configuration and `terraform plan` errors,
+  so point `tf-dir` at a root that holds at least one `.tf` file.
 - The webhook payload is the Slack incoming-webhook shape. Point
   `notify-webhook` at any endpoint that accepts a `{"text": ...}` JSON body.
