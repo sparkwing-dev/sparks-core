@@ -1,0 +1,142 @@
+// Scaffolded from the cloud-functions-deploy template. Edit freely --
+// nothing here re-runs.
+//
+// A raw-composition DAG: the deploy node shells out to `gcloud functions
+// deploy --gen2` directly, so the orchestration (what deploys, what
+// verifies) is visible and editable. The gcp block resolves the project
+// and the probe block runs the post-deploy health check.
+package jobs
+
+import (
+	"context"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/gcp"
+	"github.com/sparkwing-dev/sparks-core/probe"
+	"github.com/sparkwing-dev/sparks-core/step"
+)
+
+// {{pascal .pipeline_name}} deploys the 2nd-gen Cloud Function {{.function}}
+// from source: Google's buildpacks build and deploy it server-side, no
+// Dockerfile. For an http trigger a health probe verifies the function URL
+// after the rollout; for a Pub/Sub or GCS trigger there is no URL to probe,
+// so the verify step is a no-op. Cloud Functions has no traffic-shifting
+// rollback primitive, so recovery is a redeploy from the prior source
+// revision (see the README).
+type {{pascal .pipeline_name}} struct {
+	sparkwing.Base
+	// url is the function URL resolved after an http-trigger deploy; the
+	// Verify probe reads it. Empty for a non-http trigger and under
+	// SPARKWING_DRY_RUN, both of which skip the probe.
+	url string
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	sparkwing.Job(plan, "deploy", p.deploy).
+		Verify(p.verify)
+	return nil
+}
+
+// deploy rolls the source tree out to the Cloud Function. Under
+// SPARKWING_DRY_RUN it echoes the exact gcloud argv and returns success
+// without touching GCP. On a real http-trigger deploy it resolves the
+// function URL for the Verify probe.
+func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
+	return step.Run(ctx, "deploy cloud function "+{{quote .function}}, func(ctx context.Context) error {
+		args := functionDeployArgs()
+		if os.Getenv("SPARKWING_DRY_RUN") != "" {
+			sparkwing.Info(ctx, "DRY RUN: gcloud %s", strings.Join(args, " "))
+			return nil
+		}
+		if err := step.Exec(ctx, "gcloud", args...); err != nil {
+			return err
+		}
+		if isHTTPTrigger() {
+			url, err := resolveFunctionURL(ctx)
+			if err != nil {
+				return err
+			}
+			p.url = url
+		}
+		return nil
+	})
+}
+
+// verify probes the freshly deployed function. When no URL was resolved
+// (a non-http trigger, or a dry-run where the deploy only echoed its argv)
+// there is nothing live to probe and the check passes.
+func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
+	if p.url == "" {
+		sparkwing.Info(ctx, "no function URL resolved (non-http trigger or dry-run) - skipping health probe")
+		return nil
+	}
+	return probe.HTTP(p.url+{{quote .health_path}}).Retry(30).Interval(2 * time.Second).Check(ctx)
+}
+
+// functionDeployArgs builds the `gcloud functions deploy ...` argv (without
+// the leading "gcloud"), folding in the trigger flags and the resolved
+// project.
+func functionDeployArgs() []string {
+	args := []string{
+		"functions", "deploy", {{quote .function}},
+		"--gen2",
+		"--runtime", {{quote .runtime}},
+		"--entry-point", {{quote .entry_point}},
+		"--region", {{quote .region}},
+		"--source", {{quote .source_dir}},
+	}
+	args = append(args, functionTriggerArgs()...)
+	args = append(args, gcp.ProjectArgs({{quote .project}})...)
+	return append(args, "--quiet")
+}
+
+// functionTriggerArgs maps the trigger parameter to its gcloud flags:
+// "topic:NAME" -> --trigger-topic, "bucket:NAME" -> --trigger-bucket, and
+// anything else -> --trigger-http (plus --allow-unauthenticated when the
+// allow-unauthenticated parameter is non-empty).
+func functionTriggerArgs() []string {
+	trigger := {{quote .trigger}}
+	switch {
+	case strings.HasPrefix(trigger, "topic:"):
+		return []string{"--trigger-topic", strings.TrimPrefix(trigger, "topic:")}
+	case strings.HasPrefix(trigger, "bucket:"):
+		return []string{"--trigger-bucket", strings.TrimPrefix(trigger, "bucket:")}
+	default:
+		args := []string{"--trigger-http"}
+		if {{quote .allow_unauthenticated}} != "" {
+			args = append(args, "--allow-unauthenticated")
+		}
+		return args
+	}
+}
+
+// isHTTPTrigger reports whether the trigger parameter selects an http
+// endpoint (the only trigger kind with a URL to probe).
+func isHTTPTrigger() bool {
+	trigger := {{quote .trigger}}
+	return !strings.HasPrefix(trigger, "topic:") && !strings.HasPrefix(trigger, "bucket:")
+}
+
+// resolveFunctionURL reads the deployed function's URL with a describe
+// call. It is a state read with no side effect, so it runs for real; the
+// deploy only reaches it on a live (non-dry-run) http-trigger deploy.
+func resolveFunctionURL(ctx context.Context) (string, error) {
+	args := []string{"functions", "describe", {{quote .function}},
+		"--gen2", "--region", {{quote .region}}, "--format=value(url)"}
+	args = append(args, gcp.ProjectArgs({{quote .project}})...)
+	out, err := sparkwing.Exec(ctx, "gcloud", args...).String()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] {
+		return &{{pascal .pipeline_name}}{}
+	})
+}
