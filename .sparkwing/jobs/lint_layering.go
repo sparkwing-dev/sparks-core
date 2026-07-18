@@ -34,7 +34,8 @@ import (
 // on templates as a pure, SDK-free leaf.
 var moduleLayer = map[string]int{
 	"step": 0, "aws": 0, "probe": 0, "templates": 0,
-	"docker": 1, "s3": 1, "kube": 1, "gitops": 1,
+	"contentkey": 0,
+	"docker":     1, "s3": 1, "kube": 1, "gitops": 1,
 	"migrate": 1, "services": 1, "notify": 1, "checks": 1,
 	"deploy": 2, "rollback": 2,
 	"pipelines": 3,
