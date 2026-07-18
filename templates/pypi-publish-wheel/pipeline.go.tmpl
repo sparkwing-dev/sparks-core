@@ -1,0 +1,88 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// pypi-publish-wheel`. Edit freely -- nothing here re-runs.
+//
+// Build a Python sdist and wheel, validate them with `twine check`, and
+// (unless dry-run) upload to a package index with `twine upload`. The
+// version-file gate refuses to publish a version whose git tag already
+// exists. Build and check run locally; the upload honors
+// SPARKWING_DRY_RUN, echoing its argv instead of reaching the index.
+package jobs
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/release"
+)
+
+const (
+	packageDir  = {{quote .package_dir}}
+	repository  = {{quote .repository}}
+	versionFile = {{quote .version_file}}
+	tokenSecret = {{quote .token_secret}}
+)
+
+// {{pascal .pipeline_name}} builds and validates a Python distribution
+// and publishes it to {{.repository}}. The version declared in
+// {{.version_file}} gates the run: a release whose tag already exists is
+// refused before anything builds.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Build, check, and publish a Python wheel + sdist to {{.repository}}"
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	guard := sparkwing.Job(plan, "guard-version", p.guardVersion)
+	build := sparkwing.Job(plan, "build", p.build).Needs(guard)
+{{- if .dry_run}}
+	sparkwing.Job(plan, "twine-check", p.check).Needs(build)
+{{- else}}
+	check := sparkwing.Job(plan, "twine-check", p.check).Needs(build)
+	sparkwing.Job(plan, "upload", p.upload).Needs(check)
+{{- end}}
+	return nil
+}
+
+// guardVersion reads the version declared in the version file and fails
+// the run if a matching git tag already exists, so an already-published
+// version is never re-uploaded.
+func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
+	version, err := release.GuardVersionFile(ctx, release.VersionFileConfig{Path: versionFile})
+	if err != nil {
+		return err
+	}
+	sparkwing.Annotate(ctx, fmt.Sprintf("publishing version %s", version))
+	return nil
+}
+
+// build produces the sdist and wheel with `python -m build`, run in the
+// package directory.
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	_, err := sparkwing.Exec(ctx, "python", "-m", "build").Dir(packageDir).Run()
+	return err
+}
+
+// check validates the built distributions with `twine check` before any
+// upload.
+func (p *{{pascal .pipeline_name}}) check(ctx context.Context) error {
+	_, err := sparkwing.Bash(ctx, "twine check dist/*").Dir(packageDir).Run()
+	return err
+}
+
+// upload publishes the built distributions to the configured repository
+// with `twine upload`, authenticating with the token secret. It honors
+// SPARKWING_DRY_RUN, echoing the argv instead of reaching the index.
+func (p *{{pascal .pipeline_name}}) upload(ctx context.Context) error {
+	return release.PyPIPublish(ctx, release.PyPIPublishConfig{
+		Dir:         packageDir,
+		Repository:  repository,
+		TokenSecret: tokenSecret,
+	})
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

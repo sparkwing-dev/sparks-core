@@ -1,0 +1,61 @@
+name: pypi-publish-wheel
+description: |
+  Build a Python sdist and wheel with `python -m build`, validate them
+  with `twine check`, and upload to PyPI (or TestPyPI) with `twine
+  upload`, gated on the project version being unreleased. Build and check
+  run locally; the upload routes through a block that honors
+  SPARKWING_DRY_RUN, so a scaffold renders and (in a dry run) echoes its
+  argv without reaching a real index.
+whenToUse: |
+  The Python package-registry publish. Pick over github-release-go when
+  consumers install with `pip install your-pkg`, not by downloading a
+  binary. Sibling registry template: npm-publish-package (Node). Set the
+  repository param to testpypi to rehearse against TestPyPI first, then
+  flip it to pypi for the real upload.
+prerequisite: |
+  A Python project at package-dir with a build backend and a
+  project.version declared in the version file (pyproject.toml by
+  default), plus python, the build module, and twine on PATH.
+parameters:
+  - name: pipeline-name
+    type: string
+    required: false
+    default: publish-pypi
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+  - name: package-dir
+    type: string
+    required: false
+    default: "."
+    description: Directory containing pyproject.toml / setup.cfg, relative to the repo root.
+  - name: repository
+    type: string
+    required: false
+    default: testpypi
+    description: "twine repository target: testpypi (safe default) or pypi."
+  - name: version-file
+    type: string
+    required: false
+    default: pyproject.toml
+    description: File whose declared version gates the release (must not already be tagged).
+  - name: token-secret
+    type: string
+    required: false
+    default: PYPI_API_TOKEN
+    description: Name of the sparkwing secret holding the PyPI API token (username __token__).
+  - name: dry-run
+    type: string
+    required: false
+    default: "true"
+    description: When non-empty, the scaffold stops after `twine check` and emits no upload step. Set empty to include the upload.
+applicability:
+  cloud: []
+  category: release-publish
+verify: dry-runnable
+verify_fixture: python-module
+verify_params:
+  pipeline-name: publish-pypi
+  package-dir: "."
+  repository: testpypi
+  version-file: pyproject.toml
+  token-secret: PYPI_API_TOKEN
+  dry-run: ""
