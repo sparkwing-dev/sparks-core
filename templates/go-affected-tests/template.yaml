@@ -1,0 +1,70 @@
+name: go-affected-tests
+description: |
+  Run each listed Go package as its own .Cache()-keyed test job, gated by
+  a node that passes only when every package job passes. Each key is the
+  content hash of that package's files plus its same-module dependency
+  closure (resolved with `go list`), so an unchanged package replays its
+  stored pass while a change re-runs only that package and its dependents.
+  Fully local -- the per-package replay is observable with two
+  `sparkwing run` invocations.
+whenToUse: |
+  Pick for a Go monorepo with many packages when you want each package to
+  replay its own stored pass independently: editing one package re-runs
+  only that package's tests (and the tests of packages that import it),
+  while the rest hit cache. Each key covers the package's files plus its
+  same-module `go list` dependency closure, so a shared library change
+  correctly busts its dependents. Contrast cached-test-suite, a single
+  whole-suite key that busts on ANY matched change (no per-package
+  granularity). Contrast skip-if-paths-unchanged, which git-diffs against
+  a base ref and skips a node outright rather than replaying a typed pass.
+  Contrast test-shards, which splits one suite across parallel runners for
+  wall-clock speed with no caching or skip. You enumerate the packages in
+  the packages parameter; discovery is a static list because Plan stays
+  pure (no runtime `go list` while the DAG is built).
+prerequisite: A git repository with a Go module at the repo root whose test sources are tracked; the cache key runs `go list` + `git hash-object` over each package's dependency closure, and the default packages target a root package plus an `integration/` package.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: test
+  - name: packages
+    type: string
+    description: |
+      Comma list of `go list` package specs (`.`, `./integration`,
+      `./cmd/api`, or an import path), one content-cached test job each.
+      Enumerate the packages you want cached independently; Plan is pure,
+      so this is a static list, not a runtime discovery. The default
+      pairs a root package with an `integration/` package.
+    default: ".,./integration"
+  - name: test-cmd
+    type: string
+    description: |
+      Test command run per package when its key misses. PACKAGE is
+      exported into its environment (the default runs `go test $PACKAGE`);
+      swap it to add flags (`go test -race $PACKAGE`) or another runner.
+    default: go test $PACKAGE
+  - name: extra-key-globs
+    type: string
+    description: |
+      Comma list of extra tracked-file git pathspecs folded into EVERY
+      package's key on top of its dependency closure -- a repo-wide
+      go.mod / go.sum or shared testdata that a package hash cannot see.
+      A change to any busts every package's key.
+    default: "go.mod,go.sum"
+  - name: cache-version
+    type: string
+    description: |
+      Salt folded into every key. Bump to invalidate all stored results
+      at once, e.g. after a toolchain upgrade the content hash cannot see.
+    default: v1
+applicability:
+  cloud: []
+  category: caching-skip
+verify: runnable
+verify_fixture: go-module
+verify_params:
+  pipeline-name: test
+  packages: ".,./integration"
+  test-cmd: go test $PACKAGE
+  extra-key-globs: "go.mod,go.sum"
+  cache-version: v1

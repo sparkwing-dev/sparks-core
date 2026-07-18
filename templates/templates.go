@@ -28,7 +28,7 @@ import (
 // template directory and its files. Consumers that just want the
 // raw bytes (for rendering or diffing) reach for FS directly.
 //
-//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:approval-gated-deploy all:next-build-and-push all:build-publish-binary all:docker-build-smoketest all:lint-test-go all:test-shards all:integration-test-with-service all:scheduled-cleanup all:go-test-build-deploy-k8s all:go-test-migrate-deploy-argo all:container-deploy-ecs-fargate all:docker-deploy-gar-cloudrun all:cloudrun-deploy-source all:gke-deploy-gar-kubectl all:lambda-deploy all:cloud-functions-deploy all:next-preview-deploy-cloudrun all:canary-deploy-k8s all:github-release-go all:npm-publish-package all:pypi-publish-wheel all:container-publish-multiarch all:lint-test-node all:lint-test-python all:test-matrix all:coverage-gated-test all:cached-test-suite all:skip-if-paths-unchanged all:docker-build-layer-cache all:terraform-plan-pr all:terraform-apply-gated all:db-migrate-updown all:db-backup-restore-drill all:scheduled-db-backup
+//go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:approval-gated-deploy all:next-build-and-push all:build-publish-binary all:docker-build-smoketest all:lint-test-go all:test-shards all:integration-test-with-service all:scheduled-cleanup all:go-test-build-deploy-k8s all:go-test-migrate-deploy-argo all:container-deploy-ecs-fargate all:docker-deploy-gar-cloudrun all:cloudrun-deploy-source all:gke-deploy-gar-kubectl all:lambda-deploy all:cloud-functions-deploy all:next-preview-deploy-cloudrun all:canary-deploy-k8s all:github-release-go all:npm-publish-package all:pypi-publish-wheel all:container-publish-multiarch all:lint-test-node all:lint-test-python all:test-matrix all:coverage-gated-test all:cached-test-suite all:skip-if-paths-unchanged all:go-affected-tests all:docker-build-layer-cache all:terraform-plan-pr all:terraform-apply-gated all:db-migrate-updown all:db-backup-restore-drill all:scheduled-db-backup
 var FS embed.FS
 
 // templateNames is the canonical list of templates in this registry.
@@ -68,6 +68,7 @@ var templateNames = []string{
 	"coverage-gated-test",
 	"cached-test-suite",
 	"skip-if-paths-unchanged",
+	"go-affected-tests",
 	"docker-build-layer-cache",
 	"terraform-plan-pr",
 	"terraform-apply-gated",

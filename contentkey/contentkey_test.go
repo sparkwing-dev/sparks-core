@@ -368,6 +368,123 @@ func TestChanged_IsInverseOfUnchanged(t *testing.T) {
 	}
 }
 
+// goModuleRepo builds a two-package git repo module (testmod) where
+// package app imports package lib, plus app's test. It is the minimal
+// shape GoDeps must reason about: a target package, a same-module
+// dependency, and test files.
+func goModuleRepo(t *testing.T) *repo {
+	t.Helper()
+	t.Setenv("GOWORK", "off")
+	r := newRepo(t)
+	r.write("go.mod", "module testmod\n\ngo 1.26\n")
+	r.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"hi\" }\n")
+	r.write("app/app.go", "package app\n\nimport \"testmod/lib\"\n\nfunc Greet() string { return lib.Hello() }\n")
+	r.write("app/app_test.go", "package app\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tif Greet() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
+	r.commitAll("init")
+	return r
+}
+
+func hasPath(paths []string, want string) bool {
+	for _, p := range paths {
+		if p == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGoDeps_IncludesTargetSourceTestsAndSameModuleDeps(t *testing.T) {
+	r := goModuleRepo(t)
+	files, err := GoDeps(context.Background(), r.dir, "./app")
+	if err != nil {
+		t.Fatalf("GoDeps: %v", err)
+	}
+	for _, want := range []string{"app/app.go", "app/app_test.go", "lib/lib.go"} {
+		if !hasPath(files, want) {
+			t.Errorf("GoDeps(./app) missing %q; got %v", want, files)
+		}
+	}
+	if hasPath(files, "go.mod") {
+		t.Errorf("GoDeps must not fold go.mod into the closure (it is not a package file); got %v", files)
+	}
+}
+
+func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
+	r := goModuleRepo(t)
+	r.write("lib/lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) {\n\tif Hello() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
+	r.commitAll("lib test")
+
+	appDeps, err := GoDeps(context.Background(), r.dir, "./app")
+	if err != nil {
+		t.Fatalf("GoDeps(./app): %v", err)
+	}
+	if hasPath(appDeps, "lib/lib_test.go") {
+		t.Errorf("a dependency's test file must not enter the target's closure; got %v", appDeps)
+	}
+
+	libDeps, err := GoDeps(context.Background(), r.dir, "./lib")
+	if err != nil {
+		t.Fatalf("GoDeps(./lib): %v", err)
+	}
+	if !hasPath(libDeps, "lib/lib_test.go") {
+		t.Errorf("a package's own test file must enter its own closure; got %v", libDeps)
+	}
+}
+
+func TestSaltedGoPackage_BustsWhenDependencyChanges(t *testing.T) {
+	r := goModuleRepo(t)
+	sparkwing.SetWorkDir(r.dir)
+	ctx := context.Background()
+
+	before := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if before.IsNoCache() {
+		t.Fatalf("expected a real key, got NoCache")
+	}
+
+	r.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"changed\" }\n")
+	afterDep := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if afterDep == before {
+		t.Fatalf("editing a same-module dependency must bust the package key")
+	}
+}
+
+func TestSaltedGoPackage_UnaffectedByUnrelatedPackage(t *testing.T) {
+	r := goModuleRepo(t)
+	r.write("other/other.go", "package other\n\nfunc Noop() {}\n")
+	r.commitAll("other")
+	sparkwing.SetWorkDir(r.dir)
+	ctx := context.Background()
+
+	before := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	r.write("other/other.go", "package other\n\nfunc Noop() { _ = 1 }\n")
+	after := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if after != before {
+		t.Fatalf("editing a package outside the closure must not change the key")
+	}
+}
+
+func TestSaltedGoPackage_DistinctPerSpec(t *testing.T) {
+	r := goModuleRepo(t)
+	sparkwing.SetWorkDir(r.dir)
+	ctx := context.Background()
+
+	app := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	lib := SaltedGoPackage("v1", "./lib", "go.mod")(ctx)
+	if app == lib {
+		t.Fatalf("distinct package specs must yield distinct keys: %q", app)
+	}
+}
+
+func TestOfGoPackage_NoCacheOutsideModule(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	sparkwing.SetWorkDir(dir)
+	key := OfGoPackage("./app")(context.Background())
+	if !key.IsNoCache() {
+		t.Fatalf("outside a Go module OfGoPackage should yield NoCache, got %q", key)
+	}
+}
+
 func TestOfPaths_NoCacheOutsideRepo(t *testing.T) {
 	dir := t.TempDir()
 	sparkwing.SetWorkDir(dir)

@@ -9,6 +9,21 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `OfGoPackage` / `SaltedGoPackage` fold the content hash of a Go
+  package's same-module dependency closure into a `sparkwing.CacheKey`
+  for a node's `.Cache` modifier, so editing the package or any
+  same-module package it imports busts the key while an unrelated edit
+  does not. `SaltedGoPackage` adds a caller salt and always folds the
+  package spec in, so two packages never replay one another's result.
+- `GoDeps` returns the repo-relative Go source files in a package's
+  same-module dependency closure (its own source, test, and embedded
+  files, plus the non-test source of every same-module package it
+  transitively imports), resolved with `go list -deps -test`. Paths are
+  git pathspecs suitable for `OfPaths` / `Salted`. Files are made
+  relative to the module root `go list` reports, so resolution is stable
+  regardless of how the OS resolves symlinks in the checkout path.
+
 ## [v0.1.0] - 2026-07-18
 
 ### Added

@@ -22,7 +22,7 @@ Or read them directly here: each template is a directory containing a
 
 ## Templates
 
-38 templates. The verify column is the tier the registry harness
+39 templates. The verify column is the tier the registry harness
 holds each template to on every sparkwing release: runnable templates run
 green locally, dry-runnable templates run green with SPARKWING_DRY_RUN=1
 and touch no infrastructure, compile-only templates are rendered, compiled,
@@ -62,6 +62,7 @@ linted, and explained.
 | [coverage-gated-test](coverage-gated-test/) | any | testing-strategies | runnable | Run a test suite that emits a coverage report, then a Verify postcond... |
 | [cached-test-suite](cached-test-suite/) | any | caching-skip | runnable | Run a test suite as a single .Cache()-keyed Job whose content key is ... |
 | [skip-if-paths-unchanged](skip-if-paths-unchanged/) | any | caching-skip | runnable | A CI job guarded by .SkipIf(contentkey.Unchanged(base, paths...)): it... |
+| [go-affected-tests](go-affected-tests/) | any | caching-skip | runnable | Run each listed Go package as its own .Cache()-keyed test job, gated ... |
 | [docker-build-layer-cache](docker-build-layer-cache/) | aws,gcp | caching-skip | runnable | Build a Docker image with BuildKit layer caching wired for reuse acro... |
 | [terraform-plan-pr](terraform-plan-pr/) | aws,gcp | terraform | dry-runnable | Run terraform init + terraform plan against a Terraform root and surf... |
 | [terraform-apply-gated](terraform-apply-gated/) | aws,gcp | terraform | compile-only | terraform plan -> human approval gate -> terraform apply |

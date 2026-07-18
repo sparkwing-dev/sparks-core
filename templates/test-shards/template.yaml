@@ -12,7 +12,9 @@ whenToUse: |
   worked example of JobFanOut + an all-pass gate. For a single unsharded
   CI-hygiene gate use lint-test-go. To run the suite across a version or
   OS matrix (rather than splitting one suite) use test-matrix; to fail the
-  build under a coverage threshold use coverage-gated-test.
+  build under a coverage threshold use coverage-gated-test. To cache each
+  package's result independently (replay unchanged packages instead of
+  spreading one suite for speed) use go-affected-tests.
 parameters:
   - name: pipeline-name
     type: string

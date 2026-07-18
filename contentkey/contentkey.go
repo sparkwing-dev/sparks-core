@@ -31,10 +31,14 @@ package contentkey
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
@@ -113,6 +117,167 @@ func Changed(baseRef string, globs ...string) func(ctx context.Context) bool {
 	return func(ctx context.Context) bool {
 		return !unchanged(ctx)
 	}
+}
+
+// OfGoPackage returns a cache-key function over the same-module
+// dependency closure of the Go package matching spec, plus any extra git
+// pathspecs (a repo-wide go.mod / go.sum, shared testdata). Editing the
+// package, or any package in the same module it transitively imports,
+// busts the key; editing an unrelated package does not. It is [OfPaths]
+// scoped to one package's real dependency footprint via `go list`, the
+// building block for per-package test caching in a monorepo.
+//
+//	job.Cache(contentkey.OfGoPackage("./integration", "go.mod", "go.sum"))
+//
+// spec is a `go list` package pattern that resolves to a single package
+// (`.`, `./integration`, or a full import path). The returned function
+// reads git and go state and returns [sparkwing.NoCache] (running
+// uncached) when the closure cannot be resolved, e.g. outside a Go
+// module or when the `go` tool is unavailable.
+func OfGoPackage(spec string, extraGlobs ...string) func(ctx context.Context) sparkwing.CacheKey {
+	return SaltedGoPackage("", spec, extraGlobs...)
+}
+
+// SaltedGoPackage is [OfGoPackage] with a caller-supplied salt folded
+// into the key, like [Salted]. spec is always folded in as well, so two
+// packages sharing a salt never replay one another's stored result even
+// if their file closures happen to coincide.
+//
+//	job.Cache(contentkey.SaltedGoPackage("v2", "./integration", "go.mod"))
+func SaltedGoPackage(salt, spec string, extraGlobs ...string) func(ctx context.Context) sparkwing.CacheKey {
+	return func(ctx context.Context) sparkwing.CacheKey {
+		dir := workDir()
+		files, err := GoDeps(ctx, dir, spec)
+		if err != nil {
+			sparkwing.Warn(ctx, "contentkey: resolving go deps of %q failed, running uncached: %v", spec, err)
+			return sparkwing.NoCache
+		}
+		paths := make([]string, 0, len(files)+len(extraGlobs))
+		paths = append(paths, files...)
+		paths = append(paths, extraGlobs...)
+		key, err := contentKey(ctx, dir, salt+"\x00gopkg="+spec, paths)
+		if err != nil {
+			sparkwing.Warn(ctx, "contentkey: hashing go deps of %q failed, running uncached: %v", spec, err)
+			return sparkwing.NoCache
+		}
+		return key
+	}
+}
+
+// GoDeps returns the repo-relative Go source files in the same-module
+// dependency closure of the package matching spec: the package's own
+// source, test, and embedded files, plus the non-test source of every
+// same-module package it transitively imports (test-only imports
+// included). Standard-library packages and files outside the main module
+// are excluded. Paths are repo-relative git pathspecs suitable for
+// [OfPaths] / [Salted]; they are resolved with `go list`, so an edit to
+// the package or a dependency changes the set while an unrelated edit
+// does not.
+//
+// spec is a `go list` package pattern resolving to a single package.
+// GoDeps requires the `go` tool and a module rooted at dir; a `go list`
+// failure (no module, unresolved import) is returned as an error.
+func GoDeps(ctx context.Context, dir, spec string) ([]string, error) {
+	pkgs, err := goListDeps(ctx, dir, spec)
+	if err != nil {
+		return nil, err
+	}
+	root := mainModuleDir(pkgs)
+	if root == "" {
+		return nil, nil
+	}
+	set := map[string]struct{}{}
+	for _, p := range pkgs {
+		if p.Standard || p.Dir == "" || p.Module == nil || !p.Module.Main {
+			continue
+		}
+		files := make([]string, 0, len(p.GoFiles)+len(p.CgoFiles)+len(p.EmbedFiles))
+		files = append(files, p.GoFiles...)
+		files = append(files, p.CgoFiles...)
+		files = append(files, p.EmbedFiles...)
+		if !p.DepOnly {
+			files = append(files, p.TestGoFiles...)
+			files = append(files, p.XTestGoFiles...)
+			files = append(files, p.TestEmbedFiles...)
+			files = append(files, p.XTestEmbedFiles...)
+		}
+		for _, f := range files {
+			if filepath.IsAbs(f) {
+				continue
+			}
+			rel, err := filepath.Rel(root, filepath.Join(p.Dir, f))
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				continue
+			}
+			set[filepath.ToSlash(rel)] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// mainModuleDir returns the directory of the module being built, taken
+// from any package `go list` marks as belonging to the main module. It
+// is the base for repo-relative paths: because it and every package Dir
+// come from the same `go list` run, filepath.Rel between them is stable
+// regardless of how the OS resolves symlinks in the checkout path.
+func mainModuleDir(pkgs []goListPackage) string {
+	for _, p := range pkgs {
+		if p.Module != nil && p.Module.Main && p.Module.Dir != "" {
+			return p.Module.Dir
+		}
+	}
+	return ""
+}
+
+// goListPackage is the subset of `go list -json` fields GoDeps reads.
+type goListPackage struct {
+	Dir             string
+	Standard        bool
+	DepOnly         bool
+	Module          *goListModule
+	GoFiles         []string
+	CgoFiles        []string
+	EmbedFiles      []string
+	TestGoFiles     []string
+	XTestGoFiles    []string
+	TestEmbedFiles  []string
+	XTestEmbedFiles []string
+}
+
+// goListModule is the subset of a `go list -json` Module object GoDeps
+// reads: Main marks the package as belonging to the module being built
+// (how the closure is scoped to intra-repo dependencies), and Dir is the
+// module root the returned paths are made relative to.
+type goListModule struct {
+	Main bool
+	Dir  string
+}
+
+// goListDeps runs `go list -deps -test -json spec` in dir and decodes the
+// concatenated JSON object stream it prints (one object per package).
+func goListDeps(ctx context.Context, dir, spec string) ([]goListPackage, error) {
+	res, err := sparkwing.Exec(ctx, "go", "list", "-deps", "-test", "-json", spec).Dir(dir).Capture()
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(strings.NewReader(res.Stdout))
+	var pkgs []goListPackage
+	for {
+		var p goListPackage
+		if err := dec.Decode(&p); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("decode go list output: %w", err)
+		}
+		pkgs = append(pkgs, p)
+	}
+	return pkgs, nil
 }
 
 func workDir() string {

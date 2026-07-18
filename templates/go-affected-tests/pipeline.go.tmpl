@@ -1,0 +1,134 @@
+// Code scaffolded by `sparkwing pipeline new --template
+// go-affected-tests`. Edit freely -- nothing here re-runs.
+//
+// Run each listed Go package as its own content-cached test job, gated
+// by a node that passes only when every package job passes. Each job's
+// cache key is the content hash of that package's files plus its
+// same-module dependency closure (resolved with `go list`), so editing
+// one package re-runs only that package's tests and the tests of
+// packages that depend on it, while the rest replay their stored pass.
+package jobs
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/sparkwing-dev/sparks-core/contentkey"
+	"github.com/sparkwing-dev/sparkwing/sparkwing"
+)
+
+const (
+	{{pascal .pipeline_name}}TestCmd       = {{quote .test_cmd}}
+	{{pascal .pipeline_name}}Packages      = {{quote .packages}}
+	{{pascal .pipeline_name}}ExtraKeyGlobs = {{quote .extra_key_globs}}
+	{{pascal .pipeline_name}}CacheVersion  = {{quote .cache_version}}
+)
+
+// {{pascal .pipeline_name}} fans one content-cached test job out per
+// package listed in Packages, then a gate node depends on the whole
+// group so the run succeeds only when every package job passed.
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
+
+func ({{pascal .pipeline_name}}) ShortHelp() string {
+	return "Run each Go package as its own content-cached test job, gated on all passing"
+}
+
+func ({{pascal .pipeline_name}}) Help() string {
+	return "Runs each package listed in the packages parameter as a separate .Cache()-keyed test job. Each key is the content hash of that package's own files plus its same-module dependency closure (via go list), salted with the pipeline name, cache-version, and test command, so an unchanged package replays its stored pass while a change re-runs only that package and its dependents. A gate node needs the whole group, so the run is green only when every package passed."
+}
+
+func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
+	return []sparkwing.Example{
+		{Comment: "Run every package's tests (first run computes each key)", Command: "sparkwing run {{.pipeline_name}}"},
+		{Comment: "Run again after editing one package (only its job re-runs)", Command: "sparkwing run {{.pipeline_name}}"},
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
+	specs := splitList({{pascal .pipeline_name}}Packages)
+	if len(specs) == 0 {
+		return fmt.Errorf("{{.pipeline_name}}: packages parameter lists no Go package to test")
+	}
+	globs := splitList({{pascal .pipeline_name}}ExtraKeyGlobs)
+	salt := {{quote .pipeline_name}} + "\x00" + {{pascal .pipeline_name}}CacheVersion + "\x00" + {{pascal .pipeline_name}}TestCmd
+	seen := map[string]bool{}
+	deps := make([]sparkwing.Dep, 0, len(specs))
+	for _, spec := range specs {
+		id := uniqueID("test-"+shortName(spec), seen)
+		node := sparkwing.Job(plan, id, testPackage(spec)).
+			Cache(contentkey.SaltedGoPackage(salt, spec, globs...))
+		deps = append(deps, node)
+	}
+	sparkwing.Job(plan, "gate", p.gate).Needs(deps...)
+	return nil
+}
+
+// testPackage runs {{.test_cmd}} for one package, exporting PACKAGE so
+// the command can target it. On a cache hit this body never executes --
+// the orchestrator replays the stored pass.
+func testPackage(spec string) func(context.Context) error {
+	return func(ctx context.Context) error {
+		_, err := sparkwing.Bash(ctx, {{pascal .pipeline_name}}TestCmd).Env("PACKAGE", spec).Run()
+		return err
+	}
+}
+
+func (p *{{pascal .pipeline_name}}) gate(ctx context.Context) error {
+	sparkwing.Info(ctx, "all package test jobs passed")
+	return nil
+}
+
+// splitList turns a comma-separated parameter into a trimmed,
+// blank-dropped slice. Shared by the package list and the extra-key
+// globs.
+func splitList(csv string) []string {
+	var out []string
+	for _, s := range strings.Split(csv, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// shortName derives a stable, DAG-safe job suffix from a `go list`
+// package spec: `.` becomes "root", `./integration` becomes
+// "integration", `./cmd/api` becomes "cmd-api".
+func shortName(spec string) string {
+	s := strings.TrimPrefix(spec, "./")
+	s = strings.TrimSuffix(s, "/...")
+	s = strings.Trim(s, "/")
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r - 'A' + 'a')
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "root"
+	}
+	return out
+}
+
+// uniqueID returns base, or base-2, base-3, ... when a prior spec already
+// claimed it, so two specs that sanitize to the same short name still get
+// distinct node IDs.
+func uniqueID(base string, seen map[string]bool) string {
+	id := base
+	for n := 2; seen[id]; n++ {
+		id = fmt.Sprintf("%s-%d", base, n)
+	}
+	seen[id] = true
+	return id
+}
+
+func init() {
+	sparkwing.Register[sparkwing.NoInputs]({{quote .pipeline_name}}, func() sparkwing.Pipeline[sparkwing.NoInputs] { return &{{pascal .pipeline_name}}{} })
+}

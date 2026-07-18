@@ -9,6 +9,17 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `go-affected-tests` template (category `caching-skip`, verify
+  `runnable`): fans one content-cached test job out per listed Go
+  package, each keyed on that package's files plus its same-module
+  `go list` dependency closure, so editing one package re-runs only that
+  package and its dependents while the rest replay their stored pass. It
+  fills the per-package-granularity gap between `cached-test-suite` (a
+  single whole-suite key) and `test-shards` (parallel split, no cache);
+  the `whenToUse` of `cached-test-suite`, `skip-if-paths-unchanged`, and
+  `test-shards` now cross-reference it.
+
 ## [v0.27.0] - 2026-07-18
 
 ### Added

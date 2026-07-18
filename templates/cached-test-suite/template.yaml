@@ -14,7 +14,11 @@ whenToUse: |
   ref and skips the node entirely (storing nothing) rather than
   replaying a typed pass. Contrast docker-build-layer-cache, which caches
   Docker image layers within a single build; this replays a whole job's
-  recorded output rather than image layers.
+  recorded output rather than image layers. Contrast go-affected-tests,
+  which keys each Go package separately (its files plus its `go list`
+  dependency closure) so one package's change re-runs only that package;
+  use this single whole-suite key when you do not need per-package
+  granularity.
 parameters:
   - name: pipeline-name
     type: string

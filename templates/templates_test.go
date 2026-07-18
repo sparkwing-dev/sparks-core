@@ -72,6 +72,31 @@ func TestRender_GoTestBuildDeployK8s_TestCmdEmpty(t *testing.T) {
 	}
 }
 
+func TestRender_GoAffectedTests_Substitutes(t *testing.T) {
+	out, err := Render("go-affected-tests", map[string]string{
+		"pipeline-name":   "affected",
+		"packages":        "./api,./worker",
+		"test-cmd":        "go test -race $PACKAGE",
+		"extra-key-globs": "go.mod,go.sum",
+		"cache-version":   "v3",
+	})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	for _, want := range []string{
+		`type Affected struct`,
+		`"./api,./worker"`,
+		`"go test -race $PACKAGE"`,
+		`"v3"`,
+		`contentkey.SaltedGoPackage`,
+		`sparkwing.Register`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Render: missing %q in output\n--- output ---\n%s", want, out)
+		}
+	}
+}
+
 func TestGet_UnknownReturnsErrNotExist(t *testing.T) {
 	_, err := Get("does-not-exist")
 	if err == nil {
@@ -238,6 +263,9 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 			"artifact-bucket": "test-artifacts",
 		}},
 		{"lint-test-go", map[string]string{}},
+		{"go-affected-tests", map[string]string{
+			"packages": "./api,./worker",
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -11,9 +11,11 @@ whenToUse: |
   skip the whole suite on a docs-only PR. Contrast cached-test-suite,
   which replays a stored result on identical file CONTENT; use this for a
   zero-cost `git diff` skip against a moving base. Contrast lint-test-go
-  and test-shards, which always re-run with no skip notion. For a whole
-  polyglot monorepo, replicate this guard per component job (one
-  contentkey.Unchanged predicate per subtree).
+  and test-shards, which always re-run with no skip notion. Contrast
+  go-affected-tests, which replays a stored per-package pass keyed on the
+  package's `go list` dependency closure rather than skipping via a base
+  ref. For a whole polyglot monorepo, replicate this guard per component
+  job (one contentkey.Unchanged predicate per subtree).
 prerequisite: A git repo with at least one prior commit; the base-ref must resolve for the diff to run (a missing base fails safe and runs the job).
 parameters:
   - name: pipeline-name
