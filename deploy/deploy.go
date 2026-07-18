@@ -41,24 +41,11 @@ type Config struct {
 // env var set by sparkwing, not on whether the code is running inside a
 // cluster. Laptop deploys to prod go through gitops.
 func Run(ctx context.Context, cfg Config) error {
-	// SPARKWING_KIND_CLUSTER flips deploys into local-kubectl mode
-	// without requiring each consumer pipeline to set cfg.Local
-	// manually. sparkwing sets this env var when --on resolves to a kind
-	// profile, so any pipeline running against a kind cluster lands
-	// here even if the pipeline was written for a prod-only gitops
-	// flow.
 	if !cfg.Local && os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
 		kindCluster := os.Getenv("SPARKWING_KIND_CLUSTER")
-		// Prefer the repo-owned kind manifests at $WORKDIR/k8s/ if
-		// present. Those manifests reference short image names and a
-		// kustomization.yaml whose image transformer we patch with
-		// the current tag. Fall back to rollout restart for repos
-		// that haven't added a k8s/ dir yet.
 		kustDir := filepath.Join(sparkwing.WorkDir(), "k8s")
 		if _, err := os.Stat(filepath.Join(kustDir, "kustomization.yaml")); err == nil {
 			sparkwing.Info(ctx, "deploy: kind (%s) -> kustomize apply (%s)", kindCluster, kustDir)
-			// For kind we use DeployTag (no -prod suffix); consumer
-			// pipelines typically pass ProdTag, so strip here.
 			tag := strings.TrimSuffix(cfg.Tag, "-prod")
 			return kube.DeployKindKustomize(ctx, kube.KindKustomizeConfig{
 				Cluster:      kindCluster,

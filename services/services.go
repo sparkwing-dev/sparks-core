@@ -79,8 +79,7 @@ func With(ctx context.Context, spec Spec, fn func(ctx context.Context, hostPort 
 		if err := step.Exec(ctx, "docker", runArgs...); err != nil {
 			return err
 		}
-		// Teardown survives a cancelled run ctx so a timeout/interrupt
-		// doesn't leak the container.
+		// safety: teardown must run even when the run ctx is cancelled, or the container leaks.
 		defer func() {
 			cleanupCtx := context.WithoutCancel(ctx)
 			if rmErr := step.Exec(cleanupCtx, "docker", "rm", "-f", spec.Name); rmErr != nil {

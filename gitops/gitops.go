@@ -57,10 +57,6 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 		cfg.CommitMsg = "deploy: " + cfg.Tag
 	}
 
-	// Pre-deploy authorization: phone home to the controller if one
-	// is configured. Logs the request for audit and (for scoped
-	// tokens) enforces environment restrictions. Skipped with
-	// SPARKWING_NO_VERIFY=1 as a break-glass.
 	if err := authorizeDeployWithController(ctx, cfg); err != nil {
 		return false, err
 	}
@@ -70,11 +66,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 		_ = os.RemoveAll(tmpDir)
 		defer func() { _ = os.RemoveAll(tmpDir) }()
 
-		// Set GIT_SSH_COMMAND for this Deploy invocation. Clone routes
-		// through gitcache when available; the SSH key is needed for the
-		// SSH fallback path and for the final push when no GITHUB_TOKEN
-		// PAT is present. Process-env set is safe here: gitops.Deploy is
-		// not reentrant against itself.
+		// safety: gitops.Deploy is not reentrant, so mutating process-wide SSH env here is race-free.
 		restoreSSH := setSSHEnv(ctx)
 		defer restoreSSH()
 
@@ -82,10 +74,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 			return err
 		}
 
-		// Set origin to GitHub (both fetch and push) so retries fetch
-		// from the real upstream, not from gitcache which may be a
-		// few seconds behind. The initial clone from gitcache is
-		// purely for speed.
+		// hack: re-point origin to GitHub after the gitcache clone so retries fetch upstream, not a stale cache.
 		if pushRemote := pushTransport(ctx, cfg.GitopsRepo); pushRemote != "" {
 			if err := step.Exec(ctx, "git", "-C", tmpDir, "remote", "set-url", "origin", pushRemote); err != nil {
 				return err
@@ -194,9 +183,7 @@ func patchYAMLValue(ctx context.Context, content, key, newValue string) string {
 	rest := content[afterName:]
 	valueNeedle := "value: "
 	valueIdx := strings.Index(rest, valueNeedle)
-	// value: should be on the very next line, not 200 chars away --
-	// guards against matching the wrong pair in files where multiple
-	// "name: X" keys sit near each other.
+	// hack: cap the value: search to 200 chars so a far-off "name:" pair can't be matched by mistake.
 	if valueIdx == -1 || valueIdx > 200 {
 		sparkwing.Info(ctx, "warning: no value: found after name: %s", key)
 		return content
@@ -228,7 +215,7 @@ func pushTransport(ctx context.Context, sshURL string) string {
 	}
 	if sshCommandValue() != "" {
 		sparkwing.Info(ctx, "gitops push via SSH")
-		return "" // keep origin as cloned (SSH URL)
+		return ""
 	}
 	return ""
 }
@@ -334,8 +321,6 @@ func argocdConfig(ctx context.Context) (server, token string) {
 	token = os.Getenv("SPARKWING_ARGOCD_TOKEN")
 
 	if server == "" {
-		// In-cluster: ArgoCD server is reachable via k8s service. The
-		// server runs in insecure mode (HTTP).
 		server = "http://argocd-server.argocd.svc.cluster.local:80"
 		client := &http.Client{Timeout: 3 * time.Second}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, server+"/api/version", nil)
@@ -528,9 +513,6 @@ func authorizeDeployWithController(ctx context.Context, cfg DeployConfig) error 
 
 	params := url.Values{}
 	params.Set("pipeline", os.Getenv("SPARKWING_PIPELINE"))
-	// Send the git commit SHA for branch verification, not the image
-	// tag. The image tag contains content hashes that aren't git
-	// commits.
 	commit := os.Getenv("SPARKWING_COMMIT")
 	if commit == "" {
 		commit = cfg.Tag

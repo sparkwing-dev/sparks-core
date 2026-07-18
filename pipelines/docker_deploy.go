@@ -133,9 +133,6 @@ func (d *DockerDeploy) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Always gitops for DockerDeploy; the deploy package re-routes to
-	// kind-kustomize or kubectl when SPARKWING_KIND_CLUSTER / Local is
-	// set, so this single call covers every environment.
 	sparkwing.Info(ctx, "==> deploy app=%s ns=%s", d.AppName, d.Namespace)
 	return deploy.Run(ctx, deploy.Config{
 		GitopsRepo: d.GitopsRepo,

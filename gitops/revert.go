@@ -57,7 +57,7 @@ func Revert(ctx context.Context, cfg RevertConfig) (changed bool, err error) {
 		restoreSSH := setSSHEnv(ctx)
 		defer restoreSSH()
 
-		// Full clone: git revert needs the reverted commit's parent.
+		// safety: full clone required -- git revert needs the reverted commit's parent.
 		if err := sparkwingGit.Clone(ctx, cfg.GitopsRepo, tmpDir); err != nil {
 			return err
 		}

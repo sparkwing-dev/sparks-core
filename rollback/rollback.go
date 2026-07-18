@@ -61,10 +61,6 @@ type Config struct {
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Local || os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
 		sparkwing.Info(ctx, "rollback: local/kind -> kubectl rollout undo (ns=%s)", cfg.Namespace)
-		// Context resolves via kube.ResolveContext (explicit Context,
-		// SPARKWING_KUBE_CONTEXT, kind-<SPARKWING_KIND_CLUSTER>, or
-		// in-cluster) and fails closed -- so the rollback targets the same
-		// cluster the deploy did, never the current kubeconfig context.
 		return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
 			Deployments: cfg.Deployments,
 			Namespace:   cfg.Namespace,

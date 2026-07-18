@@ -16,9 +16,6 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 	work := t.TempDir()
 	t.Setenv("SPARKWING_WORK_DIR", work)
 
-	// BuildCmd writes the value of NEXT_EXPORT to a sentinel file. If
-	// BuildExtraEnv wasn't propagated the file ends up empty, which
-	// is the bug.
 	sentinel := filepath.Join(work, "env-seen.txt")
 	sd := &StaticDeploy{
 		BuildCmd: `printf '%s' "$NEXT_EXPORT" > ` + sentinel,
@@ -48,16 +45,12 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 // fails before S3 sync `--delete`s the live chunks.
 func TestVerifyHTMLChunkRefs_FailsOnMissingChunk(t *testing.T) {
 	out := t.TempDir()
-	// Stale HTML from a prior export-mode build, pointing at a chunk
-	// the current build did not emit.
 	html := `<!doctype html><html><body>` +
 		`<script src="/_next/static/chunks/main-OLDHASH.js"></script>` +
 		`</body></html>`
 	if err := os.WriteFile(filepath.Join(out, "index.html"), []byte(html), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// New build emitted a chunk with a different content hash; the
-	// HTML reference doesn't match anything on disk.
 	chunksDir := filepath.Join(out, "_next", "static", "chunks")
 	if err := os.MkdirAll(chunksDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -132,7 +125,7 @@ func TestVerifyHTMLChunkRefs_ScansNestedRouteHTML(t *testing.T) {
 
 func TestExtractStaticRefs_DedupesAndScopes(t *testing.T) {
 	html := `<script src="/_next/static/chunks/a.js"></script>` +
-		`<script src="/_next/static/chunks/a.js"></script>` + // dup
+		`<script src="/_next/static/chunks/a.js"></script>` +
 		`<link href="/_next/static/css/x.css">` +
 		`<a href="/about">route -- should be ignored</a>` +
 		`<a href="https://cdn.example.com/foo.js">external -- ignored</a>`

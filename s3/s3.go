@@ -65,9 +65,7 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 		return res, fmt.Errorf("s3: AWSProfile required")
 	}
 	profileArgs := aws.ProfileArgs(cfg.AWSProfile)
-	// Excludes get re-applied on every sync pass; if they only
-	// landed on one pass, --delete on the other pass would wipe the
-	// excluded prefix.
+	// safety: excludes must apply to every pass, or --delete on another pass wipes the excluded prefix.
 	excludeArgs := make([]string, 0, 2*len(cfg.Excludes))
 	for _, ex := range cfg.Excludes {
 		excludeArgs = append(excludeArgs, "--exclude", ex)
@@ -77,10 +75,6 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	fileCount := countFiles(cfg.OutDir)
 	sparkwing.Info(ctx, "syncing %d files from %s/ -> s3://%s", fileCount, cfg.OutDir, cfg.Bucket)
 
-	// Assets (JS, CSS, images) - immutable, long-lived cache.
-	// `aws s3 sync` is reliable here because bundlers fingerprint
-	// asset filenames by content, so any content change yields a new
-	// filename that sync uploads unconditionally.
 	assetArgs := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 	assetArgs = append(assetArgs, profileArgs...)
 	if cfg.Delete {
@@ -98,22 +92,7 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	}
 	res.AssetUploads = countUploads(assetRes.Stdout)
 
-	// HTML uploads use `aws s3 cp --recursive` rather than
-	// `aws s3 sync` because HTML filenames are stable across builds
-	// (e.g. /projects/foo/index.html). `sync` decides whether to
-	// upload by comparing local mtime + size against S3, and both
-	// signals can lie in a containerized build:
-	//   - mtime: build caches (Next.js .next/cache, restored
-	//     volumes) can preserve the prior build's mtimes even when
-	//     content was regenerated;
-	//   - size: HTML often differs by a single chunk-hash filename
-	//     swap whose old/new lengths happen to match.
-	// When both signals match, `sync` silently skips the HTML pass
-	// while the asset pass `--delete`s the chunks the live HTML
-	// still references -- the ISS-034 failure mode. `cp --recursive`
-	// uploads unconditionally, eliminating the comparison entirely.
-	// Cost is negligible: HTML is small text, headers are
-	// `no-cache`, and the deploy already invalidates CloudFront.
+	// hack: cp --recursive, not sync -- sync's mtime/size compare can skip changed HTML in cached builds, stranding chunk refs.
 	htmlArgs := []string{"s3", "cp", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 	htmlArgs = append(htmlArgs, profileArgs...)
 	htmlArgs = append(
@@ -130,11 +109,6 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	}
 	res.HTMLUploads = countUploads(htmlUploadRes.Stdout)
 
-	// Second HTML pass: sync only for `--delete` semantics, so HTML
-	// pages removed from the build also get pruned from S3. Uploads
-	// are no-ops here because `cp` above just refreshed every
-	// object's S3 mtime to "now", which is newer than any local
-	// file. Skipped entirely when Delete is false.
 	if cfg.Delete {
 		htmlSyncArgs := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 		htmlSyncArgs = append(htmlSyncArgs, profileArgs...)

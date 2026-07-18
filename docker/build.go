@@ -77,9 +77,6 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 	}
 
 	pushTags := make([]string, 0, len(cfg.Registries))
-	// Local tags: only the content-addressed DeployTag. The former
-	// "image:latest" local alias was dropped in the floating-tag
-	// retirement sweep.
 	buildTags := []string{
 		cfg.Image + ":" + cfg.Tags.DeployTag(),
 	}
@@ -91,8 +88,6 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 			primary = fmt.Sprintf("%s/%s:%s", reg, cfg.Image, cfg.Tags.DeployTag())
 		}
 		pushTags = append(pushTags, primary)
-		// Remote build tag: primary (ProdTag/DeployTag) only; no :latest
-		// alias -- the SDK stopped pushing floating tags to registries.
 		buildTags = append(buildTags, primary)
 	}
 

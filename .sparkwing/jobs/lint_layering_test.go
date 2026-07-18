@@ -11,20 +11,20 @@ func TestLayeringViolation(t *testing.T) {
 		imp    string
 		bad    bool
 	}{
-		{"docker", "github.com/sparkwing-dev/sparks-core/step", false},   // downward, ok
-		{"docker", "github.com/sparkwing-dev/sparks-core/aws", false},    // downward (1->0), ok
-		{"step", "github.com/sparkwing-dev/sparks-core/docker", true},    // upward (0->1)
-		{"docker", "github.com/sparkwing-dev/sparks-core/kube", true},    // sideways (1->1)
-		{"kube", "github.com/sparkwing-dev/sparks-core/pipelines", true}, // upward (1->3)
+		{"docker", "github.com/sparkwing-dev/sparks-core/step", false},
+		{"docker", "github.com/sparkwing-dev/sparks-core/aws", false},
+		{"step", "github.com/sparkwing-dev/sparks-core/docker", true},
+		{"docker", "github.com/sparkwing-dev/sparks-core/kube", true},
+		{"kube", "github.com/sparkwing-dev/sparks-core/pipelines", true},
 		{"pipelines", "github.com/sparkwing-dev/sparks-core/deploy", false},
 		{"deploy", "github.com/sparkwing-dev/sparks-core/kube", false},
-		{"docker", "github.com/sparkwing-dev/sparkwing/sparkwing", false}, // blocks may use the SDK
+		{"docker", "github.com/sparkwing-dev/sparkwing/sparkwing", false},
 		{"docker", "fmt", false},
-		{"templates", "github.com/sparkwing-dev/sparkwing/sparkwing", true}, // templates must be SDK-free
+		{"templates", "github.com/sparkwing-dev/sparkwing/sparkwing", true},
 		{"templates", "github.com/sparkwing-dev/sparkwing/sparkwing/docker", true},
 		{"templates", "go.yaml.in/yaml/v3", false},
-		{"templates", "github.com/sparkwing-dev/sparks-core/docker", true}, // layer 0 can't import any sparks-core
-		{".sparkwing", "github.com/sparkwing-dev/sparks-core/kube", false}, // unlayered module: skipped
+		{"templates", "github.com/sparkwing-dev/sparks-core/docker", true},
+		{".sparkwing", "github.com/sparkwing-dev/sparks-core/kube", false},
 	}
 	for _, tc := range cases {
 		got := layeringViolation(tc.module, tc.imp) != ""

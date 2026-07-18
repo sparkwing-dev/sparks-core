@@ -97,16 +97,7 @@ func (j *ReleaseModulesJob) tagNames() ([]string, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse spark.json: %w", err)
 	}
-	// Tag only sub-modules, never the parent path. A `vX.Y.Z` tag at
-	// the repo root would expose `github.com/sparkwing-dev/sparks-core`
-	// as a real module on proxy.golang.org, which trips Go's
-	// matching-version heuristic during `go get sparks-core/<sub>@vX`:
-	// Go fetches the parent at the same version and adds it to the
-	// build list, after which iterated `go get` of additional
-	// sub-modules misroutes them as sub-packages of the umbrella zip
-	// (which excludes nested-module dirs by design). Sub-module tags
-	// alone are everything consumers need; humans can still reference
-	// the family version via release notes or any one sub-module tag.
+	// safety: tag sub-modules only -- a vX.Y.Z tag at the repo root exposes the umbrella as a module and misroutes iterated go get.
 	var tags []string
 	for _, mod := range m.Modules {
 		tags = append(tags, mod.Path+"/"+j.In.Version)
