@@ -1,0 +1,79 @@
+name: db-backup-restore-drill
+description: |
+  Disaster-recovery drill: dump the source database, restore that dump
+  into a throwaway ephemeral instance, and run a verification query
+  against the restore to prove the backup is actually usable. Reports
+  pass/fail through an optional webhook. Intended to run on a schedule.
+  Needs only a Docker daemon plus the engine's dump/restore host tools;
+  no cloud or cluster.
+whenToUse: |
+  Reach for this to continuously prove your backups restore -- catching
+  silent backup corruption or a broken dump before a real outage, not
+  during one. Distinct from scheduled-db-backup, which only produces and
+  ships a dump: this one restores it and verifies. A snapshot-then-migrate
+  safety net is a documentable composition of the migrate template plus
+  this template's dbbackup block, not a reason to pick this. For an
+  integration suite that needs a live database use
+  integration-test-with-service.
+parameters:
+  - name: pipeline-name
+    type: string
+    description: Pipeline registration name -- the verb users type after `sparkwing run`.
+    default: backup-drill
+  - name: source-dsn-secret
+    type: string
+    description: |
+      Name of the sparkwing secret holding the source database DSN to
+      back up. When the secret is not configured the drill stands up an
+      ephemeral seeded source instead, so it runs with no setup.
+    default: DATABASE_URL
+  - name: engine
+    type: string
+    description: "Database engine: 'postgres' (pg_dump/psql) or 'mysql' (mysqldump/mysql)."
+    default: postgres
+  - name: backup-dest
+    type: string
+    description: |
+      Where the dump is written before it is restored: a local dir,
+      s3://bucket/prefix, or gs://bucket/prefix. Empty uses a run-local
+      temp dir that is removed afterward.
+    default: ""
+  - name: verify-query
+    type: string
+    description: |
+      SQL run against the restored database; a non-error result passes
+      the drill. Set a real row-count or smoke assertion for confidence.
+    default: SELECT 1
+  - name: schedule
+    type: string
+    description: |
+      Cron expression for the intended schedule. Informational here
+      (shown in help); add it to sparkwing.yaml under `on: schedule:` to
+      actually trigger -- see the template README.
+    default: "0 6 * * *"
+  - name: notify-webhook
+    type: string
+    description: |
+      Optional webhook URL posted the drill result (pass or fail) as JSON.
+      Empty skips the notification.
+    default: ""
+prerequisite: |
+  A Docker daemon plus the engine's dump/restore client binaries on PATH
+  (pg_dump + psql for postgres, mysqldump + mysql for mysql). Set the
+  source-dsn-secret to drill a real database; leave it unconfigured to
+  drill an ephemeral seeded Postgres.
+applicability:
+  cloud:
+    - aws
+    - gcp
+  category: database
+verify: runnable
+verify_fixture: none
+verify_params:
+  pipeline-name: backup-drill
+  source-dsn-secret: DATABASE_URL
+  engine: postgres
+  backup-dest: ""
+  verify-query: SELECT 1
+  schedule: "0 6 * * *"
+  notify-webhook: ""
