@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial release. Parses total coverage from three report formats
   behind one `Report{Format, Path}` type: Go coverprofiles (the

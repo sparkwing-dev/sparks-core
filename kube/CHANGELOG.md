@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-07-18
+
 ### Added
 - `Apply` runs a raw `kubectl apply` against one or more manifest paths
   (optionally server-side) and waits on named deployments -- a

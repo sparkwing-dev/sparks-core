@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.27.0] - 2026-07-18
+
 ### Added
 - 24 new templates, growing the registry to 38: container and serverless
   deploys (`container-deploy-ecs-fargate`, `lambda-deploy`,

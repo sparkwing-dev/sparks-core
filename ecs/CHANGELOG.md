@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial release. ECS/Fargate rollout helpers built on the `aws` CLI.
 - `Deploy` describes a task-definition family's current revision,

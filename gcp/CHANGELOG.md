@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial release. gcloud-CLI auth and project helpers, the GCP twin of
   the `aws` module:

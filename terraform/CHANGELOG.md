@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial release. `Plan` runs `terraform init`, optionally selects a
   workspace, then plans to a saved plan file and parses the

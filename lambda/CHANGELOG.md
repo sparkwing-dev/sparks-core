@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial module. AWS Lambda deploy helpers for both packaging types
   behind one surface:

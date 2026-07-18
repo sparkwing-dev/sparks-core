@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial module. Shared release-and-publish helpers behind the
   language-registry publish templates (github-release-go,

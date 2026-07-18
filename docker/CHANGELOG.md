@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-07-18
+
 ### Added
 - `RegistryLogin(ctx, LoginConfig)` generalizing ECR auth across three
   registries via `Kind`: `ecr` (AWS), `gar` (GCP `gcloud auth

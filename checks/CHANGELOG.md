@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-07-18
+
 ### Added
 - `Comments(ctx, paths...)`: gates Go source against the comment policy
   (godoc on declarations plus the `// hack:` / `// safety:` / `// bug:` /

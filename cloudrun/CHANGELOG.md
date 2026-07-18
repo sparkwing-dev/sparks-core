@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-07-18
+
 ### Added
 - Initial release. Cloud Run deploy, traffic, and rollback orchestration
   behind the gcloud CLI, layered over the `gcp` module:
