@@ -153,12 +153,7 @@ func (s *StaticDeploy) Run(ctx context.Context) error {
 		sparkwing.Info(ctx, "==> build (skipped via SkipBuild)")
 	}
 
-	// Cross-check HTML references vs actual chunk files before
-	// touching S3. Catches the export-mode-not-engaged failure mode
-	// where out/*.html still references chunks from a stale prior
-	// build that the current build did not emit (see ISS-034). Fail
-	// here rather than after the asset sync `--delete`s the chunks
-	// the live HTML still points at.
+	// safety: verify chunk refs before the S3 sync -- the asset --delete would otherwise strand HTML that points at missing chunks.
 	if err := verifyHTMLChunkRefs(s.OutDir); err != nil {
 		return err
 	}
@@ -174,13 +169,7 @@ func (s *StaticDeploy) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Defense-in-depth: asset uploads with zero HTML uploads should
-	// be unreachable now that the HTML phase uses `aws s3 cp
-	// --recursive` (unconditional upload of every local HTML file).
-	// If it does fire, it means the AWS CLI returned 0 success but
-	// no `copy:` lines -- a bug in the CLI or shell capture path, not
-	// a build problem. Still worth surfacing so we don't ship a
-	// silent partial deploy.
+	// safety: assets uploaded with zero HTML means the CLI dropped copies -- surface it rather than ship a partial deploy.
 	if syncRes.AssetUploads > 0 && syncRes.HTMLUploads == 0 {
 		sparkwing.Warn(ctx,
 			"%d asset uploads but 0 HTML uploads - unexpected with cp-based HTML phase. "+
@@ -250,9 +239,6 @@ func (s *StaticDeploy) dockerBuild(ctx context.Context) error {
 
 	createArgs := []string{"create", "-w", "/work"}
 
-	// Forward env vars whose names match any configured prefix. We
-	// enumerate the current process env rather than parsing -- simpler
-	// and matches the pre-rewrite sparks pattern.
 	for _, e := range os.Environ() {
 		eq := strings.Index(e, "=")
 		if eq < 0 {
@@ -266,9 +252,6 @@ func (s *StaticDeploy) dockerBuild(ctx context.Context) error {
 	for k, v := range s.BuildExtraEnv {
 		createArgs = append(createArgs, "-e", k+"="+v)
 	}
-	// Mount cache volumes so npm / yarn / go mod / pip work survives
-	// between pipeline runs. Named volumes auto-create on first use
-	// and live on the Docker daemon (DinD PVC in cluster mode).
 	for name, path := range s.BuildCacheVolumes {
 		createArgs = append(createArgs, "-v", name+":"+path)
 	}
@@ -286,11 +269,6 @@ func (s *StaticDeploy) dockerBuild(ctx context.Context) error {
 		return fmt.Errorf("docker create returned empty container id")
 	}
 
-	// Best-effort cleanup: no rollout on intermediate failure (the
-	// container is ephemeral, and the Docker daemon prunes stopped
-	// containers eventually), but we try to remove it explicitly on
-	// happy path + failure paths below so repeated builds don't
-	// accumulate dangling containers on long-lived laptops.
 	defer func() {
 		_, _ = sparkwing.Exec(ctx, "docker", "rm", "-f", containerID).Run()
 	}()
@@ -299,15 +277,9 @@ func (s *StaticDeploy) dockerBuild(ctx context.Context) error {
 		return err
 	}
 	if _, err := sparkwing.Exec(ctx, "docker", "start", "-a", containerID).Run(); err != nil {
-		// Build output already streamed to the pipeline logger via
-		// `docker start -a`'s stdout/stderr; nothing extra to surface.
 		return fmt.Errorf("build failed in %s: %w", s.BuildImage, err)
 	}
-	// `docker cp src dest` nests src under dest when dest exists as a
-	// directory (producing dest/<basename>). A stale OutDir on the host
-	// (e.g. from a prior `bin/deploy.sh` run) would silently turn the
-	// next deploy's S3 keys into `out/<path>` instead of `<path>`.
-	// Wipe first so the cp creates a fresh OutDir.
+	// safety: wipe OutDir first -- docker cp nests src under an existing dir, which would corrupt the S3 key layout.
 	hostOut := filepath.Join(workDir, s.OutDir)
 	if err := os.RemoveAll(hostOut); err != nil {
 		return fmt.Errorf("clean host %s before copy-back: %w", s.OutDir, err)

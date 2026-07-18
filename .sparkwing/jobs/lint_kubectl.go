@@ -27,10 +27,10 @@ const kubectlChokepoint = "kube/context.go"
 // these -- which keeps the scan off the same word in a log line, error
 // message, or comment.
 var execCallees = map[string]bool{
-	"Exec":           true, // step.Exec / sparkwing.Exec (arg-vector)
-	"Bash":           true, // sparkwing.Bash (shell line)
-	"Sh":             true, // step.Sh
-	"Command":        true, // os/exec.Command
+	"Exec":           true,
+	"Bash":           true,
+	"Sh":             true,
+	"Command":        true,
 	"CommandContext": true,
 }
 
@@ -60,7 +60,6 @@ func checkNoRawKubectl(ctx context.Context) error {
 		}
 		lines, err := scanGoForRawKubectl(f, data)
 		if err != nil {
-			// Unparseable Go is gofmt/vet's problem, not ours.
 			continue
 		}
 		for _, ln := range lines {

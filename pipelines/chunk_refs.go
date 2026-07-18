@@ -31,7 +31,6 @@ func verifyHTMLChunkRefs(outDir string) error {
 	if err != nil {
 		return fmt.Errorf("glob html in %s: %w", outDir, err)
 	}
-	// Also check nested route HTML (Next-style out/<route>/index.html).
 	nested, err := filepath.Glob(filepath.Join(outDir, "*", "index.html"))
 	if err != nil {
 		return fmt.Errorf("glob nested html in %s: %w", outDir, err)

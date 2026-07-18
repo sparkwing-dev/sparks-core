@@ -76,10 +76,7 @@ func checkEmDashes(ctx context.Context) error {
 		if err != nil || len(data) == 0 {
 			continue
 		}
-		// Skip binary files: a null byte in the first 8KB
-		// is a strong signal the content isn't prose. Lambda
-		// bootstrap binaries, archives, etc. can contain bytes
-		// that match the em-dash sequence coincidentally.
+		// hack: a null byte in the first 8KB flags binary content to skip -- extensions and MIME aren't reliable here.
 		head := data
 		if len(head) > 8192 {
 			head = head[:8192]
@@ -115,10 +112,7 @@ func checkTrackerIDs(ctx context.Context) error {
 		if err != nil || len(data) == 0 {
 			continue
 		}
-		// Skip binary files: a null byte in the first 8KB
-		// is a strong signal the content isn't prose. Lambda
-		// bootstrap binaries, archives, etc. can contain bytes
-		// that match the em-dash sequence coincidentally.
+		// hack: a null byte in the first 8KB flags binary content to skip -- extensions and MIME aren't reliable here.
 		head := data
 		if len(head) > 8192 {
 			head = head[:8192]

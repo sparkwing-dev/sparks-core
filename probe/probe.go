@@ -195,7 +195,6 @@ func (p *HTTPProbe) once(ctx context.Context, client *http.Client) error {
 	if err != nil {
 		return &probeError{indeterminate: true, msg: "read response body", cause: err}
 	}
-	// Auth failures are about our credentials, not the target's health.
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return &probeError{indeterminate: true, msg: fmt.Sprintf("auth failed: HTTP %d", resp.StatusCode)}
 	}

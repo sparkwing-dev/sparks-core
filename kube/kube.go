@@ -69,12 +69,6 @@ func DeployKindKustomize(ctx context.Context, cfg KindKustomizeConfig) error {
 		if err := kubectl(ctx, kubeCtx, "apply", "-k", cfg.KustomizeDir); err != nil {
 			return err
 		}
-		// Wait for each rolled deployment to report Ready. First-time
-		// apply creates the deployment; kubectl rollout status blocks
-		// until the new ReplicaSet has available replicas. Skip any
-		// image whose deployment isn't in the cluster's manifests --
-		// cfg.Images typically spans every image the pipeline builds
-		// while the kustomization may include only a subset.
 		for _, img := range cfg.Images {
 			deploy, ok := cfg.DeployMap[img]
 			if !ok {
@@ -228,8 +222,6 @@ func DeployKustomize(ctx context.Context, cfg DeployKustomizeConfig) error {
 		homeDir, _ := os.UserHomeDir()
 		kustomizePath := filepath.Join(homeDir, ".sparkwing", "clusters", cfg.Cluster, "k8s", cfg.Namespace, "kustomization.yaml")
 
-		// In-cluster runners use the service account -- no kubeconfig
-		// contexts available, so skip --context there.
 		kubeCtx := ""
 		if !IsRunningInK8s() {
 			kubeCtx = "kind-" + cfg.Cluster

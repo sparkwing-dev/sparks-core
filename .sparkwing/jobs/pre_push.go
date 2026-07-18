@@ -175,8 +175,6 @@ func moduleHasNoPackages(ctx context.Context, dir string) (bool, error) {
 	if out == "" {
 		return true, nil
 	}
-	// `go list` prints "matched no packages" to stderr; with 2>&1 it
-	// lands in stdout. Treat that as the empty signal.
 	if strings.Contains(out, "matched no packages") {
 		return true, nil
 	}

@@ -8,7 +8,7 @@ import (
 func TestRefusePostV0(t *testing.T) {
 	cases := []struct {
 		version string
-		wantErr string // substring; empty = no error
+		wantErr string
 	}{
 		{version: "v0.1.0", wantErr: ""},
 		{version: "v0.6.1", wantErr: ""},

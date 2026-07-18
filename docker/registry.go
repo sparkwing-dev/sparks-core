@@ -36,11 +36,7 @@ func ECRLogin(ctx context.Context, registry, awsProfile string) error {
 		region := ECRRegion(registry)
 		profileFlag := aws.ProfileFlag(awsProfile)
 		sparkwing.Info(ctx, "authenticating with ECR (region=%s)", region)
-		// Pipe is a real bash feature, so this stays as a Bash call;
-		// the dynamic values come through .Env() so the shell expands
-		// them safely. PROFILE_FLAG is intentionally unquoted so its
-		// " --profile <name>" expansion word-splits into two argv
-		// tokens (or vanishes when empty).
+		// hack: PROFILE_FLAG left unquoted so its " --profile <name>" word-splits into argv tokens (or vanishes when empty).
 		if _, err := sparkwing.Bash(
 			ctx,
 			`aws ecr get-login-password --region "$REGION"${PROFILE_FLAG} | docker login --username AWS --password-stdin "$REGISTRY"`,
