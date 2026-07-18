@@ -7,7 +7,10 @@ The rendered pipeline:
 
 1. Runs `npm ci && npm run build` (or `npm install && npm run build`
    on laptops, via `pipelines.NextJSBuild`).
-2. Syncs `out/` to the target GCS bucket via `gsutil rsync -d`.
+2. Syncs `out/` to the target GCS bucket via `gsutil rsync -d`, then
+   stamps per-object cache headers to match the S3 twin: a year-long
+   immutable `Cache-Control` on fingerprinted assets and `no-cache` on
+   HTML.
 3. Issues a Cloud CDN cache invalidation against the configured URL map.
 
 ## When to use
