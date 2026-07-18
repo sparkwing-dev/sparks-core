@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- `Comments(ctx, paths...)`: gates Go source against the comment policy
+  (godoc on declarations plus the `// hack:` / `// safety:` / `// bug:` /
+  `// perf:` tag allowlist; everything else rejected). Paths default to
+  the repo root and resolve relative to `sparkwing.WorkDir()`; pass
+  specific subdirectories to scope the gate.
+
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 

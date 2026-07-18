@@ -10,11 +10,14 @@ import (
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
+
+	"github.com/sparkwing-dev/sparks-core/checks"
 )
 
 // PreCommit gates local commits with fast deterministic checks. The
-// gofmt + go vet pair covers the .sparkwing/ Go module; the two regex
-// sweeps cover the whole tracked tree for em dashes and internal
+// gofmt + go vet pair covers the .sparkwing/ Go module; the comment
+// gate enforces the repo comment policy across the Go source; the two
+// regex sweeps cover the whole tracked tree for em dashes and internal
 // tracker IDs (IMP-, SDK-, LOCAL-, RUN-, ORG-, REG-, TOD-).
 //
 // Wire it to git: declare the `pre_commit:` trigger in pipelines.yaml
@@ -22,11 +25,11 @@ import (
 type PreCommit struct{ sparkwing.Base }
 
 func (PreCommit) ShortHelp() string {
-	return "Fast pre-commit gate: format, vet, em-dash + tracker-ID sweeps"
+	return "Fast pre-commit gate: format, vet, comment policy, em-dash + tracker-ID sweeps"
 }
 
 func (PreCommit) Help() string {
-	return "Runs gofmt and go vet on the .sparkwing/ module, plus two repo-wide regex checks: no em dashes, no internal tracker IDs (IMP-/SDK-/LOCAL-/RUN-/ORG-/REG-/TOD-)."
+	return "Runs gofmt and go vet on the .sparkwing/ module, enforces the repo comment policy on the Go source, plus two repo-wide regex checks: no em dashes, no internal tracker IDs (IMP-/SDK-/LOCAL-/RUN-/ORG-/REG-/TOD-)."
 }
 
 func (PreCommit) Examples() []sparkwing.Example {
@@ -48,6 +51,7 @@ func (p *PreCommit) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.No
 func (p *PreCommit) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	sparkwing.Step(w, "gofmt", runGofmt)
 	sparkwing.Step(w, "vet", runVet)
+	sparkwing.Step(w, "comments", checkComments)
 	sparkwing.Step(w, "em-dashes", checkEmDashes)
 	sparkwing.Step(w, "tracker-ids", checkTrackerIDs)
 	return nil, nil
@@ -55,6 +59,19 @@ func (p *PreCommit) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 
 func runGofmt(ctx context.Context) error {
 	return sparkwing.Bash(ctx, `gofmt -l .sparkwing/`).MustBeEmpty("files need formatting")
+}
+
+// commentGatePaths are the top-level Go trees the comment gate scans.
+//
+// hack: templates/ is omitted while it's mid-rewrite; add "templates" (or drop the arg) once it conforms.
+var commentGatePaths = []string{
+	".sparkwing", "aws", "checks", "deploy", "docker", "gitops",
+	"kube", "migrate", "notify", "pipelines", "probe", "rollback",
+	"s3", "services", "step",
+}
+
+func checkComments(ctx context.Context) error {
+	return checks.Comments(ctx, commentGatePaths...)
 }
 
 func runVet(ctx context.Context) error {
