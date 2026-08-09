@@ -16,8 +16,12 @@ import (
 
 // StaticSiteConfig configures an S3 static site deployment.
 type StaticSiteConfig struct {
-	Bucket     string
-	OutDir     string
+	Bucket string
+	OutDir string
+
+	// AWSProfile is the profile for local runs. Empty falls through
+	// to AWS_PROFILE, or is dropped entirely so the aws CLI uses its
+	// ambient credential chain. See aws.ProfileArgs.
 	AWSProfile string
 
 	// Delete removes files in S3 that no longer exist in OutDir.
@@ -26,7 +30,7 @@ type StaticSiteConfig struct {
 	// asset pass uses `aws s3 sync --delete`; HTML pass always uses
 	// `aws s3 cp --recursive` for upload, then a separate
 	// `aws s3 sync --delete` purely for orphan removal -- see the
-	// comment in DeployStaticSite for why HTML can't use sync for
+	// comment on htmlCopyArgs for why HTML can't use sync for
 	// upload.)
 	Delete bool
 
@@ -61,9 +65,6 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	if cfg.OutDir == "" {
 		cfg.OutDir = "out"
 	}
-	if cfg.AWSProfile == "" {
-		return res, fmt.Errorf("s3: AWSProfile required")
-	}
 	profileArgs := aws.ProfileArgs(cfg.AWSProfile)
 	// safety: excludes must apply to every pass, or --delete on another pass wipes the excluded prefix.
 	excludeArgs := make([]string, 0, 2*len(cfg.Excludes))
@@ -75,51 +76,20 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	fileCount := countFiles(cfg.OutDir)
 	sparkwing.Info(ctx, "syncing %d files from %s/ -> s3://%s", fileCount, cfg.OutDir, cfg.Bucket)
 
-	assetArgs := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
-	assetArgs = append(assetArgs, profileArgs...)
-	if cfg.Delete {
-		assetArgs = append(assetArgs, "--delete")
-	}
-	assetArgs = append(
-		assetArgs,
-		"--cache-control", "public, max-age=31536000, immutable",
-		"--exclude", "*.html",
-	)
-	assetArgs = append(assetArgs, excludeArgs...)
-	assetRes, err := sparkwing.Exec(ctx, "aws", assetArgs...).Run()
+	assetRes, err := sparkwing.Exec(ctx, "aws", assetSyncArgs(cfg, profileArgs, excludeArgs)...).Run()
 	if err != nil {
 		return res, err
 	}
 	res.AssetUploads = countUploads(assetRes.Stdout)
 
-	// hack: cp --recursive, not sync -- sync's mtime/size compare can skip changed HTML in cached builds, stranding chunk refs.
-	htmlArgs := []string{"s3", "cp", cfg.OutDir + "/", "s3://" + cfg.Bucket}
-	htmlArgs = append(htmlArgs, profileArgs...)
-	htmlArgs = append(
-		htmlArgs,
-		"--recursive",
-		"--cache-control", "no-cache, no-store, must-revalidate",
-		"--exclude", "*",
-		"--include", "*.html",
-	)
-	htmlArgs = append(htmlArgs, excludeArgs...)
-	htmlUploadRes, err := sparkwing.Exec(ctx, "aws", htmlArgs...).Run()
+	htmlUploadRes, err := sparkwing.Exec(ctx, "aws", htmlCopyArgs(cfg, profileArgs, excludeArgs)...).Run()
 	if err != nil {
 		return res, err
 	}
 	res.HTMLUploads = countUploads(htmlUploadRes.Stdout)
 
 	if cfg.Delete {
-		htmlSyncArgs := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
-		htmlSyncArgs = append(htmlSyncArgs, profileArgs...)
-		htmlSyncArgs = append(
-			htmlSyncArgs,
-			"--delete",
-			"--exclude", "*",
-			"--include", "*.html",
-		)
-		htmlSyncArgs = append(htmlSyncArgs, excludeArgs...)
-		if _, err := sparkwing.Exec(ctx, "aws", htmlSyncArgs...).Run(); err != nil {
+		if _, err := sparkwing.Exec(ctx, "aws", htmlOrphanSyncArgs(cfg, profileArgs, excludeArgs)...).Run(); err != nil {
 			return res, err
 		}
 	}
@@ -127,6 +97,51 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	sparkwing.Info(ctx, "deployed %d files to s3://%s (assets=%d html=%d)",
 		res.AssetUploads+res.HTMLUploads, cfg.Bucket, res.AssetUploads, res.HTMLUploads)
 	return res, nil
+}
+
+// assetSyncArgs builds the aws argv for the non-HTML asset pass:
+// long-lived immutable cache headers, optional --delete.
+func assetSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
+	args := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
+	args = append(args, profileArgs...)
+	if cfg.Delete {
+		args = append(args, "--delete")
+	}
+	args = append(
+		args,
+		"--cache-control", "public, max-age=31536000, immutable",
+		"--exclude", "*.html",
+	)
+	return append(args, excludeArgs...)
+}
+
+// htmlCopyArgs builds the aws argv for the HTML upload pass.
+// hack: cp --recursive, not sync -- sync's mtime/size compare can skip changed HTML in cached builds, stranding chunk refs.
+func htmlCopyArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
+	args := []string{"s3", "cp", cfg.OutDir + "/", "s3://" + cfg.Bucket}
+	args = append(args, profileArgs...)
+	args = append(
+		args,
+		"--recursive",
+		"--cache-control", "no-cache, no-store, must-revalidate",
+		"--exclude", "*",
+		"--include", "*.html",
+	)
+	return append(args, excludeArgs...)
+}
+
+// htmlOrphanSyncArgs builds the aws argv for the HTML orphan-removal
+// pass that runs only under Delete (upload happens in htmlCopyArgs).
+func htmlOrphanSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
+	args := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
+	args = append(args, profileArgs...)
+	args = append(
+		args,
+		"--delete",
+		"--exclude", "*",
+		"--include", "*.html",
+	)
+	return append(args, excludeArgs...)
 }
 
 // countUploads counts `upload: ...` lines in stdout. Both

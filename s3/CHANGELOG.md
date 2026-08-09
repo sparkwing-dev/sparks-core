@@ -11,6 +11,10 @@ multi-module repo conventions).
 
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
+- `DeployStaticSite` accepts an empty `AWSProfile` instead of erroring
+  with "AWSProfile required": it falls through to `AWS_PROFILE`, or to
+  the aws CLI's ambient credential chain when that is unset too. Takes
+  full effect once the `aws` module pin moves past v0.24.0.
 
 ## [v0.24.0] - 2026-05-21
 

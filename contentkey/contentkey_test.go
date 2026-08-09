@@ -2,10 +2,13 @@ package contentkey
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -30,7 +33,7 @@ func newRepo(t *testing.T) *repo {
 
 func (r *repo) git(args ...string) string {
 	r.t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = r.dir
 	cmd.Env = append(os.Environ(),
 		"GIT_CONFIG_GLOBAL=/dev/null",
@@ -251,6 +254,70 @@ func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	}
 	if after == before {
 		t.Fatalf("deleting a tracked file did not change the key: %q", before)
+	}
+}
+
+// lockDir revokes search permission on a tracked directory so Lstat on
+// paths under it fails with a real non-ENOENT error (EACCES), the same
+// shape as a transient EMFILE/EAGAIN under load.
+func lockDir(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based Lstat failure not constructible on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	if err := os.Chmod(dir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+}
+
+func TestContentKey_StatFailureErrorsInsteadOfChangingKey(t *testing.T) {
+	r := newRepo(t)
+	r.write("locked/a.go", "package p\n")
+	r.write("main.go", "package main\n")
+	r.commitAll("init")
+	globs := []string{"*.go"}
+	before := mustKey(t, r.dir, "", globs)
+
+	locked := filepath.Join(r.dir, "locked")
+	lockDir(t, locked)
+	_, err := contentKey(context.Background(), r.dir, "", globs)
+	if err == nil {
+		t.Fatal("a stat failure that is not a deletion must error, not shrink the key")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("permission failure misclassified as not-exist: %v", err)
+	}
+
+	if err := os.Chmod(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	after := mustKey(t, r.dir, "", globs)
+	if after != before {
+		t.Fatalf("key changed across a transient stat failure: %q != %q", before, after)
+	}
+}
+
+func TestOfPaths_StatFailureRunsUncachedNotDifferentKey(t *testing.T) {
+	r := newRepo(t)
+	r.write("locked/a.go", "package p\n")
+	r.write("main.go", "package main\n")
+	r.commitAll("init")
+	sparkwing.SetWorkDir(r.dir)
+	ctx := context.Background()
+
+	before := OfPaths("*.go")(ctx)
+	if before.IsNoCache() {
+		t.Fatalf("expected a real key before the fault, got %q", before)
+	}
+
+	lockDir(t, filepath.Join(r.dir, "locked"))
+	during := OfPaths("*.go")(ctx)
+	if !during.IsNoCache() {
+		t.Fatalf("stat failure must run uncached, not mint a key: got %q (healthy key %q)", during, before)
 	}
 }
 

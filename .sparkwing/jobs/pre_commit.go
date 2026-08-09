@@ -17,7 +17,7 @@ import (
 // PreCommit gates local commits with fast deterministic checks. The
 // gofmt + go vet pair covers the .sparkwing/ Go module; the comment
 // gate enforces the repo comment policy across the Go source; the two
-// regex sweeps cover the whole tracked tree for em dashes and internal
+// regex sweeps cover the staged change for em dashes and internal
 // tracker IDs (IMP-, SDK-, LOCAL-, RUN-, ORG-, REG-, TOD-).
 //
 // Wire it to git: declare the `pre_commit:` trigger in pipelines.yaml
@@ -29,7 +29,7 @@ func (PreCommit) ShortHelp() string {
 }
 
 func (PreCommit) Help() string {
-	return "Runs gofmt and go vet on the .sparkwing/ module, enforces the repo comment policy on the Go source, plus two repo-wide regex checks: no em dashes, no internal tracker IDs (IMP-/SDK-/LOCAL-/RUN-/ORG-/REG-/TOD-)."
+	return "Runs gofmt and go vet on the .sparkwing/ module, enforces the repo comment policy on the Go source, plus two regex checks over the staged change: no em dashes, no internal tracker IDs (IMP-/SDK-/LOCAL-/RUN-/ORG-/REG-/TOD-). Set SPARKWING_REGEX_SWEEP_ALL=1 to sweep the whole tree for both instead."
 }
 
 func (PreCommit) Examples() []sparkwing.Example {
@@ -149,11 +149,22 @@ func checkTrackerIDs(ctx context.Context) error {
 	return fmt.Errorf("tracker IDs in %d file(s)", len(bad))
 }
 
-// regexCheckFiles returns the tracked-file list filtered for the
-// regex sweeps: tickets/ and archive/ are exempt because historical
-// content is allowed to carry whatever style it was written with.
+// regexCheckFiles returns the file list the regex sweeps judge: the staged
+// change, so a commit is never charged for content it did not touch. Swept
+// whole-tree, these checks refuse a clean commit over history it never went
+// near, and the only way past that is the bypass the gate exists to prevent.
+// Deletions are excluded because there is no content left to read. tickets/
+// and archive/ are exempt because historical content is allowed to carry
+// whatever style it was written with.
+//
+// Set SPARKWING_REGEX_SWEEP_ALL=1 for the whole-tree audit, which is how
+// pre-existing drift gets found without blocking an unrelated commit.
 func regexCheckFiles(ctx context.Context) ([]string, error) {
-	all, err := sparkwing.Bash(ctx, "git ls-files").Lines()
+	list := `git diff --cached --name-only --diff-filter=ACMR`
+	if os.Getenv("SPARKWING_REGEX_SWEEP_ALL") != "" {
+		list = "git ls-files"
+	}
+	all, err := sparkwing.Bash(ctx, list).Lines()
 	if err != nil {
 		return nil, err
 	}

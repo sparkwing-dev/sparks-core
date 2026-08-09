@@ -6,13 +6,11 @@ import (
 	"os"
 )
 
-// DefaultProfile is used when no AWS_PROFILE is set and we are not
-// running under IRSA.
-const DefaultProfile = "default"
-
 // ProfileFlag returns " --profile <name>" for local dev, or "" when
-// running under IRSA (IAM Roles for Service Accounts). The default
-// profile is used when AWS_PROFILE is not set.
+// running under IRSA (IAM Roles for Service Accounts) or when no
+// profile is configured at all (AWS_PROFILE unset and defaultProfile
+// empty). An empty return leaves credential resolution to the aws
+// CLI's own chain: env keys, SSO cache, instance metadata.
 //
 // Prefer ProfileArgs for argv-shaped exec calls (sparkwing.Exec); use
 // ProfileFlag only when splicing into a known-static shell line.
@@ -20,12 +18,17 @@ func ProfileFlag(defaultProfile string) string {
 	if IsIRSA() {
 		return ""
 	}
-	return " --profile " + resolveProfile(defaultProfile)
+	profile := resolveProfile(defaultProfile)
+	if profile == "" {
+		return ""
+	}
+	return " --profile " + profile
 }
 
 // ProfileArgs is the argv-shaped variant of ProfileFlag: returns
-// {"--profile", "<name>"} for local dev, or an empty slice under IRSA.
-// Append into an aws CLI argv directly:
+// {"--profile", "<name>"} for local dev, or an empty slice under IRSA
+// or when no profile is configured at all. Append into an aws CLI
+// argv directly:
 //
 //	args := []string{"s3", "sync", src, dst}
 //	args = append(args, aws.ProfileArgs(cfg.AWSProfile)...)
@@ -34,18 +37,20 @@ func ProfileArgs(defaultProfile string) []string {
 	if IsIRSA() {
 		return nil
 	}
-	return []string{"--profile", resolveProfile(defaultProfile)}
+	profile := resolveProfile(defaultProfile)
+	if profile == "" {
+		return nil
+	}
+	return []string{"--profile", profile}
 }
 
+// resolveProfile prefers AWS_PROFILE over the configured default and
+// returns "" when neither is set.
 func resolveProfile(defaultProfile string) string {
-	if defaultProfile == "" {
-		defaultProfile = DefaultProfile
+	if profile := os.Getenv("AWS_PROFILE"); profile != "" {
+		return profile
 	}
-	profile := os.Getenv("AWS_PROFILE")
-	if profile == "" {
-		profile = defaultProfile
-	}
-	return profile
+	return defaultProfile
 }
 
 // IsIRSA returns true when running with IAM Roles for Service Accounts

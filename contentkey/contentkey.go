@@ -35,6 +35,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -295,7 +296,10 @@ func contentKey(ctx context.Context, dir, salt string, globs []string) (sparkwin
 	if err != nil {
 		return "", err
 	}
-	paths = onDisk(dir, paths)
+	paths, err = onDisk(dir, paths)
+	if err != nil {
+		return "", err
+	}
 	parts := make([]any, 0, len(paths)+2)
 	parts = append(parts, keySchema)
 	if salt != "" {
@@ -328,15 +332,24 @@ func trackedFiles(ctx context.Context, dir string, globs []string) ([]string, er
 // yet staged; hashing such a path errors and would bust the whole key.
 // Dropping it instead lets the deletion register as an ordinary key
 // change (the path's (path, hash) pair disappears) rather than forcing
-// an uncached run.
-func onDisk(dir string, paths []string) []string {
+// an uncached run. Only a confirmed absence drops a path: any other
+// Lstat failure (EACCES, EMFILE under load, ...) is an error, because
+// dropping on a transient fault would mint a different key for
+// identical content and replay the wrong cached result.
+func onDisk(dir string, paths []string) ([]string, error) {
 	kept := paths[:0:0]
 	for _, p := range paths {
-		if _, err := os.Lstat(filepath.Join(dir, p)); err == nil {
+		_, err := os.Lstat(filepath.Join(dir, p))
+		switch {
+		case err == nil:
 			kept = append(kept, p)
+		case errors.Is(err, fs.ErrNotExist):
+			// deleted but still tracked: absence folds into the key
+		default:
+			return nil, fmt.Errorf("stat tracked file: %w", err)
 		}
 	}
-	return kept
+	return kept, nil
 }
 
 // hashObjects returns the git blob hash of each path's working-tree

@@ -9,6 +9,17 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Fixed
+- Empty profile no longer forces `--profile default`: when `AWS_PROFILE`
+  is unset and the configured profile is empty, `ProfileFlag` returns `""`
+  and `ProfileArgs` returns nil, so the aws CLI falls through to its
+  ambient credential chain (env keys, SSO cache, instance metadata).
+  Hosts with no `default` profile previously broke on every call.
+
+### Removed
+- BREAKING: the `DefaultProfile` constant. Nothing falls back to the
+  `default` profile anymore.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed

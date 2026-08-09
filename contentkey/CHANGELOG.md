@@ -9,6 +9,15 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Fixed
+- Cache keys no longer silently drop a tracked path when `Lstat` fails
+  for a reason other than the file being gone (e.g. transient
+  `EMFILE`/`EAGAIN` under load), which produced different keys for
+  identical inputs. Only a confirmed absence (deleted but not yet
+  staged) is dropped; any other stat failure surfaces as an error, so
+  `OfPaths`/`Salted`/`SaltedGoPackage` warn and run uncached instead of
+  replaying the wrong cached result.
+
 ### Added
 - `OfGoPackage` / `SaltedGoPackage` fold the content hash of a Go
   package's same-module dependency closure into a `sparkwing.CacheKey`
