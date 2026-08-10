@@ -9,7 +9,7 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
-## [v0.25.0] - 2026-08-08
+## [v0.25.0] - 2026-08-10
 
 ### Added
 - `Revert` rolls a gitops deployment back by reverting a commit (the
