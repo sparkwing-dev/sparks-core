@@ -39,6 +39,43 @@ Each module has its own `CHANGELOG.md` and is tagged independently
 under the convention `<module>/vMAJOR.MINOR.PATCH` (e.g.
 `pipelines/v0.1.0`).
 
+## How these libraries treat the environment
+
+The same helper runs on a laptop, on a CI runner, and in a pod. The
+environment differs in all three, and it is the one input that never
+appears in the pipeline definition. These rules keep it from deciding
+anything that matters.
+
+**The caller names the target.** Which account, project, cluster,
+registry, or bucket arrives as an argument. A helper does not read it
+from the environment, because a stale `AWS_PROFILE` or an inherited
+kubeconfig would then redirect a deploy without a line of the pipeline
+changing.
+
+**Detect where you are, never what you meant.** `AWS_WEB_IDENTITY_TOKEN_FILE`
+and `KUBERNETES_SERVICE_HOST` are facts about the machine, and reading
+them is fine. A fact may change how a call authenticates. It may not
+change which target the call hits.
+
+**Refuse rather than guess.** A helper that cannot resolve its target
+returns an error naming every place it looked. `kube.ResolveContext` is
+the shape to copy:
+
+> refusing to run kubectl without an explicit context (it would target
+> the current kubeconfig context, which may be the wrong cluster)
+
+**Confirm the identity before a destructive call.** Naming a profile
+pins which credentials get selected, not which account they belong to,
+and under federated auth there is no profile to name. A helper that
+deletes or overwrites checks that the account it reached is the one the
+caller declared.
+
+**`SPARKWING_DRY_RUN` is the exception.** It comes from the environment
+because it can only make a run less destructive. Every helper that
+mutates a cloud honors it.
+
+Modules that do not follow these rules yet are tracked in BW-1727.
+
 ## Consuming a module
 
 ```
