@@ -226,8 +226,6 @@ func TestDeployStaticSite_DryRunWritesNothing(t *testing.T) {
 	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), Delete: true}); err != nil {
 		t.Fatalf("DeployStaticSite: %v", err)
 	}
-	// The stub only creates its log when it is invoked, so an absent
-	// file is the assertion: the CLI never ran.
 	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 		t.Fatalf("dry run still ran the aws CLI: %v", recordedInvocations(t, logPath))
 	}

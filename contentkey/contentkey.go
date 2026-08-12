@@ -344,7 +344,7 @@ func onDisk(dir string, paths []string) ([]string, error) {
 		case err == nil:
 			kept = append(kept, p)
 		case errors.Is(err, fs.ErrNotExist):
-			// deleted but still tracked: absence folds into the key
+			// safety: deleted but still tracked, so absence folds into the key
 		default:
 			return nil, fmt.Errorf("stat tracked file: %w", err)
 		}
