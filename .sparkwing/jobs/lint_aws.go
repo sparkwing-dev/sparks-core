@@ -20,10 +20,25 @@ var awsWordRe = regexp.MustCompile(`\baws\b`)
 
 // awsProfileResolvers are the helpers that make an aws CLI call target an
 // explicit account/profile (or correctly no profile under IRSA). A
-// function that shells aws must reference one of them.
+// function that shells aws must reference one of them, directly or
+// through a local wrapper: resolvesProfileName also accepts any name
+// ending in ProfileArgs or ProfileFlag, which is how ecs and lambda
+// build their argv (regionProfileArgs).
 var awsProfileResolvers = map[string]bool{
 	"ProfileArgs": true,
 	"ProfileFlag": true,
+	// CallerIdentityArgs appends ProfileArgs itself, and is what a
+	// caller runs to confirm the account before a destructive call.
+	"CallerIdentityArgs": true,
+}
+
+// resolvesProfileName reports whether a called function resolves the aws
+// profile, either by being one of awsProfileResolvers or by wrapping one
+// under a name that carries the same suffix.
+func resolvesProfileName(name string) bool {
+	return awsProfileResolvers[name] ||
+		strings.HasSuffix(name, "ProfileArgs") ||
+		strings.HasSuffix(name, "ProfileFlag")
 }
 
 // checkNoRawAWS fails the push if any function shells out to the aws CLI
@@ -87,15 +102,74 @@ func scanGoForRawAWS(filename string, src []byte) ([]int, error) {
 		}
 		var awsLines []int
 		resolvesProfile := false
+		// Helpers take the resolved argv, or the resolved profile flags,
+		// as a []string parameter and thread it down (ecs's rp, lambda's
+		// args). The resolution happened in the caller, so an aws call
+		// whose argv references such a parameter is already targeted.
+		sliceParams := map[string]bool{}
+		for _, field := range fn.Type.Params.List {
+			at, ok := field.Type.(*ast.ArrayType)
+			if !ok {
+				continue
+			}
+			if elt, ok := at.Elt.(*ast.Ident); !ok || elt.Name != "string" {
+				continue
+			}
+			for _, name := range field.Names {
+				sliceParams[name.Name] = true
+			}
+		}
+		// A local built from one of those parameters carries the same
+		// resolution: ecs does args := describeServicesArgs(..., rp)
+		// and then execs args.
+		carries := func(node ast.Node) bool {
+			found := false
+			ast.Inspect(node, func(inner ast.Node) bool {
+				if id, ok := inner.(*ast.Ident); ok && sliceParams[id.Name] {
+					found = true
+				}
+				return true
+			})
+			return found
+		}
+		ast.Inspect(fn, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for _, rhs := range assign.Rhs {
+				if !carries(rhs) {
+					continue
+				}
+				for _, lhs := range assign.Lhs {
+					if id, ok := lhs.(*ast.Ident); ok {
+						sliceParams[id.Name] = true
+					}
+				}
+			}
+			return true
+		})
 		ast.Inspect(fn, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
 				return true
 			}
-			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && awsProfileResolvers[sel.Sel.Name] {
-				resolvesProfile = true
+			switch fn := call.Fun.(type) {
+			case *ast.SelectorExpr:
+				if resolvesProfileName(fn.Sel.Name) {
+					resolvesProfile = true
+				}
+			case *ast.Ident:
+				if resolvesProfileName(fn.Name) {
+					resolvesProfile = true
+				}
 			}
 			if isExecCallee(call.Fun) {
+				for _, arg := range call.Args {
+					if carries(arg) {
+						resolvesProfile = true
+					}
+				}
 				for _, arg := range call.Args {
 					lit, ok := arg.(*ast.BasicLit)
 					if !ok || lit.Kind != token.STRING {

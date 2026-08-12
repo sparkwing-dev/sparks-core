@@ -26,7 +26,7 @@ The middle row is the one to check. The CLI still honors `AWS_PROFILE`,
 so the same profile applies unless environment credentials outrank it,
 which is the precedence boto3 uses.
 
-## Before
+## AWS, before
 
 ```go
 // Empty AWSProfile was an error, so CI had to invent a profile that
@@ -37,7 +37,7 @@ sd := pipelines.StaticDeploy{
 }
 ```
 
-## After
+## AWS, after
 
 ```go
 // A laptop pins the profile it means.
@@ -84,7 +84,7 @@ Both now take what the caller passes. gcloud reads those variables
 itself when no flag is given, so the same project and identity still
 apply, with gcloud's precedence rather than an override.
 
-### Before
+### GCP, before
 
 ```go
 // Identity came from the environment, invisible to the pipeline.
@@ -92,7 +92,7 @@ args = append(args, gcp.ProjectArgs(cfg.Project)...)
 args = append(args, gcp.ImpersonationArgs()...)
 ```
 
-### After
+### GCP, after
 
 ```go
 args = append(args, gcp.ProjectArgs(cfg.Project)...)

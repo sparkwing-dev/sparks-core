@@ -219,8 +219,10 @@ render to parseable Go and carry a non-empty README and `whenToUse`.
 
 The primary path is the CLI:
 
-    sparkwing pipeline templates                     # list the registry + each template's params
-    sparkwing pipeline new --name <name> --template <template> --param k=v ...
+```sh
+sparkwing pipeline templates                     # list the registry + each template's params
+sparkwing pipeline new --name <name> --template <template> --param k=v ...
+```
 
 That scaffolds `.sparkwing/` (if absent), renders the template into
 `.sparkwing/jobs/<name>.go`, and wires the `pipelines.yaml` entry. `--name`
