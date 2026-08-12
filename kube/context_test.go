@@ -29,30 +29,15 @@ func TestResolveContext_InClusterReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestResolveContext_EnvContext(t *testing.T) {
+// The environment cannot name a cluster any more, so a variable left
+// over from another project no longer decides where kubectl points.
+func TestResolveContext_EnvCannotNameACluster(t *testing.T) {
 	clearKubeEnv(t)
 	t.Setenv("SPARKWING_KUBE_CONTEXT", "team-staging")
-	got, err := ResolveContext("")
-	if err != nil || got != "team-staging" {
-		t.Fatalf("ResolveContext = (%q, %v), want (team-staging, nil)", got, err)
-	}
-}
-
-func TestResolveContext_KindCluster(t *testing.T) {
-	clearKubeEnv(t)
 	t.Setenv("SPARKWING_KIND_CLUSTER", "sparktest")
-	got, err := ResolveContext("")
-	if err != nil || got != "kind-sparktest" {
-		t.Fatalf("ResolveContext = (%q, %v), want (kind-sparktest, nil)", got, err)
-	}
-}
-
-func TestResolveContext_AllowCurrentOptIn(t *testing.T) {
-	clearKubeEnv(t)
 	t.Setenv("SPARKWING_KUBE_ALLOW_CURRENT", "1")
-	got, err := ResolveContext("")
-	if err != nil || got != "" {
-		t.Fatalf("ResolveContext allow-current = (%q, %v), want (\"\", nil)", got, err)
+	if _, err := ResolveContext(""); err == nil {
+		t.Fatal("ResolveContext resolved a cluster from the environment, want an error")
 	}
 }
 

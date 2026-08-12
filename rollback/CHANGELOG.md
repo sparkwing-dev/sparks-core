@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Removed
+- **kind:** (Breaking) `SPARKWING_KIND_CLUSTER` from the routing
+  condition in `Run`, which is `cfg.Local` alone now, matching
+  `deploy.Run`.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ### Added
 - Initial release. `Run` reverts the most recent deployment, routing the
   same way as the deploy package: `kubectl rollout undo` on the

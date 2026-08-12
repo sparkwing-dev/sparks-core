@@ -5,9 +5,6 @@ package deploy
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 
@@ -37,29 +34,9 @@ type Config struct {
 //   - Remote (prod): pushes image tags to gitops repo and kicks
 //     ArgoCD.
 //
-// The routing decision is based on cfg.Local and the SPARKWING_KIND_CLUSTER
-// env var set by sparkwing, not on whether the code is running inside a
-// cluster. Laptop deploys to prod go through gitops.
+// The routing decision is cfg.Local, not whether the code is running
+// inside a cluster. Laptop deploys to prod go through gitops.
 func Run(ctx context.Context, cfg Config) error {
-	if !cfg.Local && os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
-		kindCluster := os.Getenv("SPARKWING_KIND_CLUSTER")
-		kustDir := filepath.Join(sparkwing.WorkDir(), "k8s")
-		if _, err := os.Stat(filepath.Join(kustDir, "kustomization.yaml")); err == nil {
-			sparkwing.Info(ctx, "deploy: kind (%s) -> kustomize apply (%s)", kindCluster, kustDir)
-			tag := strings.TrimSuffix(cfg.Tag, "-prod")
-			return kube.DeployKindKustomize(ctx, kube.KindKustomizeConfig{
-				Cluster:      kindCluster,
-				KustomizeDir: kustDir,
-				Images:       cfg.Images,
-				Tag:          tag,
-				DeployMap:    cfg.DeployMap,
-				Namespace:    cfg.Namespace,
-			})
-		}
-		sparkwing.Info(ctx, "deploy: kind (%s) -> kubectl rollout restart (no k8s/ dir)", kindCluster)
-		return kube.DeployKubectl(ctx, cfg.Images, cfg.DeployMap, cfg.Namespace)
-	}
-
 	if cfg.Local {
 		sparkwing.Info(ctx, "deploy: local -> kubectl rollout restart (ns=%s)", cfg.Namespace)
 		return kube.DeployKubectl(ctx, cfg.Images, cfg.DeployMap, cfg.Namespace)

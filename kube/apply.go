@@ -18,9 +18,9 @@ type ApplyConfig struct {
 	Paths []string
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty resolves via ResolveContext
-	// (SPARKWING_KUBE_CONTEXT, kind cluster, in-cluster) and fails closed
-	// rather than silently using the current kubeconfig context.
+	// Context is the kubectl --context. Empty resolves via ResolveContext,
+	// which accepts an in-cluster service account and otherwise fails
+	// closed rather than silently using the current kubeconfig context.
 	Context string
 	// ServerSide applies with --server-side, the safer choice for large
 	// or CRD-heavy manifests.
@@ -125,10 +125,9 @@ type RolloutUndoConfig struct {
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
 	// Context is the kubectl --context, ideally the same one the deploy
-	// used. Empty resolves via ResolveContext (SPARKWING_KUBE_CONTEXT,
-	// kind cluster, in-cluster) and fails closed -- so a rollback never
-	// silently targets a different (e.g. production) cluster than the
-	// deploy did.
+	// used. Empty resolves via ResolveContext, which fails closed unless
+	// the run is in-cluster, so a rollback never silently targets a
+	// different (e.g. production) cluster than the deploy did.
 	Context string
 	// Timeout bounds each rollout-status wait. Defaults to "180s".
 	Timeout string

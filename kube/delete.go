@@ -24,9 +24,9 @@ type DeleteConfig struct {
 	Resources []string
 	// Namespace is the -n target. Defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty resolves via ResolveContext
-	// (SPARKWING_KUBE_CONTEXT, kind cluster, in-cluster) and fails closed
-	// rather than silently using the current kubeconfig context.
+	// Context is the kubectl --context. Empty resolves via ResolveContext,
+	// which accepts an in-cluster service account and otherwise fails
+	// closed rather than silently using the current kubeconfig context.
 	Context string
 	// IgnoreNotFound adds --ignore-not-found so deleting an object that is
 	// already gone is a success, making the teardown idempotent.

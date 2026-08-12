@@ -9,6 +9,14 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Removed
+- **kind:** (Breaking) the `SPARKWING_KIND_CLUSTER` branch in
+  `BuildAndPush`, which replaced the registry push with
+  `kind load docker-image`. An environment variable decided whether an
+  image reached the registry at all.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ## [v0.25.0] - 2026-07-18
 
 ### Added

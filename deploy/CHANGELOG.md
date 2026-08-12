@@ -9,6 +9,14 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Removed
+- **kind:** (Breaking) the `SPARKWING_KIND_CLUSTER` branch in `Run`. It
+  turned a deploy that had declared `Local: false` into a local kind
+  deploy, so the environment could overrule the pipeline about where a
+  release landed. Routing is `cfg.Local` alone now.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 

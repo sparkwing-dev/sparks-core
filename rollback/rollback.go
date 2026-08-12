@@ -23,7 +23,6 @@ package rollback
 
 import (
 	"context"
-	"os"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 
@@ -41,7 +40,7 @@ type Config struct {
 	// Namespace is the kubectl -n target for the local/kind path.
 	Namespace string
 	// Context is the kubectl --context for the local/kind path. Empty
-	// resolves via kube.ResolveContext (SPARKWING_KUBE_CONTEXT, kind
+	// resolves via kube.ResolveContext (explicit, or in-cluster
 	// cluster, in-cluster) and fails closed.
 	Context string
 	// GitopsRepo is the gitops repo SSH URL for the remote path.
@@ -59,8 +58,8 @@ type Config struct {
 // Run rolls back the most recent deployment using the path that matches
 // the environment, mirroring deploy.Run's routing.
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.Local || os.Getenv("SPARKWING_KIND_CLUSTER") != "" {
-		sparkwing.Info(ctx, "rollback: local/kind -> kubectl rollout undo (ns=%s)", cfg.Namespace)
+	if cfg.Local {
+		sparkwing.Info(ctx, "rollback: local -> kubectl rollout undo (ns=%s)", cfg.Namespace)
 		return kube.RolloutUndo(ctx, kube.RolloutUndoConfig{
 			Deployments: cfg.Deployments,
 			Namespace:   cfg.Namespace,

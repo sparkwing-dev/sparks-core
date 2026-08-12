@@ -9,6 +9,21 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+- **context:** (Breaking) `ResolveContext` no longer reads
+  `SPARKWING_KUBE_CONTEXT`, `SPARKWING_KIND_CLUSTER`, or
+  `SPARKWING_KUBE_ALLOW_CURRENT`. It resolves an explicit context, or an
+  in-cluster service account, and otherwise fails closed. Which cluster
+  a command targets is the caller's to state, and a variable left over
+  from another project could point kubectl somewhere else.
+
+  Migration: set the `Context` field on the config you pass. In-cluster
+  runs are unaffected. `SPARKWING_KUBE_ALLOW_CURRENT` has no
+  replacement, because "use whatever kubeconfig is active" is the
+  failure this package exists to prevent.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ## [v0.25.0] - 2026-07-18
 
 ### Added

@@ -49,16 +49,14 @@ func dryRunEnabled(ctx context.Context) bool {
 //  1. explicit -- a Context passed by the caller wins.
 //  2. in-cluster -- when running inside a pod, the service account is
 //     used and no --context is needed (returns "", nil).
-//  3. SPARKWING_KUBE_CONTEXT -- the "configure once" knob: set it once
-//     (env, runner config, pipeline env) and every kube call honors it.
-//  4. kind-<SPARKWING_KIND_CLUSTER> -- convenience for local kind runs.
-//  5. SPARKWING_KUBE_ALLOW_CURRENT=1 -- explicit opt-in to the current
-//     context (returns "", nil). The escape hatch for "I really do mean
-//     whatever kubeconfig is active".
-//  6. otherwise -- an error. No silent current-context fallthrough.
+//  3. otherwise -- an error. No silent current-context fallthrough.
 //
-// An empty return string means "run kubectl without --context" (cases 2
-// and 5); a non-empty string is passed as --context.
+// Which cluster a command targets is the caller's to state, so nothing
+// here reads it from the environment. Case 2 is a fact about the
+// machine rather than a choice, which is why it stays.
+//
+// An empty return string means "run kubectl without --context" (case
+// 2); a non-empty string is passed as --context.
 func ResolveContext(explicit string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
@@ -66,19 +64,9 @@ func ResolveContext(explicit string) (string, error) {
 	if IsRunningInK8s() {
 		return "", nil
 	}
-	if c := os.Getenv("SPARKWING_KUBE_CONTEXT"); c != "" {
-		return c, nil
-	}
-	if kc := os.Getenv("SPARKWING_KIND_CLUSTER"); kc != "" {
-		return "kind-" + kc, nil
-	}
-	if os.Getenv("SPARKWING_KUBE_ALLOW_CURRENT") == "1" {
-		return "", nil
-	}
 	return "", fmt.Errorf("kube: refusing to run kubectl without an explicit context " +
 		"(it would target the current kubeconfig context, which may be the wrong cluster). " +
-		"Set the Context field, or SPARKWING_KUBE_CONTEXT, or SPARKWING_KIND_CLUSTER; " +
-		"set SPARKWING_KUBE_ALLOW_CURRENT=1 to deliberately use the current context")
+		"Set the Context field on the config you are passing")
 }
 
 // contextArgs returns the ["--context", <ctx>] prefix for a kubectl

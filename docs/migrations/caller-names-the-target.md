@@ -1,6 +1,7 @@
 # The caller names the target
 
-Modules: `aws`, `s3`, `pipelines`, `gcp`, `cloudrun`.
+Modules: `aws`, `s3`, `pipelines`, `gcp`, `cloudrun`, `kube`, `docker`,
+`deploy`, `rollback`.
 
 `ProfileArgs` and `ProfileFlag` used to read `AWS_PROFILE` and pass it as
 `--profile`, overriding whatever the caller asked for. They now pass the
@@ -105,6 +106,35 @@ Cloud Run callers set `ImpersonateServiceAccount` on `DeployConfig`,
 `Ref`, `TrafficConfig`, or `RollbackConfig`. Leaving it empty keeps
 gcloud's own handling of the variable, so a caller that relied on the
 environment keeps working without editing anything.
+
+## Kubernetes and kind
+
+`kube.ResolveContext` already failed closed, so it could not silently
+pick a cluster. It could still pick the wrong one: `SPARKWING_KUBE_CONTEXT`
+named a context, `SPARKWING_KIND_CLUSTER` derived one, and
+`SPARKWING_KUBE_ALLOW_CURRENT=1` disabled the guard from the
+environment. All three are gone. Set `Context` on the config you pass.
+In-cluster runs are unaffected, because a service account is a fact
+about the machine rather than a choice.
+
+`SPARKWING_KIND_CLUSTER` reached further than `kube`:
+
+| Module | What it did |
+|---|---|
+| `docker` | replaced the registry push with `kind load docker-image` |
+| `deploy` | turned a `Local: false` deploy into a local kind deploy |
+| `rollback` | routed the rollback locally |
+| `kube` | derived the kubectl context |
+
+The `deploy` case is the sharp one. The condition was
+`!cfg.Local && os.Getenv("SPARKWING_KIND_CLUSTER") != ""`, so a pipeline
+that had declared it was deploying remotely got a local deploy instead,
+decided by a variable. Routing is `cfg.Local` alone now, and `rollback`
+matches it.
+
+`kube.DeployKindKustomize` and `KindKustomizeConfig` are still exported.
+`deploy.Run` was their only caller in this repo, so they now have none.
+Delete them if nothing outside depends on them.
 
 ## Not covered by a snapshot
 
