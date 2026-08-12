@@ -119,12 +119,17 @@ about the machine rather than a choice.
 
 `SPARKWING_KIND_CLUSTER` reached further than `kube`:
 
-| Module | What it did |
-|---|---|
-| `docker` | replaced the registry push with `kind load docker-image` |
-| `deploy` | turned a `Local: false` deploy into a local kind deploy |
-| `rollback` | routed the rollback locally |
-| `kube` | derived the kubectl context |
+| Module | What it did | Now |
+|---|---|---|
+| `docker` | replaced the registry push with `kind load docker-image` | `BuildConfig.KindCluster` |
+| `deploy` | turned a `Local: false` deploy into a local kind deploy | removed, routes on `cfg.Local` |
+| `rollback` | routed the rollback locally | removed, routes on `cfg.Local` |
+| `kube` | derived the kubectl context | removed, set `Context` |
+
+The `docker` path is kept because it is in use: a pipeline that builds
+for a local cluster has no registry to push to, so removing it leaves
+the image sitting in the local daemon while the deploy pulls something
+stale. It takes the cluster name as a field now.
 
 The `deploy` case is the sharp one. The condition was
 `!cfg.Local && os.Getenv("SPARKWING_KIND_CLUSTER") != ""`, so a pipeline
@@ -132,9 +137,10 @@ that had declared it was deploying remotely got a local deploy instead,
 decided by a variable. Routing is `cfg.Local` alone now, and `rollback`
 matches it.
 
-`kube.DeployKindKustomize` and `KindKustomizeConfig` are still exported.
-`deploy.Run` was their only caller in this repo, so they now have none.
-Delete them if nothing outside depends on them.
+`kube.DeployKindKustomize` and `KindKustomizeConfig` stay. `deploy.Run`
+was their only caller inside this repo, but `moonborn-ws` calls them
+directly and already passes `Cluster` explicitly, so they follow the
+rule as they are.
 
 ## Not covered by a snapshot
 
