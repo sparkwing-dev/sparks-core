@@ -31,10 +31,7 @@ func ECRLogin(ctx context.Context, registry, awsProfile string) error {
 }
 
 // TryDetectLocalRegistries returns a user-specified local registry via
-// SPARKWING_REGISTRY, or nil. Kind clusters no longer host an in-
-// cluster registry -- images land via `kind load docker-image` (gated
-// in BuildAndPush), so the old port-probe
-// heuristic went away.
+// SPARKWING_REGISTRY, or nil.
 func TryDetectLocalRegistries(cluster string) ([]string, error) {
 	if r := os.Getenv("SPARKWING_REGISTRY"); r != "" && !IsECR(r) {
 		return []string{r}, nil

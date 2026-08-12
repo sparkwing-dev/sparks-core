@@ -117,30 +117,19 @@ environment. All three are gone. Set `Context` on the config you pass.
 In-cluster runs are unaffected, because a service account is a fact
 about the machine rather than a choice.
 
-`SPARKWING_KIND_CLUSTER` reached further than `kube`:
+Kind support is removed rather than made explicit, because nothing
+deploys to kind any more:
 
-| Module | What it did | Now |
-|---|---|---|
-| `docker` | replaced the registry push with `kind load docker-image` | `BuildConfig.KindCluster` |
-| `deploy` | turned a `Local: false` deploy into a local kind deploy | removed, routes on `cfg.Local` |
-| `rollback` | routed the rollback locally | removed, routes on `cfg.Local` |
-| `kube` | derived the kubectl context | removed, set `Context` |
+| Module | Removed |
+|---|---|
+| `docker` | the `kind load docker-image` path in `BuildAndPush` |
+| `kube` | `DeployKindKustomize`, `KindKustomizeConfig`, `DeployKustomize`, `DeployKustomizeConfig` |
+| `deploy` | the branch that turned a `Local: false` deploy into a kind deploy |
+| `rollback` | the same override on its routing condition |
 
-The `docker` path is kept because it is in use: a pipeline that builds
-for a local cluster has no registry to push to, so removing it leaves
-the image sitting in the local daemon while the deploy pulls something
-stale. It takes the cluster name as a field now.
-
-The `deploy` case is the sharp one. The condition was
-`!cfg.Local && os.Getenv("SPARKWING_KIND_CLUSTER") != ""`, so a pipeline
-that had declared it was deploying remotely got a local deploy instead,
-decided by a variable. Routing is `cfg.Local` alone now, and `rollback`
-matches it.
-
-`kube.DeployKindKustomize` and `KindKustomizeConfig` stay. `deploy.Run`
-was their only caller inside this repo, but `moonborn-ws` calls them
-directly and already passes `Cluster` explicitly, so they follow the
-rule as they are.
+`deploy` and `rollback` route on `cfg.Local` alone now. A pipeline that
+built for a kind cluster needs a registry the cluster can pull from, or
+a different deploy path entirely.
 
 ## Not covered by a snapshot
 

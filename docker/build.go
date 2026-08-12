@@ -27,12 +27,6 @@ type BuildConfig struct {
 	CacheFrom []string
 	// CacheTo are BuildKit --cache-to specs; see BuildCacheRef.
 	CacheTo []string
-	// KindCluster, when set, replaces the registry push with
-	// `kind load docker-image`, injecting the image into that cluster's
-	// containerd and skipping the registry round-trip. Name the cluster
-	// rather than leaving it to the environment, because whether an
-	// image reaches a registry decides where a deploy can pull it from.
-	KindCluster string
 }
 
 // ecrLoginOnce ensures each ECR registry is authenticated exactly
@@ -64,9 +58,6 @@ func ensureECRLogin(ctx context.Context, registry, awsProfile string) error {
 // relevant tag is actually pushed per registry to keep push time
 // bounded. Safe to call concurrently -- ECR login is serialized via
 // sync.Once.
-//
-// Setting KindCluster replaces the push path with
-// `kind load docker-image`.
 func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 	if cfg.Context == "" {
 		cfg.Context = "."
@@ -119,19 +110,6 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 		return err
 	}); err != nil {
 		return err
-	}
-
-	if cfg.KindCluster != "" {
-		loadTag := cfg.Image + ":" + cfg.Tags.DeployTag()
-		loadArgs := []string{"load", "docker-image", loadTag, "--name", cfg.KindCluster}
-		return step.Run(ctx, "kind load ("+cfg.Image+")", func(ctx context.Context) error {
-			if dryRun() {
-				echoArgv(ctx, "kind", loadArgs)
-				return nil
-			}
-			sparkwing.Info(ctx, "kind load %s -> %s", loadTag, cfg.KindCluster)
-			return step.Exec(ctx, "kind", loadArgs...)
-		})
 	}
 
 	for _, t := range pushTags {

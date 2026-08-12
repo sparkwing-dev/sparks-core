@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Removed
+- **kind:** (Breaking) `DeployKindKustomize`, `KindKustomizeConfig`,
+  `DeployKustomize`, and `DeployKustomizeConfig`. Both were kind-only
+  deploy paths: the first applied a repo's kustomization against
+  `kind-<cluster>`, the second read `~/.sparkwing/clusters`. `DeployKubectl`
+  and `Apply` cover what remains.
+
 ### Changed
 - **context:** (Breaking) `ResolveContext` no longer reads
   `SPARKWING_KUBE_CONTEXT`, `SPARKWING_KIND_CLUSTER`, or

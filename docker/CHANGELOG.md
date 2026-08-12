@@ -9,16 +9,10 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
-### Changed
-- **kind:** (Breaking) `BuildAndPush` routes to `kind load docker-image`
-  when `BuildConfig.KindCluster` names a cluster, instead of when
-  `SPARKWING_KIND_CLUSTER` is set. Whether an image reaches a registry
-  decides where a deploy can pull it from, so the caller states it.
-
-  Migration: set `KindCluster` on the `BuildConfig`. A caller that
-  relied on the environment variable builds and pushes nothing to kind
-  until it does, because there are usually no registries configured on
-  that path.
+### Removed
+- **kind:** (Breaking) the `kind load docker-image` path in
+  `BuildAndPush`, along with the `SPARKWING_KIND_CLUSTER` read that
+  selected it. `BuildAndPush` pushes to the configured registries.
 
 See `docs/migrations/caller-names-the-target.md`.
 
