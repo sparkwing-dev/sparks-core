@@ -12,9 +12,22 @@ multi-module repo conventions).
 ### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 - `DeployStaticSite` accepts an empty `AWSProfile` instead of erroring
-  with "AWSProfile required": it falls through to `AWS_PROFILE`, or to
-  the aws CLI's ambient credential chain when that is unset too. Takes
-  full effect once the `aws` module pin moves past v0.24.0.
+  with "AWSProfile required": it passes no `--profile` and leaves the
+  aws CLI its own credential chain, which is what an assumed role in CI
+  needs. Takes full effect once the `aws` module pin moves past v0.24.0.
+- **profile:** (Breaking) `AWSProfile` no longer falls through to
+  `AWS_PROFILE`. See `docs/migrations/caller-names-the-target.md`.
+
+### Added
+- **identity:** `StaticSiteConfig.ExpectedAccountID` checks the account the
+  credentials resolve to before the first write, and refuses the deploy
+  on a mismatch. Unset skips the check. A profile name pins which
+  credentials get selected and not which account they belong to, and
+  under federated auth there is no profile to name, so this is the only
+  way to state which account a deploy means.
+- **dry-run:** `DeployStaticSite` honors `SPARKWING_DRY_RUN`, logging the argv of
+  every pass and writing nothing. Ten other modules already honored it,
+  and this one carries the `--delete`.
 
 ## [v0.24.0] - 2026-05-21
 

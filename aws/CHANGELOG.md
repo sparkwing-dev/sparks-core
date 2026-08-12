@@ -9,6 +9,30 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+- **profile:** (Breaking) `ProfileArgs` and `ProfileFlag` no longer read
+  `AWS_PROFILE`. The caller's profile is the only one they pass. Passing `--profile`
+  overrides the credentials already in the environment, so promoting an
+  inherited variable into an override could redirect a deploy without
+  the pipeline changing.
+
+  Migration: nothing changes for a caller that already names a profile.
+  A caller that relied on `AWS_PROFILE` filling an empty argument now
+  gets no `--profile`, and the aws CLI reads `AWS_PROFILE` itself with
+  its own precedence, so the same profile still applies unless
+  environment credentials outrank it. That ordering matches boto3,
+  where an explicitly passed profile suppresses the environment
+  provider and an `AWS_PROFILE` alone does not.
+- **profile:** the parameter is named `profile` rather than
+  `defaultProfile`, because it is a pin and never a fallback.
+
+### Added
+- **identity:** `CallerIdentityArgs(profile)` builds the argv that prints the account
+  id the credentials resolve to. Callers run it before a destructive
+  operation and compare against the account they expect, because a
+  profile name pins which credentials get selected and not which
+  account they belong to.
+
 ### Fixed
 - Empty profile no longer forces `--profile default`: when `AWS_PROFILE`
   is unset and the configured profile is empty, `ProfileFlag` returns `""`

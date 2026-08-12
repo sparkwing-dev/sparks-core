@@ -93,13 +93,19 @@ type StaticDeploy struct {
 	// OutDir is the build output directory. Defaults to "out".
 	OutDir string
 
-	// AWSProfile is the profile used for aws CLI invocations.
-	// Required - callers must pass an explicit profile name. Empty
-	// AWSProfile fails Run() with an error rather than silently
-	// falling back to the literal "default" profile, which has
-	// surprised consumers when the local AWS config doesn't have
-	// kikd creds (or any creds) under that name.
+	// AWSProfile is the profile passed to the aws CLI. Empty passes no
+	// --profile, which is what an assumed role in CI needs, because
+	// there is no profile to name when credentials arrive as
+	// environment variables. Name one to pin which credentials get
+	// selected on a machine that has several.
 	AWSProfile string
+
+	// ExpectedAccountID, when set, is checked against the account the
+	// credentials resolve to before anything is written. Naming a
+	// profile pins which credentials get selected and not which
+	// account they belong to, so this is the statement of intent that
+	// survives both a renamed profile and federated auth.
+	ExpectedAccountID string
 
 	// CloudFrontID, when set, triggers a cache invalidation against
 	// the named distribution after sync.
@@ -137,9 +143,6 @@ func (s *StaticDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing
 // Run executes build (optional) + S3 sync (+ CloudFront invalidation
 // when configured).
 func (s *StaticDeploy) Run(ctx context.Context) error {
-	if s.AWSProfile == "" {
-		return fmt.Errorf("StaticDeploy: AWSProfile is required")
-	}
 	if s.OutDir == "" {
 		s.OutDir = "out"
 	}
@@ -160,11 +163,12 @@ func (s *StaticDeploy) Run(ctx context.Context) error {
 
 	sparkwing.Info(ctx, "==> sync s3 bucket=%s dir=%s", s.Bucket, s.OutDir)
 	syncRes, err := s3.DeployStaticSite(ctx, s3.StaticSiteConfig{
-		Bucket:     s.Bucket,
-		OutDir:     s.OutDir,
-		AWSProfile: s.AWSProfile,
-		Delete:     s.Delete,
-		Excludes:   s.Excludes,
+		Bucket:            s.Bucket,
+		OutDir:            s.OutDir,
+		AWSProfile:        s.AWSProfile,
+		ExpectedAccountID: s.ExpectedAccountID,
+		Delete:            s.Delete,
+		Excludes:          s.Excludes,
 	})
 	if err != nil {
 		return err

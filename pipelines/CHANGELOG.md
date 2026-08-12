@@ -10,6 +10,22 @@ multi-module repo conventions).
 ## [Unreleased]
 
 ### Changed
+- **profile:** (Breaking) `StaticDeploy` no longer requires `AWSProfile`. The guard
+  existed because an empty profile once became `--profile default`, and
+  the `aws` module stopped doing that in `aws/v0.24.0`, so the guard was
+  rejecting the configuration CI needs to express: credentials from an
+  assumed role, with no profile to name.
+
+  Migration: callers that pass a profile are unaffected. Callers that
+  want the aws CLI's own credential chain now leave `AWSProfile` empty
+  and set `ExpectedAccountID` instead, so a wrong-account deploy still
+  fails before the first write.
+
+### Added
+- **identity:** `StaticDeploy.ExpectedAccountID`, passed through to
+  `s3.DeployStaticSite`.
+
+### Changed
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 
 ## [v0.24.0] - 2026-05-21

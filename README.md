@@ -74,8 +74,6 @@ caller declared.
 because it can only make a run less destructive. Every helper that
 mutates a cloud honors it.
 
-Modules that do not follow these rules yet are tracked in BW-1727.
-
 ## Consuming a module
 
 ```

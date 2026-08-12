@@ -43,13 +43,16 @@ func TestAssetSyncArgs_EmptyProfileOmitsFlag(t *testing.T) {
 	}
 }
 
-func TestAssetSyncArgs_EmptyProfileUsesAWSProfileEnv(t *testing.T) {
+// No caller profile means no --profile, even with AWS_PROFILE set, so
+// the aws CLI applies its own precedence rather than having an
+// inherited variable promoted into an override.
+func TestAssetSyncArgs_NoProfileLeavesAWSProfileEnvToTheCLI(t *testing.T) {
 	awsEnvOff(t)
 	t.Setenv("AWS_PROFILE", "from-env")
 	cfg := StaticSiteConfig{Bucket: "site", OutDir: "out"}
 	got := assetSyncArgs(cfg, aws.ProfileArgs(cfg.AWSProfile), nil)
-	if joined := strings.Join(got, " "); !strings.Contains(joined, "--profile from-env") {
-		t.Fatalf("assetSyncArgs with AWS_PROFILE lacks --profile from-env: %v", got)
+	if joined := strings.Join(got, " "); strings.Contains(joined, "--profile") {
+		t.Fatalf("assetSyncArgs passed a profile with none configured: %v", got)
 	}
 }
 
@@ -198,17 +201,48 @@ func TestDeployStaticSite_ConfiguredProfileReachesTheCLI(t *testing.T) {
 	}
 }
 
-func TestDeployStaticSite_AWSProfileEnvReachesTheCLI(t *testing.T) {
+func TestDeployStaticSite_CallerProfileBeatsAWSProfileEnv(t *testing.T) {
 	awsEnvOff(t)
 	t.Setenv("AWS_PROFILE", "from-env")
 	logPath := fakeAWSCLI(t)
-	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t)}); err != nil {
+	cfg := StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), AWSProfile: "caller"}
+	if _, err := DeployStaticSite(context.Background(), cfg); err != nil {
 		t.Fatalf("DeployStaticSite: %v", err)
 	}
 	for _, argv := range recordedInvocations(t, logPath) {
-		if !hasFlagValue(argv, "--profile", "from-env") {
-			t.Fatalf("AWS_PROFILE missing from argv: %v", argv)
+		if hasFlagValue(argv, "--profile", "from-env") {
+			t.Fatalf("AWS_PROFILE overrode the caller: %v", argv)
 		}
+		if !hasFlagValue(argv, "--profile", "caller") {
+			t.Fatalf("caller profile missing from argv: %v", argv)
+		}
+	}
+}
+
+func TestDeployStaticSite_DryRunWritesNothing(t *testing.T) {
+	awsEnvOff(t)
+	t.Setenv("SPARKWING_DRY_RUN", "1")
+	logPath := fakeAWSCLI(t)
+	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), Delete: true}); err != nil {
+		t.Fatalf("DeployStaticSite: %v", err)
+	}
+	// The stub only creates its log when it is invoked, so an absent
+	// file is the assertion: the CLI never ran.
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("dry run still ran the aws CLI: %v", recordedInvocations(t, logPath))
+	}
+}
+
+func TestDeployStaticSite_WrongAccountRefuses(t *testing.T) {
+	awsEnvOff(t)
+	fakeAWSCLI(t)
+	cfg := StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), ExpectedAccountID: "111111111111"}
+	_, err := DeployStaticSite(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("DeployStaticSite deployed to an account the caller did not name")
+	}
+	if !strings.Contains(err.Error(), "refusing to deploy") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
