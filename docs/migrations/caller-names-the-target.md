@@ -1,6 +1,6 @@
 # The caller names the target
 
-Modules: `aws`, `s3`, `pipelines`.
+Modules: `aws`, `s3`, `pipelines`, `gcp`, `cloudrun`.
 
 `ProfileArgs` and `ProfileFlag` used to read `AWS_PROFILE` and pass it as
 `--profile`, overriding whatever the caller asked for. They now pass the
@@ -71,14 +71,52 @@ sd := pipelines.StaticDeploy{
 4. Check any doc comment in your own pipelines that promises an
    `AWS_PROFILE` fallback.
 
+## GCP
+
+`gcp` had the same shape with different variables. `ProjectArgs` read
+`GOOGLE_CLOUD_PROJECT` and `CLOUDSDK_CORE_PROJECT`; `ImpersonationArgs`
+took no argument at all and read
+`CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`, so an inherited variable
+decided which identity every gcloud call ran as.
+
+Both now take what the caller passes. gcloud reads those variables
+itself when no flag is given, so the same project and identity still
+apply, with gcloud's precedence rather than an override.
+
+### Before
+
+```go
+// Identity came from the environment, invisible to the pipeline.
+args = append(args, gcp.ProjectArgs(cfg.Project)...)
+args = append(args, gcp.ImpersonationArgs()...)
+```
+
+### After
+
+```go
+args = append(args, gcp.ProjectArgs(cfg.Project)...)
+args = append(args, gcp.ImpersonationArgs(cfg.ImpersonateServiceAccount)...)
+```
+
+`ResolveProject` is gone. It existed to hold the environment fallback,
+so pass the project to `ProjectArgs` directly.
+
+Cloud Run callers set `ImpersonateServiceAccount` on `DeployConfig`,
+`Ref`, `TrafficConfig`, or `RollbackConfig`. Leaving it empty keeps
+gcloud's own handling of the variable, so a caller that relied on the
+environment keeps working without editing anything.
+
 ## Not covered by a snapshot
 
-This is a behavioral break. The function signatures are unchanged, every
-consumer compiles, and the tests pass. `ecs`, `lambda`, `dbbackup`, and
-`docker` were each built and tested against the new `aws` module with a
-local replace, and all four are green. What changes for them is which
-profile reaches the CLI once their `aws` pin moves, and their doc
-comments still promise the old fallback:
+The `gcp` break is structural and a compiler catches it:
+`ImpersonationArgs` gained a parameter and `ResolveProject` is gone.
+
+The `aws` break is behavioral. Signatures are unchanged, every consumer
+compiles, and the tests pass, so nothing tells you it happened. `ecs`,
+`lambda`, `dbbackup`, and `docker` were each built and tested against
+the new `aws` module with a local replace, and all four are green. What
+changes for them is which profile reaches the CLI once their `aws` pin
+moves, and their doc comments still promise the old fallback:
 
 - `lambda/lambda.go:65`, `:97`, `:121`
 - `ecs/ecs.go:93`

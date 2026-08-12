@@ -82,6 +82,10 @@ type GKEConfig struct {
 	Cluster  string
 	Location string
 	Project  string
+	// ImpersonateServiceAccount runs the command as that service
+	// account. Empty passes no flag, leaving gcloud its own
+	// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT handling.
+	ImpersonateServiceAccount string
 	// ExtraArgs are appended verbatim to the get-credentials argv, an
 	// escape hatch for flags this struct does not model. Private control
 	// planes need ExtraArgs: []string{"--internal-ip"} (or
@@ -116,6 +120,6 @@ func getCredentialsArgs(cfg GKEConfig) []string {
 	}
 	args = append(args, ProjectArgs(cfg.Project)...)
 	args = append(args, cfg.ExtraArgs...)
-	args = append(args, ImpersonationArgs()...)
+	args = append(args, ImpersonationArgs(cfg.ImpersonateServiceAccount)...)
 	return args
 }

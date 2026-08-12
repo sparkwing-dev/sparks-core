@@ -58,6 +58,10 @@ type DeployConfig struct {
 	// Project is the GCP project id; empty falls back to the ambient
 	// gcloud project (see gcp.ProjectArgs).
 	Project string
+	// ImpersonateServiceAccount runs the gcloud command as that service
+	// account. Empty passes no flag, leaving gcloud its own
+	// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT handling.
+	ImpersonateServiceAccount string
 	// Port is the container port the service listens on. Zero omits
 	// --port and Cloud Run applies its default.
 	Port int
@@ -111,6 +115,10 @@ type Ref struct {
 	Service string
 	Region  string
 	Project string
+	// ImpersonateServiceAccount runs the gcloud command as that service
+	// account. Empty passes no flag, leaving gcloud its own
+	// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT handling.
+	ImpersonateServiceAccount string
 }
 
 // DeployResult is what Deploy returns: the URL to probe plus the
@@ -239,7 +247,7 @@ func deployArgs(cfg DeployConfig) []string {
 		args = append(args, "--region", cfg.Region)
 	}
 	args = append(args, gcp.ProjectArgs(cfg.Project)...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs(cfg.ImpersonateServiceAccount)...)
 	if cfg.Port > 0 {
 		args = append(args, "--port", strconv.Itoa(cfg.Port))
 	}
@@ -290,7 +298,7 @@ func describeArgs(ref Ref) []string {
 		args = append(args, "--region", ref.Region)
 	}
 	args = append(args, gcp.ProjectArgs(ref.Project)...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs(ref.ImpersonateServiceAccount)...)
 	return append(args, "--format=json")
 }
 

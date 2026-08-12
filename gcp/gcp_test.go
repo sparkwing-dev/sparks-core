@@ -11,43 +11,25 @@ func clearProjectEnv(t *testing.T) {
 	t.Setenv("CLOUDSDK_CORE_PROJECT", "")
 }
 
-func TestResolveProject_ExplicitWins(t *testing.T) {
-	clearProjectEnv(t)
-	t.Setenv("GOOGLE_CLOUD_PROJECT", "from-env")
-	if got := ResolveProject("from-arg"); got != "from-arg" {
-		t.Fatalf("ResolveProject = %q, want from-arg (explicit wins)", got)
-	}
-}
-
-func TestResolveProject_GoogleCloudProjectEnv(t *testing.T) {
-	clearProjectEnv(t)
-	t.Setenv("GOOGLE_CLOUD_PROJECT", "env-proj")
-	if got := ResolveProject(""); got != "env-proj" {
-		t.Fatalf("ResolveProject = %q, want env-proj", got)
-	}
-}
-
-func TestResolveProject_CloudSDKEnvFallback(t *testing.T) {
+// The caller's project is the only one passed. gcloud still reads
+// CLOUDSDK_CORE_PROJECT itself when no flag is given, with its own
+// precedence.
+func TestProjectArgs_NoCallerProjectLeavesEnvToGcloud(t *testing.T) {
 	clearProjectEnv(t)
 	t.Setenv("CLOUDSDK_CORE_PROJECT", "sdk-proj")
-	if got := ResolveProject(""); got != "sdk-proj" {
-		t.Fatalf("ResolveProject = %q, want sdk-proj", got)
-	}
-}
-
-func TestResolveProject_GoogleCloudProjectBeatsCloudSDK(t *testing.T) {
-	clearProjectEnv(t)
 	t.Setenv("GOOGLE_CLOUD_PROJECT", "primary")
-	t.Setenv("CLOUDSDK_CORE_PROJECT", "secondary")
-	if got := ResolveProject(""); got != "primary" {
-		t.Fatalf("ResolveProject = %q, want primary", got)
+	if got := ProjectArgs(""); got != nil {
+		t.Fatalf("ProjectArgs(\"\") with project env set = %v, want nil", got)
 	}
 }
 
-func TestResolveProject_EmptyWhenUnset(t *testing.T) {
+func TestProjectArgs_CallerBeatsEnv(t *testing.T) {
 	clearProjectEnv(t)
-	if got := ResolveProject(""); got != "" {
-		t.Fatalf("ResolveProject = %q, want empty", got)
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "from-env")
+	got := ProjectArgs("from-caller")
+	want := []string{"--project", "from-caller"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ProjectArgs = %v, want %v", got, want)
 	}
 }
 
@@ -97,18 +79,20 @@ func TestIsWorkloadIdentity_LocalIsFalse(t *testing.T) {
 	}
 }
 
-func TestImpersonationArgs_SetFromEnv(t *testing.T) {
-	t.Setenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", "deployer@proj.iam.gserviceaccount.com")
-	got := ImpersonationArgs()
+func TestImpersonationArgs_Named(t *testing.T) {
+	got := ImpersonationArgs("deployer@proj.iam.gserviceaccount.com")
 	want := []string{"--impersonate-service-account", "deployer@proj.iam.gserviceaccount.com"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ImpersonationArgs = %v, want %v", got, want)
 	}
 }
 
-func TestImpersonationArgs_NilWhenUnset(t *testing.T) {
-	t.Setenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", "")
-	if got := ImpersonationArgs(); got != nil {
-		t.Fatalf("ImpersonationArgs = %v, want nil", got)
+// An inherited variable must not decide which identity a deploy runs
+// as, so an unnamed account passes no flag and leaves gcloud its own
+// handling of CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT.
+func TestImpersonationArgs_NilWhenUnnamed(t *testing.T) {
+	t.Setenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", "deployer@proj.iam.gserviceaccount.com")
+	if got := ImpersonationArgs(""); got != nil {
+		t.Fatalf("ImpersonationArgs(\"\") = %v, want nil", got)
 	}
 }

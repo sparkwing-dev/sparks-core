@@ -9,6 +9,28 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+- **project:** (Breaking) `ProjectArgs` no longer reads
+  `GOOGLE_CLOUD_PROJECT` or `CLOUDSDK_CORE_PROJECT`. The caller's
+  project is the only one it passes, because an inherited variable
+  would otherwise redirect a deploy without the pipeline changing.
+  gcloud reads both variables itself when no `--project` is passed, so
+  the same project still applies with gcloud's own precedence.
+- **identity:** (Breaking) `ImpersonationArgs` takes the service account
+  as an argument instead of reading
+  `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`. Which identity a deploy
+  runs as is the caller's statement to make. gcloud honors the variable
+  itself when no flag is passed.
+- **gke:** `GKEConfig.ImpersonateServiceAccount` carries that account
+  into `get-credentials`.
+
+### Removed
+- **project:** (Breaking) `ResolveProject`. It existed to hold the
+  environment fallback that is gone, and a resolver that resolves
+  nothing is worse than no resolver. Pass the project to `ProjectArgs`.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ## [v0.1.0] - 2026-07-18
 
 ### Added

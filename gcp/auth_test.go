@@ -40,8 +40,12 @@ func TestGetCredentialsArgs_NoProjectNoLocation(t *testing.T) {
 
 func TestGetCredentialsArgs_Impersonation(t *testing.T) {
 	clearProjectEnv(t)
-	t.Setenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", "deployer@proj.iam.gserviceaccount.com")
-	got := getCredentialsArgs(GKEConfig{Cluster: "prod", Location: "us-west1", Project: "my-proj"})
+	got := getCredentialsArgs(GKEConfig{
+		Cluster:                   "prod",
+		Location:                  "us-west1",
+		Project:                   "my-proj",
+		ImpersonateServiceAccount: "deployer@proj.iam.gserviceaccount.com",
+	})
 	want := []string{
 		"container", "clusters", "get-credentials", "prod",
 		"--location", "us-west1",

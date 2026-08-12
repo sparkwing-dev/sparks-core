@@ -9,6 +9,16 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Added
+- **identity:** `ImpersonateServiceAccount` on `DeployConfig`, `Ref`,
+  `TrafficConfig`, and `RollbackConfig`. It replaces the
+  `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` read that `gcp` used to do
+  on every call, so the identity a deploy runs as is declared rather
+  than inherited. Empty passes no flag and leaves gcloud its own
+  handling.
+
+See `docs/migrations/caller-names-the-target.md`.
+
 ## [v0.1.1] - 2026-07-18
 
 ### Fixed

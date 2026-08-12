@@ -23,6 +23,10 @@ type TrafficConfig struct {
 	Percent  int
 	ToLatest bool
 	DryRun   bool
+	// ImpersonateServiceAccount runs the gcloud command as that service
+	// account. Empty passes no flag, leaving gcloud its own
+	// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT handling.
+	ImpersonateServiceAccount string
 }
 
 // RollbackConfig drives RollbackToRevision. Revision is the target to
@@ -43,6 +47,10 @@ type RollbackConfig struct {
 	Project  string
 	Revision string
 	DryRun   bool
+	// ImpersonateServiceAccount runs the gcloud command as that service
+	// account. Empty passes no flag, leaving gcloud its own
+	// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT handling.
+	ImpersonateServiceAccount string
 }
 
 // Traffic returns a func(ctx) error that shifts Cloud Run traffic per
@@ -126,7 +134,7 @@ func trafficArgs(cfg TrafficConfig) []string {
 		args = append(args, "--region", cfg.Region)
 	}
 	args = append(args, gcp.ProjectArgs(cfg.Project)...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs(cfg.ImpersonateServiceAccount)...)
 	switch {
 	case cfg.ToLatest:
 		args = append(args, "--to-latest")
@@ -148,7 +156,7 @@ func removeTagArgs(cfg DeployConfig) []string {
 		args = append(args, "--region", cfg.Region)
 	}
 	args = append(args, gcp.ProjectArgs(cfg.Project)...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs(cfg.ImpersonateServiceAccount)...)
 	args = append(args, "--remove-tags", cfg.Tag)
 	return append(args, "--quiet")
 }
@@ -161,7 +169,7 @@ func revisionsListArgs(ref Ref) []string {
 		args = append(args, "--region", ref.Region)
 	}
 	args = append(args, gcp.ProjectArgs(ref.Project)...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs(ref.ImpersonateServiceAccount)...)
 	return append(args, "--format=json", "--sort-by=~metadata.creationTimestamp")
 }
 

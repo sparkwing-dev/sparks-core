@@ -6,7 +6,16 @@
 // It is the GCP twin of the [github.com/sparkwing-dev/sparks-core/aws]
 // module: ProjectArgs mirrors aws.ProfileArgs, IsWorkloadIdentity mirrors
 // aws.IsIRSA, and ConfigureDockerAuth mirrors docker.ECRLogin. A reader
-// who knows one predicts the other.
+// who knows one predicts the other, with one asymmetry: IsIRSA tests a
+// fact (a token file exists) while IsWorkloadIdentity is a heuristic,
+// documented on the function.
+//
+// The caller names the project and the identity. Nothing here reads
+// CLOUDSDK_CORE_PROJECT or CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT to
+// pick one, because an inherited variable would then redirect a deploy
+// without the pipeline changing. gcloud reads both on its own, so
+// passing no flag keeps that path with gcloud's own precedence. See the
+// environment rules in the repo README.
 //
 // Cloud-mutating helpers honor SPARKWING_DRY_RUN: when it is non-empty
 // they echo the exact gcloud argv they would run and return success
@@ -22,44 +31,20 @@ import (
 	"os"
 )
 
-// projectEnvKeys are the project-id environment variables ResolveProject
-// falls back to, in the order it checks them. This is this module's own
-// precedence, not a mirror of gcloud's property resolution.
-var projectEnvKeys = []string{"GOOGLE_CLOUD_PROJECT", "CLOUDSDK_CORE_PROJECT"}
-
-// ResolveProject returns the GCP project id to target. An explicit def
-// (typically a pipeline's configured project param) wins; when it is
-// empty the GOOGLE_CLOUD_PROJECT and CLOUDSDK_CORE_PROJECT environment
-// variables are consulted in that order. An empty result means "let
-// gcloud resolve the project from its own config or the metadata server"
-// -- see ProjectArgs.
-func ResolveProject(def string) string {
-	if def != "" {
-		return def
-	}
-	for _, key := range projectEnvKeys {
-		if v := os.Getenv(key); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 // ProjectArgs is the argv-shaped project selector: it returns
-// {"--project", "<id>"} for a resolved project, or nil when none is
-// configured so gcloud falls back to its active config / metadata-server
-// project (Application Default Credentials). Append it into a gcloud
-// argv directly:
+// {"--project", "<id>"} when the caller named a project, and nil
+// otherwise, leaving gcloud its own resolution (CLOUDSDK_CORE_PROJECT,
+// the active config, or the metadata-server project under Application
+// Default Credentials). Append it into a gcloud argv directly:
 //
 //	args := []string{"run", "deploy", service}
 //	args = append(args, gcp.ProjectArgs(cfg.Project)...)
 //	sparkwing.Exec(ctx, "gcloud", args...).Run()
 func ProjectArgs(project string) []string {
-	id := ResolveProject(project)
-	if id == "" {
+	if project == "" {
 		return nil
 	}
-	return []string{"--project", id}
+	return []string{"--project", project}
 }
 
 // IsWorkloadIdentity reports whether GCP credentials come from the
@@ -86,13 +71,16 @@ func IsWorkloadIdentity() bool {
 }
 
 // ImpersonationArgs returns {"--impersonate-service-account", "<sa>"}
-// when CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT names a target service
-// account, or nil. Append it into a gcloud argv so every command runs as
-// the impersonated identity without a per-call flag.
-func ImpersonationArgs() []string {
-	sa := os.Getenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT")
-	if sa == "" {
+// when the caller named a service account, and nil otherwise. Append it
+// into a gcloud argv so the command runs as that identity.
+//
+// It takes the account as an argument rather than reading
+// CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT, because which identity a
+// deploy runs as is the caller's statement to make. gcloud honors that
+// variable itself when no flag is passed.
+func ImpersonationArgs(serviceAccount string) []string {
+	if serviceAccount == "" {
 		return nil
 	}
-	return []string{"--impersonate-service-account", sa}
+	return []string{"--impersonate-service-account", serviceAccount}
 }

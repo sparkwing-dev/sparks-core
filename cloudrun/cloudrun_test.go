@@ -111,8 +111,12 @@ func TestDeployArgs_EnvIsSortedAndJoined(t *testing.T) {
 
 func TestDeployArgs_Impersonation(t *testing.T) {
 	clearGCPEnv(t)
-	t.Setenv("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", "deployer@p.iam.gserviceaccount.com")
-	got := deployArgs(DeployConfig{Service: "api", Image: "img", Project: "p"})
+	got := deployArgs(DeployConfig{
+		Service:                   "api",
+		Image:                     "img",
+		Project:                   "p",
+		ImpersonateServiceAccount: "deployer@p.iam.gserviceaccount.com",
+	})
 	want := []string{
 		"run", "deploy", "api",
 		"--image", "img",
