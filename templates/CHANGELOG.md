@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.28.0] - 2026-07-18
+
 ### Added
 - `go-affected-tests` template (category `caching-skip`, verify
   `runnable`): fans one content-cached test job out per listed Go

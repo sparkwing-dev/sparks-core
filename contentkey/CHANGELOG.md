@@ -18,6 +18,8 @@ multi-module repo conventions).
   `OfPaths`/`Salted`/`SaltedGoPackage` warn and run uncached instead of
   replaying the wrong cached result.
 
+## [v0.2.0] - 2026-07-18
+
 ### Added
 - `OfGoPackage` / `SaltedGoPackage` fold the content hash of a Go
   package's same-module dependency closure into a `sparkwing.CacheKey`
