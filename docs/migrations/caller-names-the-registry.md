@@ -37,14 +37,14 @@ names the registry. The `cluster` parameter is gone: no function body
 had read it since kind support was removed in v0.26.0, so it described
 a selection that no longer happened.
 
-### Before
+### docker, before
 
 ```go
 // SPARKWING_REGISTRY, wherever it came from, chose the push target.
 registries, err := docker.DetectRegistries("sparktest", defaultECR)
 ```
 
-### After
+### docker, after
 
 ```go
 // The pipeline states its target. Resolve a runner override through a
@@ -67,7 +67,7 @@ func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ..
 `deploy.Config` and `rollback.Config` carry the same struct as an
 `ArgoCD` field and pass it through.
 
-### Before
+### gitops, before
 
 ```go
 token, err := sparkwing.Secret(ctx, "SPARKWING_ARGOCD_TOKEN")
@@ -78,7 +78,7 @@ _ = os.Setenv("SPARKWING_ARGOCD_TOKEN", token)
 return deploy.Run(ctx, deploy.Config{AppName: "myapp" /* ... */})
 ```
 
-### After
+### gitops, after
 
 ```go
 token, err := sparkwing.Secret(ctx, "ARGOCD_TOKEN")
