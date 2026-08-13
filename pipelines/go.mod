@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/sparkwing-dev/sparks-core/aws v0.25.0
-	github.com/sparkwing-dev/sparks-core/deploy v0.24.0
-	github.com/sparkwing-dev/sparks-core/docker v0.24.0
-	github.com/sparkwing-dev/sparks-core/gitops v0.24.0
+	github.com/sparkwing-dev/sparks-core/deploy v0.26.0
+	github.com/sparkwing-dev/sparks-core/docker v0.27.0
+	github.com/sparkwing-dev/sparks-core/gitops v0.27.0
 	github.com/sparkwing-dev/sparks-core/s3 v0.25.1
 	github.com/sparkwing-dev/sparks-core/step v0.24.0
 	github.com/sparkwing-dev/sparkwing v0.31.0
@@ -19,7 +19,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.9.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
