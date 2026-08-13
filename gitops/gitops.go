@@ -236,18 +236,31 @@ func sshToHTTPS(sshURL, token string) string {
 	return fmt.Sprintf("https://x-access-token:%s@%s/%s", token, host, path)
 }
 
+// ArgoCDConfig names the ArgoCD API server to sync against and the
+// token to authenticate with.
+type ArgoCDConfig struct {
+	// Server is the ArgoCD API base URL. Empty probes the in-cluster
+	// service, which is a fact about where the code runs rather than a
+	// choice of target, and fails closed when it is unreachable.
+	Server string
+	// Token is the ArgoCD API bearer token. Resolve it through
+	// sparkwing.Secret rather than hardcoding it. Empty is valid
+	// in-cluster, where the API may accept an unauthenticated call.
+	Token string
+}
+
 // SyncArgoCD triggers a hard ArgoCD sync for the named application
 // and waits until the synced revision advances past the starting
 // point and reports Synced + Healthy.
 //
-// Uses the ArgoCD REST API (SPARKWING_ARGOCD_SERVER +
-// SPARKWING_ARGOCD_TOKEN) so it works from anywhere. Falls back to
-// in-cluster service discovery if the env vars are not set.
-func SyncArgoCD(ctx context.Context, appName string, tag ...string) error {
+// Uses the ArgoCD REST API, so it works from anywhere the caller can
+// name a server. An empty [ArgoCDConfig.Server] falls back to
+// in-cluster service discovery.
+func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ...string) error {
 	return step.Run(ctx, "argocd sync", func(ctx context.Context) error {
-		server, token := argocdConfig(ctx)
+		server, token := argocdConfig(ctx, argocd)
 		if server == "" {
-			return fmt.Errorf("argocd: no server reachable - set SPARKWING_ARGOCD_SERVER or deploy from inside the cluster")
+			return fmt.Errorf("argocd: no server reachable - pass ArgoCDConfig.Server or deploy from inside the cluster")
 		}
 
 		client := &http.Client{Timeout: 10 * time.Second}
@@ -316,9 +329,13 @@ func SyncArgoCD(ctx context.Context, appName string, tag ...string) error {
 	})
 }
 
-func argocdConfig(ctx context.Context) (server, token string) {
-	server = os.Getenv("SPARKWING_ARGOCD_SERVER")
-	token = os.Getenv("SPARKWING_ARGOCD_TOKEN")
+// argocdConfig resolves the server to talk to: the one the caller
+// named, or the in-cluster service when it named none. Probing the
+// in-cluster service asks where this code runs, not what the caller
+// meant, so an unreachable probe returns an empty server and the call
+// fails rather than guessing another target.
+func argocdConfig(ctx context.Context, argocd ArgoCDConfig) (server, token string) {
+	server, token = argocd.Server, argocd.Token
 
 	if server == "" {
 		server = "http://argocd-server.argocd.svc.cluster.local:80"
@@ -490,6 +507,11 @@ func setSSHEnv(ctx context.Context) func() {
 // endpoint before pushing to the gitops repo. The controller logs
 // the request for audit and verifies the commit is on the protected
 // branch.
+//
+// Every variable below is the harness channel: the sparkwing runner
+// sets them on a job it dispatched, so they describe the run rather
+// than name a target. That is why they stay environment reads while
+// the ArgoCD server and token became arguments.
 //
 // Behavior:
 //   - SPARKWING_NO_VERIFY=1: skip entirely, print warning (break-glass)

@@ -74,6 +74,16 @@ caller declared.
 because it can only make a run less destructive. Every helper that
 mutates a cloud honors it.
 
+**The harness has its own channel, and it is not caller intent.** The
+sparkwing runner sets `SPARKWING_JOB_ID`, `SPARKWING_PIPELINE`,
+`SPARKWING_COMMIT`, `SPARKWING_CONTROLLER` and `SPARKWING_API_TOKEN` on a
+job it dispatched, and `SPARKWING_NO_VERIFY` is the break-glass flag that
+turns the deploy authorization check off. `gitops` reads them, and they
+stay environment variables: they describe the run the harness started,
+not which cluster or registry the pipeline meant. Nothing outside that
+list is a supported way to talk to these libraries through the
+environment.
+
 ## Consuming a module
 
 ```
