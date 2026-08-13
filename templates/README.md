@@ -60,9 +60,9 @@ linted, and explained.
 | [lint-test-python](lint-test-python/) | any | ci-hygiene | runnable | CI hygiene gate for a Python project on the uv/ruff/pytest stack: uv ... |
 | [test-matrix](test-matrix/) | any | testing-strategies | runnable | Fan the full test suite out across a matrix of toolchain versions and... |
 | [coverage-gated-test](coverage-gated-test/) | any | testing-strategies | runnable | Run a test suite that emits a coverage report, then a Verify postcond... |
-| [cached-test-suite](cached-test-suite/) | any | caching-skip | runnable | Run a test suite as a single .Cache()-keyed Job whose content key is ... |
+| [cached-test-suite](cached-test-suite/) | any | caching-skip | runnable | Run a test suite as a single .Memoize()-keyed Job whose content key is ... |
 | [skip-if-paths-unchanged](skip-if-paths-unchanged/) | any | caching-skip | runnable | A CI job guarded by .SkipIf(contentkey.Unchanged(base, paths...)): it... |
-| [go-affected-tests](go-affected-tests/) | any | caching-skip | runnable | Run each listed Go package as its own .Cache()-keyed test job, gated ... |
+| [go-affected-tests](go-affected-tests/) | any | caching-skip | runnable | Run each listed Go package as its own .Memoize()-keyed test job, gated ... |
 | [docker-build-layer-cache](docker-build-layer-cache/) | aws,gcp | caching-skip | runnable | Build a Docker image with BuildKit layer caching wired for reuse acro... |
 | [terraform-plan-pr](terraform-plan-pr/) | aws,gcp | terraform | dry-runnable | Run terraform init + terraform plan against a Terraform root and surf... |
 | [terraform-apply-gated](terraform-apply-gated/) | aws,gcp | terraform | compile-only | terraform plan -> human approval gate -> terraform apply |

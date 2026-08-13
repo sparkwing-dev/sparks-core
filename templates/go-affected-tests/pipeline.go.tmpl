@@ -35,7 +35,7 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 }
 
 func ({{pascal .pipeline_name}}) Help() string {
-	return "Runs each package listed in the packages parameter as a separate .Cache()-keyed test job. Each key is the content hash of that package's own files plus its same-module dependency closure (via go list), salted with the pipeline name, cache-version, and test command, so an unchanged package replays its stored pass while a change re-runs only that package and its dependents. A gate node needs the whole group, so the run is green only when every package passed."
+	return "Runs each package listed in the packages parameter as a separate .Memoize()-keyed test job. Each key is the content hash of that package's own files plus its same-module dependency closure (via go list), salted with the pipeline name, cache-version, and test command, so an unchanged package replays its stored pass while a change re-runs only that package and its dependents. A gate node needs the whole group, so the run is green only when every package passed."
 }
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
@@ -57,7 +57,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	for _, spec := range specs {
 		id := uniqueID("test-"+shortName(spec), seen)
 		node := sparkwing.Job(plan, id, testPackage(spec)).
-			Cache(contentkey.SaltedGoPackage(salt, spec, globs...))
+			Memoize(contentkey.SaltedGoPackage(salt, spec, globs...))
 		deps = append(deps, node)
 	}
 	sparkwing.Job(plan, "gate", p.gate).Needs(deps...)
