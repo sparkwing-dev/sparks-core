@@ -3,10 +3,10 @@ module github.com/sparkwing-dev/sparks-core/pipelines
 go 1.26.0
 
 require (
-	github.com/sparkwing-dev/sparks-core/aws v0.24.0
+	github.com/sparkwing-dev/sparks-core/aws v0.25.0
 	github.com/sparkwing-dev/sparks-core/deploy v0.24.0
 	github.com/sparkwing-dev/sparks-core/docker v0.24.0
-	github.com/sparkwing-dev/sparks-core/s3 v0.25.0
+	github.com/sparkwing-dev/sparks-core/s3 v0.25.1
 	github.com/sparkwing-dev/sparks-core/step v0.24.0
 	github.com/sparkwing-dev/sparkwing v0.31.0
 )

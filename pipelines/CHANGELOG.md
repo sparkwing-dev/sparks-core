@@ -9,6 +9,14 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.1] - 2026-08-12
+
+### Fixed
+- **deps:** require `s3` v0.25.1. v0.25.0 set
+  `s3.StaticSiteConfig.ExpectedAccountID` while resolving `s3` v0.24.0,
+  which has no such field, so the module did not build outside this
+  repo's workspace.
+
 ## [v0.25.0] - 2026-08-12
 
 ### Changed

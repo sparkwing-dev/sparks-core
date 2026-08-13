@@ -94,8 +94,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/sparkwing-dev/sparks-core/aws v0.24.0 h1:+UqL+5vapAWvmDWCmn3aCB3gPz2QlFeR38WXLk3RnLQ=
-github.com/sparkwing-dev/sparks-core/aws v0.24.0/go.mod h1:onfZea13/30OCvs9lvOqXvGS+krNU/99N9czFpFQerM=
+github.com/sparkwing-dev/sparks-core/aws v0.25.0 h1:VlUyHi6Z1x1hSnK6GmBpUl8PsRYfRrMW4I8/6/hZkRM=
+github.com/sparkwing-dev/sparks-core/aws v0.25.0/go.mod h1:onfZea13/30OCvs9lvOqXvGS+krNU/99N9czFpFQerM=
 github.com/sparkwing-dev/sparks-core/deploy v0.24.0 h1:pXtAyqRGqFvXTgdrIiTlkl4RT5pLd6CulrjsREISOy4=
 github.com/sparkwing-dev/sparks-core/deploy v0.24.0/go.mod h1:3ASF+vsjgaX9yK47bSc6OGa87AMHJ6NZeWBkiSvR1sY=
 github.com/sparkwing-dev/sparks-core/docker v0.24.0 h1:2yAvv2VvNIkuK84NBhlOPn5O16s67e5eNhdwSabXtd8=
@@ -104,8 +104,8 @@ github.com/sparkwing-dev/sparks-core/gitops v0.24.0 h1:EtgnX/kIRGxJNUqonGeFt9qFl
 github.com/sparkwing-dev/sparks-core/gitops v0.24.0/go.mod h1:X6ZwFuWjCytYxSr4ca3AEvfJ7z2rsZ0js8IfUnmQ18I=
 github.com/sparkwing-dev/sparks-core/kube v0.24.0 h1:nWTU0bZlC2nbftil/IRnMFN24lqUTEKBk6mTbYY4qL8=
 github.com/sparkwing-dev/sparks-core/kube v0.24.0/go.mod h1:ulrMv1FF/O7B1RTnqjO0uw7l3RTLIfx3HQIWO0xuxaE=
-github.com/sparkwing-dev/sparks-core/s3 v0.25.0 h1:L3vPOWgUJanCpkdnCJ9xhUU480PRoJJvUFENSCTkCKE=
-github.com/sparkwing-dev/sparks-core/s3 v0.25.0/go.mod h1:i/RIIFKlWg307kggaG9bmmS839xP2GA8QqJc+leFEac=
+github.com/sparkwing-dev/sparks-core/s3 v0.25.1 h1:0yhJikYERLyLp7PgPbtM5pla2+vuH6ZhTRM+voZ5hRY=
+github.com/sparkwing-dev/sparks-core/s3 v0.25.1/go.mod h1:R9lLeeqbrO2qC0K7vdIR51LxMMejgy+XG1JgoyOKh7U=
 github.com/sparkwing-dev/sparks-core/step v0.24.0 h1:77ENVVza1VRs2UIvW2wwwdfyhhZc5l6b7vkVr6sw5hM=
 github.com/sparkwing-dev/sparks-core/step v0.24.0/go.mod h1:bjoEvgv79VMf0rUkKeP9qAELA0/n2frm/49r+fKh1+A=
 github.com/sparkwing-dev/sparkwing v0.31.0 h1:HWElgkn9/j7bZmkCbeUWyFyrmsvvRtocAVo2OVVZDaQ=
