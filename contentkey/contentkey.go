@@ -8,9 +8,9 @@
 //   - Cache keys. [OfPaths] and [Salted] fold the content hash of the
 //     tracked files under a set of git pathspecs into a
 //     [sparkwing.CacheKey]. Hand the returned function to a node's
-//     .Cache modifier; an unchanged tree hashes to the same key and
+//     .Memoize modifier; an unchanged tree hashes to the same key and
 //     replays the recorded result instead of re-running. See
-//     `sparkwing docs read --topic caching` for the .Cache/sparkwing.Key model.
+//     `sparkwing docs read --topic caching` for the .Memoize/sparkwing.Key model.
 //
 //   - Skip predicates. [Unchanged] and [Changed] compare the working
 //     tree against a base ref with `git diff` and return a
@@ -53,7 +53,7 @@ const keySchema = "contentkey/v1"
 // across branches, rebases, and machines; any change to a matched file
 // busts the key. With no globs it covers every tracked file.
 //
-//	job.Cache(contentkey.OfPaths("*.go", "go.mod", "go.sum"))
+//	job.Memoize(contentkey.OfPaths("*.go", "go.mod", "go.sum"))
 //
 // The returned function reads git state and returns [sparkwing.NoCache]
 // (running uncached) if the content cannot be hashed, e.g. outside a
@@ -67,7 +67,7 @@ func OfPaths(globs ...string) func(ctx context.Context) sparkwing.CacheKey {
 // content hash cannot see what changed, such as a toolchain or base
 // image upgrade.
 //
-//	job.Cache(contentkey.Salted("v2", "*.go", "go.mod", "go.sum"))
+//	job.Memoize(contentkey.Salted("v2", "*.go", "go.mod", "go.sum"))
 func Salted(salt string, globs ...string) func(ctx context.Context) sparkwing.CacheKey {
 	return func(ctx context.Context) sparkwing.CacheKey {
 		dir := workDir()
@@ -128,7 +128,7 @@ func Changed(baseRef string, globs ...string) func(ctx context.Context) bool {
 // scoped to one package's real dependency footprint via `go list`, the
 // building block for per-package test caching in a monorepo.
 //
-//	job.Cache(contentkey.OfGoPackage("./integration", "go.mod", "go.sum"))
+//	job.Memoize(contentkey.OfGoPackage("./integration", "go.mod", "go.sum"))
 //
 // spec is a `go list` package pattern that resolves to a single package
 // (`.`, `./integration`, or a full import path). The returned function
@@ -144,7 +144,7 @@ func OfGoPackage(spec string, extraGlobs ...string) func(ctx context.Context) sp
 // packages sharing a salt never replay one another's stored result even
 // if their file closures happen to coincide.
 //
-//	job.Cache(contentkey.SaltedGoPackage("v2", "./integration", "go.mod"))
+//	job.Memoize(contentkey.SaltedGoPackage("v2", "./integration", "go.mod"))
 func SaltedGoPackage(salt, spec string, extraGlobs ...string) func(ctx context.Context) sparkwing.CacheKey {
 	return func(ctx context.Context) sparkwing.CacheKey {
 		dir := workDir()

@@ -94,8 +94,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/sparkwing-dev/sparkwing v0.31.0 h1:HWElgkn9/j7bZmkCbeUWyFyrmsvvRtocAVo2OVVZDaQ=
-github.com/sparkwing-dev/sparkwing v0.31.0/go.mod h1:HJrN9+7gTqLI8l8YKbbiQYMEwkuCuUMig57ibBwX4Ag=
+github.com/sparkwing-dev/sparkwing v0.32.1 h1:2secvAnPiEbMiGAzUjWtV1rLnPl9xeQehOwCcT/nWkA=
+github.com/sparkwing-dev/sparkwing v0.32.1/go.mod h1:gufkNaZLkijpHU5bgDdm+HtowDR7l4dT6zqDGmjTBzc=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
