@@ -91,7 +91,7 @@ func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
 func functionIdentityToken(audience string) func(ctx context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
 		args := []string{"auth", "print-identity-token", "--audiences", audience}
-		args = append(args, gcp.ImpersonationArgs()...)
+		args = append(args, gcp.ImpersonationArgs("")...)
 		out, err := sparkwing.Exec(ctx, "gcloud", args...).String()
 		if err != nil {
 			return "", err
@@ -114,7 +114,7 @@ func functionDeployArgs() []string {
 	}
 	args = append(args, functionTriggerArgs()...)
 	args = append(args, gcp.ProjectArgs({{quote .project}})...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs("")...)
 	return append(args, "--quiet")
 }
 
@@ -152,7 +152,7 @@ func resolveFunctionURL(ctx context.Context) (string, error) {
 	args := []string{"functions", "describe", {{quote .function}},
 		"--gen2", "--region", {{quote .region}}, "--format=value(url)"}
 	args = append(args, gcp.ProjectArgs({{quote .project}})...)
-	args = append(args, gcp.ImpersonationArgs()...)
+	args = append(args, gcp.ImpersonationArgs("")...)
 	out, err := sparkwing.Exec(ctx, "gcloud", args...).String()
 	if err != nil {
 		return "", err
