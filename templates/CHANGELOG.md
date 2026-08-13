@@ -9,6 +9,15 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.30.0] - 2026-08-12
+
+### Changed
+- **cached-test-suite, go-affected-tests:** call `.Memoize()` instead of
+  `.Cache()`, following the sparkwing SDK rename of the result-memoization
+  modifier. A pipeline scaffolded from these templates now needs sparkwing
+  v0.32.0 or later, where the `.Memoize()` name lands; against an older SDK
+  the generated `.sparkwing/` module does not compile.
+
 ## [v0.29.1] - 2026-08-12
 
 ### Fixed
