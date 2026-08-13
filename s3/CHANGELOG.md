@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.1] - 2026-08-12
+
+### Fixed
+- **deps:** require `aws` v0.25.0. v0.25.0 called
+  `aws.CallerIdentityArgs` while still requiring `aws` v0.24.0, so the
+  module did not build for anyone outside this repo's workspace.
+
 ## [v0.25.0] - 2026-08-12
 
 ### Changed

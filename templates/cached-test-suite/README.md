@@ -16,7 +16,7 @@ sparkwing pipeline new --name test --template cached-test-suite \
 
 ## What it does
 
-- The Plan registers one `test` Job and attaches `.Cache(...)`. The key
+- The Plan registers one `test` Job and attaches `.Memoize(...)`. The key
   comes from `contentkey.Salted(salt, globs...)`, which runs `git
   ls-files` then `git hash-object` over the matched paths and folds the
   sorted `(path, blob-hash)` pairs into a `sparkwing.CacheKey`. The salt

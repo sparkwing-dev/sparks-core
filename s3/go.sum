@@ -96,8 +96,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qq
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/sparkwing-dev/sparks-core/aws v0.24.0 h1:+UqL+5vapAWvmDWCmn3aCB3gPz2QlFeR38WXLk3RnLQ=
-github.com/sparkwing-dev/sparks-core/aws v0.24.0/go.mod h1:onfZea13/30OCvs9lvOqXvGS+krNU/99N9czFpFQerM=
+github.com/sparkwing-dev/sparks-core/aws v0.25.0 h1:VlUyHi6Z1x1hSnK6GmBpUl8PsRYfRrMW4I8/6/hZkRM=
+github.com/sparkwing-dev/sparks-core/aws v0.25.0/go.mod h1:onfZea13/30OCvs9lvOqXvGS+krNU/99N9czFpFQerM=
 github.com/sparkwing-dev/sparkwing v0.31.0 h1:HWElgkn9/j7bZmkCbeUWyFyrmsvvRtocAVo2OVVZDaQ=
 github.com/sparkwing-dev/sparkwing v0.31.0/go.mod h1:HJrN9+7gTqLI8l8YKbbiQYMEwkuCuUMig57ibBwX4Ag=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

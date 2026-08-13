@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.2.1] - 2026-08-12
+
+### Fixed
+- **deps:** require `gcp` v0.2.0. v0.2.0 passed a service account to
+  `gcp.ImpersonationArgs` while still requiring `gcp` v0.1.0, whose
+  signature takes no argument, so the module did not build.
+
 ## [v0.2.0] - 2026-08-12
 
 ### Changed
