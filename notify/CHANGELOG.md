@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
 ### Added
 - Initial release. `Webhook` POSTs a JSON payload to an HTTP webhook
   (non-2xx is an error); `Slack` is the `{"text": ...}` convenience for

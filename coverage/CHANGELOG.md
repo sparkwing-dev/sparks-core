@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+- **errors:** two error strings lose their leading capital.
+
 ## [v0.1.0] - 2026-07-18
 
 ### Added

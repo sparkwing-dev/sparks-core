@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.26.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
 ### Removed
 - **kind:** (Breaking) the `kind load docker-image` path in
   `BuildAndPush`, along with the `SPARKWING_KIND_CLUSTER` read that

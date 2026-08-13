@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
 ### Removed
 - **kind:** (Breaking) the `SPARKWING_KIND_CLUSTER` branch in `Run`. It
   turned a deploy that had declared `Local: false` into a local kind
@@ -18,6 +20,8 @@ multi-module repo conventions).
 See `docs/migrations/caller-names-the-target.md`.
 
 ### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 
 ## [v0.24.0] - 2026-05-21

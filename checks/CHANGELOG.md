@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.26.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+- **errors:** the disallowed-comment message no longer ends in a colon.
+
 ## [v0.25.0] - 2026-07-18
 
 ### Added

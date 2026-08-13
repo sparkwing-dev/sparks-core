@@ -9,7 +9,11 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
 ### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
 - **profile:** (Breaking) `StaticDeploy` no longer requires `AWSProfile`. The guard
   existed because an empty profile once became `--profile default`, and
   the `aws` module stopped doing that in `aws/v0.24.0`, so the guard was

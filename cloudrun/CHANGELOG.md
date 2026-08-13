@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.2.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
 ### Added
 - **identity:** `ImpersonateServiceAccount` on `DeployConfig`, `Ref`,
   `TrafficConfig`, and `RollbackConfig`. It replaces the

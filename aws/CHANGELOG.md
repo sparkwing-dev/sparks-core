@@ -9,7 +9,11 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
 ### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
 - **profile:** (Breaking) `ProfileArgs` and `ProfileFlag` no longer read
   `AWS_PROFILE`. The caller's profile is the only one they pass. Passing `--profile`
   overrides the credentials already in the environment, so promoting an

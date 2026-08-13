@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.26.0] - 2026-08-12
+
 ### Removed
 - **kind:** (Breaking) `DeployKindKustomize`, `KindKustomizeConfig`,
   `DeployKustomize`, and `DeployKustomizeConfig`. Both were kind-only
@@ -17,6 +19,8 @@ multi-module repo conventions).
   and `Apply` cover what remains.
 
 ### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
 - **context:** (Breaking) `ResolveContext` no longer reads
   `SPARKWING_KUBE_CONTEXT`, `SPARKWING_KIND_CLUSTER`, or
   `SPARKWING_KUBE_ALLOW_CURRENT`. It resolves an explicit context, or an

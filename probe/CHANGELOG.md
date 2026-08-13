@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
 ### Added
 - Initial release. `probe.HTTP(url)` builds an HTTP health probe whose
   `Check` method is a `func(ctx) error` suitable for sparkwing's

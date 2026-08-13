@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.3.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
 ### Fixed
 - Cache keys no longer silently drop a tracked path when `Lstat` fails
   for a reason other than the file being gone (e.g. transient

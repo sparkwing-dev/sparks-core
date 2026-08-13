@@ -23,13 +23,48 @@ var awsWordRe = regexp.MustCompile(`\baws\b`)
 // function that shells aws must reference one of them, directly or
 // through a local wrapper: resolvesProfileName also accepts any name
 // ending in ProfileArgs or ProfileFlag, which is how ecs and lambda
-// build their argv (regionProfileArgs).
+// build their argv (regionProfileArgs). CallerIdentityArgs is here
+// because it appends ProfileArgs itself, and is what a caller runs to
+// confirm the account before a destructive call.
 var awsProfileResolvers = map[string]bool{
-	"ProfileArgs": true,
-	"ProfileFlag": true,
-	// CallerIdentityArgs appends ProfileArgs itself, and is what a
-	// caller runs to confirm the account before a destructive call.
+	"ProfileArgs":        true,
+	"ProfileFlag":        true,
 	"CallerIdentityArgs": true,
+}
+
+// stringSliceParams returns the names of fn's []string parameters.
+// Helpers take the resolved argv, or the resolved profile flags, as such
+// a parameter and thread it down (ecs's rp, lambda's args), so an aws
+// call whose argv references one was already targeted by the caller.
+func stringSliceParams(fn *ast.FuncDecl) map[string]bool {
+	names := map[string]bool{}
+	for _, field := range fn.Type.Params.List {
+		at, ok := field.Type.(*ast.ArrayType)
+		if !ok {
+			continue
+		}
+		if elt, ok := at.Elt.(*ast.Ident); !ok || elt.Name != "string" {
+			continue
+		}
+		for _, name := range field.Names {
+			names[name.Name] = true
+		}
+	}
+	return names
+}
+
+// referencesAny reports whether node mentions any of names. A local built
+// from a resolved parameter carries the same resolution, which is how ecs
+// reaches its exec: args := describeServicesArgs(..., rp).
+func referencesAny(node ast.Node, names map[string]bool) bool {
+	found := false
+	ast.Inspect(node, func(inner ast.Node) bool {
+		if id, ok := inner.(*ast.Ident); ok && names[id.Name] {
+			found = true
+		}
+		return true
+	})
+	return found
 }
 
 // resolvesProfileName reports whether a called function resolves the aws
@@ -102,36 +137,8 @@ func scanGoForRawAWS(filename string, src []byte) ([]int, error) {
 		}
 		var awsLines []int
 		resolvesProfile := false
-		// Helpers take the resolved argv, or the resolved profile flags,
-		// as a []string parameter and thread it down (ecs's rp, lambda's
-		// args). The resolution happened in the caller, so an aws call
-		// whose argv references such a parameter is already targeted.
-		sliceParams := map[string]bool{}
-		for _, field := range fn.Type.Params.List {
-			at, ok := field.Type.(*ast.ArrayType)
-			if !ok {
-				continue
-			}
-			if elt, ok := at.Elt.(*ast.Ident); !ok || elt.Name != "string" {
-				continue
-			}
-			for _, name := range field.Names {
-				sliceParams[name.Name] = true
-			}
-		}
-		// A local built from one of those parameters carries the same
-		// resolution: ecs does args := describeServicesArgs(..., rp)
-		// and then execs args.
-		carries := func(node ast.Node) bool {
-			found := false
-			ast.Inspect(node, func(inner ast.Node) bool {
-				if id, ok := inner.(*ast.Ident); ok && sliceParams[id.Name] {
-					found = true
-				}
-				return true
-			})
-			return found
-		}
+		sliceParams := stringSliceParams(fn)
+		carries := func(node ast.Node) bool { return referencesAny(node, sliceParams) }
 		ast.Inspect(fn, func(n ast.Node) bool {
 			assign, ok := n.(*ast.AssignStmt)
 			if !ok {
