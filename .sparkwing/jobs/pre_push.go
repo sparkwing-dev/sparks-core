@@ -32,7 +32,10 @@ func (PrePush) Help() string {
 		"Per-module checks (golangci-lint, `go test -race`, govulncheck, " +
 		"`go mod tidy` drift) iterate every go.mod under the repo. Repo-" +
 		"level checks: no `replace` lines, no committed go.work / go.work.sum, " +
-		"sparkwing-ecosystem version-freshness, shellcheck, markdownlint."
+		"shellcheck, markdownlint. SDK staleness is reported by the " +
+		"sparks-core-sdk-staleness chore rather than gated here, because no " +
+		"push can clear it and a gate that fails on every push teaches people " +
+		"to ignore it."
 }
 
 func (PrePush) Examples() []sparkwing.Example {
@@ -56,7 +59,6 @@ func (p *PrePush) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	sparkwing.Step(w, "no-raw-aws", checkNoRawAWS)
 	sparkwing.Step(w, "module-layering", checkModuleLayering)
 	sparkwing.Step(w, "tidy", tidyAllModules)
-	sparkwing.Step(w, "version-freshness", checkVersionFreshness)
 	sparkwing.Step(w, "golangci-lint", lintAllModules)
 	sparkwing.Step(w, "test-race", testRaceAllModules)
 	sparkwing.Step(w, "govulncheck", govulncheckAllModules)
@@ -179,10 +181,6 @@ func moduleHasNoPackages(ctx context.Context, dir string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
-}
-
-func checkVersionFreshness(ctx context.Context) error {
-	return CheckVersionsFreshness(ctx, sparkwing.WorkDir())
 }
 
 func runShellcheck(ctx context.Context) error {
