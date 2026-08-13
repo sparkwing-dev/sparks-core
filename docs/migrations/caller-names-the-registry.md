@@ -30,7 +30,7 @@ evidence the API was wrong.
 |---|---|
 | `DetectRegistries(cluster, defaultECR)` | `Registries(registry, ecrRegistry)` |
 | `DetectLocalRegistries(cluster)` | `RequireLocalRegistry(registry)` |
-| `TryDetectLocalRegistries(cluster)` | `LocalRegistries(registry)` — returns `[]string`, no error |
+| `TryDetectLocalRegistries(cluster)` | `LocalRegistries(registry)`, which returns `[]string` and no error |
 
 The names lose "Detect" because nothing is detected once the caller
 names the registry. The `cluster` parameter is gone: no function body
