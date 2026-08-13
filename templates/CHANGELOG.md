@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.29.1] - 2026-08-12
+
+### Fixed
+- **cloud-functions-deploy:** pass the empty impersonation account to
+  `gcp.ImpersonationArgs`, which gained a parameter in `gcp` v0.2.0. The
+  template did not compile as shipped in v0.29.0.
+
 ## [v0.29.0] - 2026-08-12
 
 ### Changed

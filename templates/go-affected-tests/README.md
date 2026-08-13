@@ -19,7 +19,7 @@ sparkwing pipeline new --name test --template go-affected-tests \
 ## What it does
 
 - The Plan splits the `packages` parameter into `go list` package specs
-  and registers one `test-<name>` Job per spec, each with a `.Memoize(...)`
+  and registers one `test-<name>` Job per spec, each with a `.Cache(...)`
   whose key comes from `contentkey.SaltedGoPackage(salt, spec, globs...)`.
   A `gate` Job `Needs` the whole group, so the run is green only when
   every package passed.

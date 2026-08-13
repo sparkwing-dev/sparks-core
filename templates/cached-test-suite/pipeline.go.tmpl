@@ -60,7 +60,7 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 }
 
 func ({{pascal .pipeline_name}}) Help() string {
-	return "Runs the test suite as one .Memoize()-keyed Job. The key is the content hash of the tracked files matching source-globs, salted with the pipeline name, cache-version, and test command, so an unchanged tree replays the recorded pass instead of re-running. Change any matched file, edit the test command, or bump cache-version to bust the key."
+	return "Runs the test suite as one .Cache()-keyed Job. The key is the content hash of the tracked files matching source-globs, salted with the pipeline name, cache-version, and test command, so an unchanged tree replays the recorded pass instead of re-running. Change any matched file, edit the test command, or bump cache-version to bust the key."
 }
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
@@ -73,7 +73,7 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 	globs := splitGlobs({{quote .source_globs}})
 	sparkwing.Job(plan, "test", p.test).
-		Memoize(contentkey.Salted(cacheSalt, globs...){{if .cache_ttl}}, sparkwing.TTL({{pascal .pipeline_name}}CacheTTL){{end}})
+		Cache(contentkey.Salted(cacheSalt, globs...){{if .cache_ttl}}, sparkwing.TTL({{pascal .pipeline_name}}CacheTTL){{end}})
 	return nil
 }
 

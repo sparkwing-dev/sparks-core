@@ -1,6 +1,6 @@
 name: cached-test-suite
 description: |
-  Run a test suite as a single .Memoize()-keyed Job whose content key is
+  Run a test suite as a single .Cache()-keyed Job whose content key is
   the hash of the source globs. An unchanged tree replays the recorded
   pass instead of re-running; the first run computes and stores it,
   every later run on identical content hits. Fully local -- the replay

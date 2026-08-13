@@ -1,6 +1,6 @@
 name: go-affected-tests
 description: |
-  Run each listed Go package as its own .Memoize()-keyed test job, gated by
+  Run each listed Go package as its own .Cache()-keyed test job, gated by
   a node that passes only when every package job passes. Each key is the
   content hash of that package's files plus its same-module dependency
   closure (resolved with `go list`), so an unchanged package replays its
