@@ -137,7 +137,7 @@ func NpmPublish(ctx context.Context, cfg NpmPublishConfig) error {
 			if err != nil {
 				return err
 			}
-			defer os.Remove(npmrc)
+			defer func() { _ = os.Remove(npmrc) }()
 			runArgs = append(append([]string(nil), args...), "--userconfig", npmrc)
 		}
 		cmd := sparkwing.Exec(ctx, "npm", runArgs...)
@@ -171,11 +171,11 @@ func writeNpmAuthConfig(registry string) (string, error) {
 	line := "//" + npmAuthHost(registry) + ":_authToken=${NODE_AUTH_TOKEN}\n"
 	if _, werr := f.WriteString(line); werr != nil {
 		f.Close()
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return "", fmt.Errorf("release: write npmrc: %w", werr)
 	}
 	if cerr := f.Close(); cerr != nil {
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return "", fmt.Errorf("release: write npmrc: %w", cerr)
 	}
 	return f.Name(), nil

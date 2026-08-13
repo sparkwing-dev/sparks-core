@@ -45,11 +45,13 @@ func TestRegionProfileArgs_IRSADropsProfile(t *testing.T) {
 
 func TestDescribeArgs(t *testing.T) {
 	got := describeArgs("myapp", []string{"--region", "us-west-2"})
-	want := []string{"ecs", "describe-task-definition",
+	want := []string{
+		"ecs", "describe-task-definition",
 		"--task-definition", "myapp",
 		"--query", "taskDefinition",
 		"--output", "json",
-		"--region", "us-west-2"}
+		"--region", "us-west-2",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("describeArgs = %v, want %v", got, want)
 	}
@@ -57,10 +59,12 @@ func TestDescribeArgs(t *testing.T) {
 
 func TestRegisterArgs(t *testing.T) {
 	got := registerArgs("file:///tmp/td.json", nil, nil)
-	want := []string{"ecs", "register-task-definition",
+	want := []string{
+		"ecs", "register-task-definition",
 		"--cli-input-json", "file:///tmp/td.json",
 		"--query", "taskDefinition.taskDefinitionArn",
-		"--output", "text"}
+		"--output", "text",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("registerArgs = %v, want %v", got, want)
 	}
@@ -68,12 +72,14 @@ func TestRegisterArgs(t *testing.T) {
 
 func TestRegisterArgs_AppendsExtra(t *testing.T) {
 	got := registerArgs("file:///tmp/td.json", []string{"--tags", "key=team,value=core"}, []string{"--profile", "ci"})
-	want := []string{"ecs", "register-task-definition",
+	want := []string{
+		"ecs", "register-task-definition",
 		"--cli-input-json", "file:///tmp/td.json",
 		"--query", "taskDefinition.taskDefinitionArn",
 		"--output", "text",
 		"--tags", "key=team,value=core",
-		"--profile", "ci"}
+		"--profile", "ci",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("registerArgs = %v, want %v", got, want)
 	}
@@ -81,11 +87,13 @@ func TestRegisterArgs_AppendsExtra(t *testing.T) {
 
 func TestUpdateServiceArgs(t *testing.T) {
 	got := updateServiceArgs("prod", "web", "arn:aws:ecs:...:task-definition/web:7", nil, []string{"--profile", "ci"})
-	want := []string{"ecs", "update-service",
+	want := []string{
+		"ecs", "update-service",
 		"--cluster", "prod",
 		"--service", "web",
 		"--task-definition", "arn:aws:ecs:...:task-definition/web:7",
-		"--profile", "ci"}
+		"--profile", "ci",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("updateServiceArgs = %v, want %v", got, want)
 	}
@@ -93,11 +101,13 @@ func TestUpdateServiceArgs(t *testing.T) {
 
 func TestUpdateServiceArgs_AppendsExtra(t *testing.T) {
 	got := updateServiceArgs("prod", "web", "web:7", []string{"--force-new-deployment"}, nil)
-	want := []string{"ecs", "update-service",
+	want := []string{
+		"ecs", "update-service",
 		"--cluster", "prod",
 		"--service", "web",
 		"--task-definition", "web:7",
-		"--force-new-deployment"}
+		"--force-new-deployment",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("updateServiceArgs = %v, want %v", got, want)
 	}
@@ -105,9 +115,11 @@ func TestUpdateServiceArgs_AppendsExtra(t *testing.T) {
 
 func TestWaitStableArgs(t *testing.T) {
 	got := waitStableArgs("prod", "web", nil)
-	want := []string{"ecs", "wait", "services-stable",
+	want := []string{
+		"ecs", "wait", "services-stable",
 		"--cluster", "prod",
-		"--services", "web"}
+		"--services", "web",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("waitStableArgs = %v, want %v", got, want)
 	}

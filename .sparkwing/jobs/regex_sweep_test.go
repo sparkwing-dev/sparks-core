@@ -28,7 +28,7 @@ func sweepGit(t *testing.T, dir string, args ...string) {
 		"-c", "user.email=gate@example.com",
 		"-c", "commit.gpgsign=false",
 	}, args...)
-	cmd := exec.Command("git", full...)
+	cmd := exec.CommandContext(context.Background(), "git", full...)
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)

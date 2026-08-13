@@ -82,7 +82,7 @@ func Comments(ctx context.Context, paths ...string) error {
 		for _, l := range lines {
 			sparkwing.Info(ctx, "  %s", l)
 		}
-		return fmt.Errorf("%d disallowed comment(s); allowed: godoc, // hack:, // safety:, // bug:, // perf:", len(violations))
+		return fmt.Errorf("%d disallowed comment(s); allowed are godoc and the hack, safety, bug and perf tags", len(violations))
 	})
 }
 

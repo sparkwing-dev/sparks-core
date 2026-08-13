@@ -164,12 +164,12 @@ func Dump(ctx context.Context, cfg Config) (Artifact, error) {
 		if err := dumpSQL(ctx, engine, cfg, sqlPath); err != nil {
 			return err
 		}
-		defer os.Remove(sqlPath)
+		defer func() { _ = os.Remove(sqlPath) }()
 		size, err := gzipFile(sqlPath, gzPath)
 		if err != nil {
 			return fmt.Errorf("dbbackup: compress dump: %w", err)
 		}
-		defer os.Remove(gzPath)
+		defer func() { _ = os.Remove(gzPath) }()
 		art.Bytes = size
 		art.AWSProfile = cfg.AWSProfile
 		art.Project = cfg.Project
@@ -219,7 +219,7 @@ func Restore(ctx context.Context, cfg Config) error {
 		if err := gunzipFile(gzPath, sqlPath); err != nil {
 			return fmt.Errorf("dbbackup: decompress source: %w", err)
 		}
-		defer os.Remove(sqlPath)
+		defer func() { _ = os.Remove(sqlPath) }()
 		if err := replaySQL(ctx, engine, cfg, sqlPath); err != nil {
 			return err
 		}
@@ -410,13 +410,13 @@ func fetch(ctx context.Context, cfg Config, src location, workDir string) (strin
 		if err := execWithRetry(ctx, "aws", s3DownloadArgs(cfg.Source, local, cfg.AWSProfile)...); err != nil {
 			return "", noop, err
 		}
-		return local, func() { os.Remove(local) }, nil
+		return local, func() { _ = os.Remove(local) }, nil
 	case schemeGS:
 		local := filepath.Join(workDir, "dbbackup-src-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".sql.gz")
 		if err := execWithRetry(ctx, "gcloud", gsDownloadArgs(cfg.Source, local, cfg.Project)...); err != nil {
 			return "", noop, err
 		}
-		return local, func() { os.Remove(local) }, nil
+		return local, func() { _ = os.Remove(local) }, nil
 	}
 	return "", noop, fmt.Errorf("dbbackup: unsupported source scheme %q", src.scheme)
 }
@@ -759,7 +759,7 @@ func gzipFile(src, dst string) (int64, error) {
 	defer out.Close()
 	gw := gzip.NewWriter(out)
 	if _, err := io.Copy(gw, in); err != nil {
-		gw.Close()
+		_ = gw.Close()
 		return 0, err
 	}
 	if err := gw.Close(); err != nil {
@@ -786,7 +786,7 @@ func gunzipFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 	out, err := os.Create(dst)
 	if err != nil {
 		return err

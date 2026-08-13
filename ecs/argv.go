@@ -35,10 +35,12 @@ func regionProfileArgs(region, awsProfile string) []string {
 // describeArgs builds the argv for reading a family's current task
 // definition as JSON.
 func describeArgs(taskFamily string, rp []string) []string {
-	args := []string{"ecs", "describe-task-definition",
+	args := []string{
+		"ecs", "describe-task-definition",
 		"--task-definition", taskFamily,
 		"--query", "taskDefinition",
-		"--output", "json"}
+		"--output", "json",
+	}
 	return append(args, rp...)
 }
 
@@ -47,10 +49,12 @@ func describeArgs(taskFamily string, rp []string) []string {
 // dry-run), returning the new revision's ARN as plain text. extra is
 // appended verbatim as an escape hatch for the CLI's long tail.
 func registerArgs(inputRef string, extra, rp []string) []string {
-	args := []string{"ecs", "register-task-definition",
+	args := []string{
+		"ecs", "register-task-definition",
 		"--cli-input-json", inputRef,
 		"--query", "taskDefinition.taskDefinitionArn",
-		"--output", "text"}
+		"--output", "text",
+	}
 	args = append(args, extra...)
 	return append(args, rp...)
 }
@@ -60,10 +64,12 @@ func registerArgs(inputRef string, extra, rp []string) []string {
 // an escape hatch for the CLI's long tail (--force-new-deployment,
 // --health-check-grace-period-seconds, ...).
 func updateServiceArgs(cluster, service, taskDef string, extra, rp []string) []string {
-	args := []string{"ecs", "update-service",
+	args := []string{
+		"ecs", "update-service",
 		"--cluster", cluster,
 		"--service", service,
-		"--task-definition", taskDef}
+		"--task-definition", taskDef,
+	}
 	args = append(args, extra...)
 	return append(args, rp...)
 }
@@ -71,20 +77,24 @@ func updateServiceArgs(cluster, service, taskDef string, extra, rp []string) []s
 // waitStableArgs builds the argv for blocking until a service reaches a
 // steady state via the aws CLI's built-in waiter (fixed ~10-minute cap).
 func waitStableArgs(cluster, service string, rp []string) []string {
-	args := []string{"ecs", "wait", "services-stable",
+	args := []string{
+		"ecs", "wait", "services-stable",
 		"--cluster", cluster,
-		"--services", service}
+		"--services", service,
+	}
 	return append(args, rp...)
 }
 
 // describeServicesArgs builds the argv for reading a service's live
 // state as JSON, used by the timeout-bounded stability poll.
 func describeServicesArgs(cluster, service string, rp []string) []string {
-	args := []string{"ecs", "describe-services",
+	args := []string{
+		"ecs", "describe-services",
 		"--cluster", cluster,
 		"--services", service,
 		"--query", "services[0]",
-		"--output", "json"}
+		"--output", "json",
+	}
 	return append(args, rp...)
 }
 
@@ -175,11 +185,11 @@ func writeTaskDefFile(input []byte) (string, error) {
 	}
 	if _, err := f.Write(input); err != nil {
 		f.Close()
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return "", err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return "", err
 	}
 	return f.Name(), nil

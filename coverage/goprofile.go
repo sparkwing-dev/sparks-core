@@ -51,10 +51,10 @@ func parseGoProfile(data []byte) (float64, error) {
 		return 0, fmt.Errorf("read Go coverprofile: %w", err)
 	}
 	if blocks == 0 {
-		return 0, fmt.Errorf("Go coverprofile has no coverage blocks")
+		return 0, fmt.Errorf("go coverprofile has no coverage blocks")
 	}
 	if total == 0 {
-		return 0, fmt.Errorf("Go coverprofile reports zero total statements")
+		return 0, fmt.Errorf("go coverprofile reports zero total statements")
 	}
 	return 100 * float64(covered) / float64(total), nil
 }

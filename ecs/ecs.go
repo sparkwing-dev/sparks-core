@@ -175,7 +175,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (prevTaskDef string, err erro
 		if terr != nil {
 			return terr
 		}
-		defer os.Remove(path)
+		defer func() { _ = os.Remove(path) }()
 		newArn, rerr := sparkwing.Exec(ctx, "aws", registerArgs("file://"+path, cfg.RegisterArgs, rp)...).String()
 		if rerr != nil {
 			return fmt.Errorf("ecs: register task definition %s: %w", cfg.TaskFamily, rerr)
