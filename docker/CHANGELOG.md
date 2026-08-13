@@ -9,6 +9,20 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.27.0] - 2026-08-12
+
+### Changed
+- **registry:** (Breaking) `DetectRegistries`, `DetectLocalRegistries`
+  and `TryDetectLocalRegistries` are replaced by `Registries`,
+  `RequireLocalRegistry` and `LocalRegistries`. The registry is a
+  parameter now instead of a read of `SPARKWING_REGISTRY` /
+  `SPARKWING_ECR_REGISTRY`, so a variable inherited from a shell or a
+  runner pod can no longer redirect a push without the pipeline
+  changing. The names lose "Detect" because nothing is detected once the
+  caller names the registry, and the `cluster` parameter goes with them:
+  no body had read it since kind support was removed in v0.26.0. See
+  [docs/migrations/caller-names-the-registry.md](../docs/migrations/caller-names-the-registry.md).
+
 ## [v0.26.0] - 2026-08-12
 
 ### Changed
