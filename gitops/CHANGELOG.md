@@ -9,7 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
-## [v0.25.0] - 2026-08-12
+## [v0.26.0] - 2026-08-12
+
+### Changed
+- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
+  truncation of large command output in `Exec(...).Lines()`.
+
+## [v0.25.0] - 2026-07-29
 
 ### Added
 - `Revert` rolls a gitops deployment back by reverting a commit (the
@@ -18,8 +24,6 @@ multi-module repo conventions).
   authorization, since a rollback is a recovery action.
 
 ### Changed
-- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
-  truncation of large command output in `Exec(...).Lines()`.
 - **sdk:** bump sparkwing pin to v0.8.0 (gains Job.Verify + failure-aware OnFailure).
 
 ## [v0.24.0] - 2026-05-21
