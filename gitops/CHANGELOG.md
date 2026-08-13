@@ -9,6 +9,27 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.27.0] - 2026-08-12
+
+### Changed
+- **argocd:** (Breaking) `SyncArgoCD` takes an `ArgoCDConfig` naming the
+  server and token, where it read `SPARKWING_ARGOCD_SERVER` and
+  `SPARKWING_ARGOCD_TOKEN`. The token is a credential with nowhere to be
+  passed, which forced callers to resolve it through `sparkwing.Secret`
+  and `os.Setenv` it back for this package to find. An empty
+  `Server` still probes the in-cluster service and still fails closed
+  when it is unreachable, because where the code runs is a fact about
+  the machine rather than a choice of target. See
+  [docs/migrations/caller-names-the-registry.md](../docs/migrations/caller-names-the-registry.md).
+
+### Documentation
+- Name the harness channel explicitly on
+  `authorizeDeployWithController`: `SPARKWING_NO_VERIFY`,
+  `SPARKWING_CONTROLLER`, `SPARKWING_API_TOKEN`, `SPARKWING_JOB_ID`,
+  `SPARKWING_PIPELINE` and `SPARKWING_COMMIT` stay environment reads
+  because the runner sets them to describe a job it dispatched, not to
+  name a target.
+
 ## [v0.26.0] - 2026-08-12
 
 ### Changed

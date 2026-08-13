@@ -9,6 +9,19 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.3.1] - 2026-08-12
+
+### Fixed
+- **docs:** the godoc examples on `OfPaths`, `Salted`, `OfGoPackage` and
+  `SaltedGoPackage` showed `job.Cache(...)`, which sparkwing v0.32.1
+  renamed to `.Memoize(...)` with no alias, so copying one produced code
+  that did not compile. They show `job.Memoize(...)` now, as does the
+  package doc.
+
+### Changed
+- **deps:** raise the sparkwing SDK floor to v0.32.1, the first version
+  with the `.Memoize` modifier the examples demonstrate.
+
 ## [v0.3.0] - 2026-08-12
 
 ### Changed

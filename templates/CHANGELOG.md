@@ -9,6 +9,30 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.31.0] - 2026-08-12
+
+### Removed
+- **go-test-build-deploy-k8s, canary-deploy-k8s:** both templates are
+  gone (Breaking). Each branched on `SPARKWING_KIND_CLUSTER` to load the
+  image it had just built into a local cluster, and kind support was
+  removed from `docker`, `kube`, `deploy` and `rollback`. The branch
+  still compiled, so `template-verify` passed them while a scaffolded
+  pipeline built an image, never got it to a cluster, and deployed
+  whatever was already running. See
+  [docs/migrations/kind-templates-removed.md](../docs/migrations/kind-templates-removed.md).
+  The registry drops from 39 templates to 37.
+
+### Changed
+- **docker-deploy-ecr-eks, go-test-migrate-deploy-argo,
+  gke-deploy-gar-kubectl:** point the "applying k8s YAML directly with
+  kubectl" advice at `gke-deploy-gar-kubectl`, the only kubectl-apply
+  template left, instead of the removed `go-test-build-deploy-k8s`.
+
+### Fixed
+- **lint-test-python, static-deploy-s3-cloudfront:** their READMEs still
+  suggested `.Cache(...)`, missed by the v0.30.0 rename. They say
+  `.Memoize(...)` now.
+
 ## [v0.30.0] - 2026-08-12
 
 ### Changed

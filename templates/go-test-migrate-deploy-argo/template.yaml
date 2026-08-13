@@ -15,7 +15,7 @@ whenToUse: |
   rollback, so they must be backward-compatible (expand/contract): a
   failed, rolled-back deploy leaves the new schema running under the old
   code. If you have no migrations, use docker-deploy-ecr-eks. If you
-  apply k8s YAML directly with kubectl, use go-test-build-deploy-k8s. To
+  apply k8s YAML directly with kubectl, use gke-deploy-gar-kubectl. To
   run migrations on their own (up/down, no build or deploy) use
   db-migrate-updown.
 prerequisite: |

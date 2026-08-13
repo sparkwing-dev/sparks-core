@@ -22,7 +22,7 @@ Or read them directly here: each template is a directory containing a
 
 ## Templates
 
-39 templates. The verify column is the tier the registry harness
+37 templates. The verify column is the tier the registry harness
 holds each template to on every sparkwing release: runnable templates run
 green locally, dry-runnable templates run green with SPARKWING_DRY_RUN=1
 and touch no infrastructure, compile-only templates are rendered, compiled,
@@ -34,7 +34,6 @@ linted, and explained.
 | [static-deploy-gcs-cloudcdn](static-deploy-gcs-cloudcdn/) | gcp | static-site-deploy | compile-only | Build a Next.js (or any static-output) app and sync to a Google Cloud... |
 | [docker-deploy-ecr-eks](docker-deploy-ecr-eks/) | aws | docker-deploy | compile-only | Build a Docker image, push to ECR, and deploy via gitops to EKS (or k... |
 | [docker-deploy-gar-gke](docker-deploy-gar-gke/) | gcp | docker-deploy | compile-only | Build a Docker image, push to Google Artifact Registry, and deploy vi... |
-| [go-test-build-deploy-k8s](go-test-build-deploy-k8s/) | aws | docker-deploy | compile-only | Test, build a Docker image to ECR, and deploy to Kubernetes by applyi... |
 | [go-test-migrate-deploy-argo](go-test-migrate-deploy-argo/) | aws | docker-deploy | compile-only | Run integration tests against an ephemeral Postgres, build a Docker i... |
 | [approval-gated-deploy](approval-gated-deploy/) | any | deploy | compile-only | Build -> test -> human approval gate -> deploy |
 | [next-build-and-push](next-build-and-push/) | aws,gcp | build-only | compile-only | Build a Next.js static export and upload the artifact tarball (out.ta... |
@@ -51,7 +50,6 @@ linted, and explained.
 | [lambda-deploy](lambda-deploy/) | aws | serverless-function-deploy | dry-runnable | Deploy an AWS Lambda from either a container image (build + push to E... |
 | [cloud-functions-deploy](cloud-functions-deploy/) | gcp | serverless-deploy | dry-runnable | Deploy a 2nd-gen Google Cloud Function from source with `gcloud funct... |
 | [next-preview-deploy-cloudrun](next-preview-deploy-cloudrun/) | gcp | static-frontend | compile-only | Per-branch preview deploys for a server-rendered Next.js app on Cloud... |
-| [canary-deploy-k8s](canary-deploy-k8s/) | aws,gcp | deploy | compile-only | Progressive canary rollout on Kubernetes: build the image, deploy a s... |
 | [github-release-go](github-release-go/) | any | release-publish | dry-runnable | Cross-compile a Go binary for a GOOS/GOARCH matrix, write a SHA-256 c... |
 | [npm-publish-package](npm-publish-package/) | any | release-publish | dry-runnable | Build an npm package and publish it with `npm publish`, gated so the ... |
 | [pypi-publish-wheel](pypi-publish-wheel/) | any | release-publish | dry-runnable | Build a Python sdist and wheel with `python -m build`, validate them ... |

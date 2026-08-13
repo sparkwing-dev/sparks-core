@@ -9,10 +9,10 @@ This is a **raw-composition** template: the generated `Plan()` wires
 sparks-core blocks (`gcp`, `docker`, `kube`, `probe`, `rollback`) into a
 `test -> build -> deploy` DAG directly, so you can see and edit the
 orchestration. The blocks do the work; the scaffolded file is just the
-shape. It is the GCP twin of `go-test-build-deploy-k8s` (which targets
-ECR/EKS on AWS): the only GCP-specific additions are `gcloud auth
-configure-docker` for the GAR push and `gcloud container clusters
-get-credentials` for the kubeconfig bootstrap.
+shape. The only GCP-specific parts are `gcloud auth configure-docker`
+for the GAR push and `gcloud container clusters get-credentials` for the
+kubeconfig bootstrap; swap those two and the rest applies to any
+cluster.
 
 The rendered pipeline:
 
@@ -31,10 +31,12 @@ The rendered pipeline:
 - Your repo owns its Kubernetes YAML and you apply it directly with
   `kubectl` -- no gitops repo, no ArgoCD, no kustomize indirection.
 - You want a deploy that rolls itself back when a health check fails.
+- You're on AWS and apply your own YAML: this is the only kubectl-apply
+  template, so start here and swap the GAR push and the
+  `get-credentials` node for ECR and EKS.
 
 ## When not to use
 
-- You're on AWS: use `go-test-build-deploy-k8s` (the ECR/EKS twin).
 - You deploy through a gitops repo + ArgoCD: use `docker-deploy-gar-gke`.
 - You don't run a GKE cluster and want managed serverless containers: use
   `docker-deploy-gar-cloudrun` (build and push the image yourself) or

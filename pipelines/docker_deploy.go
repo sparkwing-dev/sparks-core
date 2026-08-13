@@ -22,7 +22,6 @@ package pipelines
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/sparkwing-dev/sparks-core/deploy"
 	"github.com/sparkwing-dev/sparks-core/docker"
+	"github.com/sparkwing-dev/sparks-core/gitops"
 )
 
 // DockerDeploy is a one-node pipeline that builds a Docker image,
@@ -54,6 +54,10 @@ type DockerDeploy struct {
 	// ECR is the AWS ECR registry URL used for prod pushes + gitops
 	// image matching.
 	ECR string
+	// Registry redirects the push to a registry other than ECR (a
+	// runner-local registry, GAR, GHCR). Empty pushes to ECR. It does
+	// not change the ECR endpoint gitops matches images on.
+	Registry string
 	// GitopsRepo is the SSH URL for the gitops repo.
 	GitopsRepo string
 	// GitopsPath is the path within the gitops repo (e.g.
@@ -61,15 +65,16 @@ type DockerDeploy struct {
 	GitopsPath string
 	// AppName is the ArgoCD application name.
 	AppName string
+	// ArgoCD names the server the deploy syncs against and the token it
+	// authenticates with. An empty Server probes the in-cluster
+	// service.
+	ArgoCD gitops.ArgoCDConfig
 	// Namespace is the K8s namespace. For local/kind deploys this is
 	// also the kubectl -n target.
 	Namespace string
 	// DeployMap maps image name -> k8s deployment (e.g. "myapp" ->
 	// "deploy/myapp"). Defaults to image -> "deploy/<image>".
 	DeployMap map[string]string
-	// Cluster is the kind cluster name used when deploying locally.
-	// Defaults to "sparktest".
-	Cluster string
 	// TestCmd is an optional shell command run before build. When
 	// empty the test step is skipped entirely.
 	TestCmd string
@@ -100,7 +105,7 @@ func (d *DockerDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing
 func (d *DockerDeploy) Run(ctx context.Context) error {
 	d.applyDefaults()
 
-	registries, err := d.resolveRegistries(ctx)
+	registries, err := d.resolveRegistries()
 	if err != nil {
 		return err
 	}
@@ -143,6 +148,7 @@ func (d *DockerDeploy) Run(ctx context.Context) error {
 		AppName:    d.AppName,
 		Namespace:  d.Namespace,
 		DeployMap:  d.DeployMap,
+		ArgoCD:     d.ArgoCD,
 	})
 }
 
@@ -153,26 +159,11 @@ func (d *DockerDeploy) applyDefaults() {
 	if d.Context == "" {
 		d.Context = "."
 	}
-	if d.Cluster == "" {
-		d.Cluster = "sparktest"
-	}
 	if d.DeployMap == nil {
 		d.DeployMap = map[string]string{d.Image: "deploy/" + d.Image}
 	}
 }
 
-// resolveRegistries honors SPARKWING_REGISTRY (runner pod override),
-// falling back to the configured ECR plus any local-kind registry
-// hint. Mirrors the selection logic the old sparks.DockerDeploy
-// helper did inline.
-func (d *DockerDeploy) resolveRegistries(ctx context.Context) ([]string, error) {
-	if r := os.Getenv("SPARKWING_REGISTRY"); r != "" {
-		return []string{r}, nil
-	}
-	registries := []string{d.ECR}
-	local, _ := docker.TryDetectLocalRegistries(d.Cluster)
-	if len(local) > 0 {
-		registries = append(local, registries...)
-	}
-	return registries, nil
+func (d *DockerDeploy) resolveRegistries() ([]string, error) {
+	return docker.Registries(d.Registry, d.ECR)
 }

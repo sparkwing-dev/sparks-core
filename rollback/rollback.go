@@ -1,7 +1,7 @@
 // Package rollback reverts the most recent deployment. It is the
 // recovery counterpart to the deploy package and routes the same way:
 //
-//   - kind / local: `kubectl rollout undo` on the named deployments.
+//   - local: `kubectl rollout undo` on the named deployments.
 //   - remote (prod): revert the last gitops commit and let ArgoCD sync
 //     the cluster back to the prior image tags.
 //
@@ -30,16 +30,16 @@ import (
 	"github.com/sparkwing-dev/sparks-core/kube"
 )
 
-// Config configures a rollback. The kube fields drive the local/kind
-// path; the gitops fields drive the remote path. Populate both so the
+// Config configures a rollback. The kube fields drive the local path;
+// the gitops fields drive the remote path. Populate both so the
 // same config rolls back correctly regardless of where it runs.
 type Config struct {
-	// Deployments are the k8s deployments to roll back on the
-	// local/kind path (e.g. "deploy/myapp").
+	// Deployments are the k8s deployments to roll back on the local
+	// path (e.g. "deploy/myapp").
 	Deployments []string
-	// Namespace is the kubectl -n target for the local/kind path.
+	// Namespace is the kubectl -n target for the local path.
 	Namespace string
-	// Context is the kubectl --context for the local/kind path. Empty
+	// Context is the kubectl --context for the local path. Empty
 	// resolves via kube.ResolveContext (explicit, or in-cluster
 	// cluster, in-cluster) and fails closed.
 	Context string
@@ -50,8 +50,11 @@ type Config struct {
 	GitopsCommit string
 	// AppName is the ArgoCD application to sync after a remote revert.
 	AppName string
-	// Local forces the kubectl path even when no kind cluster env hint
-	// is present.
+	// ArgoCD names the server the remote path syncs against and the
+	// token it authenticates with. An empty Server probes the
+	// in-cluster service.
+	ArgoCD gitops.ArgoCDConfig
+	// Local routes to the kubectl path instead of gitops.
 	Local bool
 }
 
@@ -76,7 +79,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	if changed && cfg.AppName != "" {
-		return gitops.SyncArgoCD(ctx, cfg.AppName)
+		return gitops.SyncArgoCD(ctx, cfg.ArgoCD, cfg.AppName)
 	}
 	sparkwing.Info(ctx, "rollback: nothing reverted - skipping argocd sync")
 	return nil

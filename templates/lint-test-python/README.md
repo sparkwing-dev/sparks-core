@@ -69,7 +69,7 @@ A few deliberate omissions, in case you want them:
 - **Caching.** The install node is the slowest, most-cacheable step, but
   this template stays minimal and does not cache. For a resolved
   environment keyed on the lockfile, use `cached-test-suite` (whole-job
-  content replay) as the model, or add a `.Cache(...)` on the install
+  content replay) as the model, or add a `.Memoize(...)` on the install
   node keyed on `uv.lock`/`pyproject.toml`.
 - **Install retry/timeout.** `install-cmd` does network I/O (package
   downloads) and is not retried here. If registry flakes bite, add

@@ -23,7 +23,7 @@ directly, so you can see and edit the orchestration.
 
 - No migrations: use `docker-deploy-ecr-eks`.
 - You apply k8s YAML directly with `kubectl` (no gitops): use
-  `go-test-build-deploy-k8s`.
+  `gke-deploy-gar-kubectl`.
 
 ## Parameters
 

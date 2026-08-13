@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -30,37 +29,40 @@ func ECRLogin(ctx context.Context, registry, awsProfile string) error {
 	return RegistryLogin(ctx, LoginConfig{Kind: RegistryECR, Registry: registry, AWSProfile: awsProfile})
 }
 
-// TryDetectLocalRegistries returns a user-specified local registry via
-// SPARKWING_REGISTRY, or nil.
-func TryDetectLocalRegistries(cluster string) ([]string, error) {
-	if r := os.Getenv("SPARKWING_REGISTRY"); r != "" && !IsECR(r) {
-		return []string{r}, nil
+// Registries returns the registries to push to: the one the caller
+// named, or ecrRegistry when the caller named none. Passing both means
+// registry wins, so a pipeline can redirect a push without editing the
+// ECR endpoint it also matches on in the gitops repo.
+func Registries(registry, ecrRegistry string) ([]string, error) {
+	if registry != "" {
+		return []string{registry}, nil
 	}
-	return nil, nil
+	if ecrRegistry == "" {
+		return nil, fmt.Errorf("no registry named: pass a registry, an ECR registry, or both")
+	}
+	return []string{ecrRegistry}, nil
 }
 
-// DetectLocalRegistries is the strict variant of TryDetectLocalRegistries:
-// returns the SPARKWING_REGISTRY override or errors.
-func DetectLocalRegistries(cluster string) ([]string, error) {
-	if r := os.Getenv("SPARKWING_REGISTRY"); r != "" && !IsECR(r) {
-		return []string{r}, nil
+// LocalRegistries returns registry as a one-element list when it names a
+// local (non-ECR) registry, and nil otherwise. A local registry is
+// optional, so naming none is not an error; use [RequireLocalRegistry]
+// when it is.
+func LocalRegistries(registry string) []string {
+	if registry != "" && !IsECR(registry) {
+		return []string{registry}
 	}
-	return nil, fmt.Errorf("no local registry configured (set SPARKWING_REGISTRY)")
+	return nil
 }
 
-// DetectRegistries returns all registries to push to. SPARKWING_REGISTRY
-// wins if set (typical in runner pods). Otherwise uses
-// SPARKWING_ECR_REGISTRY, falling back to the provided default.
-func DetectRegistries(cluster, defaultECR string) ([]string, error) {
-	if r := os.Getenv("SPARKWING_REGISTRY"); r != "" {
-		return []string{r}, nil
+// RequireLocalRegistry is [LocalRegistries] for a caller that cannot
+// proceed without one: it errors when registry is empty or names an ECR
+// endpoint.
+func RequireLocalRegistry(registry string) ([]string, error) {
+	if local := LocalRegistries(registry); local != nil {
+		return local, nil
 	}
-	ecr := os.Getenv("SPARKWING_ECR_REGISTRY")
-	if ecr == "" {
-		ecr = defaultECR
+	if registry == "" {
+		return nil, fmt.Errorf("no local registry named")
 	}
-	if ecr == "" {
-		return nil, fmt.Errorf("no registry configured (set SPARKWING_REGISTRY or SPARKWING_ECR_REGISTRY, or pass defaultECR)")
-	}
-	return []string{ecr}, nil
+	return nil, fmt.Errorf("registry %q is an ECR endpoint, not a local registry", registry)
 }

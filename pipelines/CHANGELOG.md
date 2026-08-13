@@ -9,6 +9,26 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.26.0] - 2026-08-12
+
+### Added
+- **DockerDeploy:** `Registry` names a push target other than ECR, and
+  `ArgoCD` names the ArgoCD server and token the deploy syncs against.
+  Both replace environment reads. See
+  [docs/migrations/caller-names-the-registry.md](../docs/migrations/caller-names-the-registry.md).
+
+### Removed
+- **DockerDeploy:** (Breaking) `Cluster` is gone. It defaulted to
+  `"sparktest"` and fed a registry lookup that ignored it, so it had
+  selected nothing since kind support was removed.
+
+### Changed
+- **DockerDeploy:** (Breaking) `resolveRegistries` no longer reads
+  `SPARKWING_REGISTRY`. A pipeline that relied on that variable to
+  redirect its push must set `Registry`.
+- **deps:** require `docker` v0.27.0, `deploy` v0.26.0 and `gitops`
+  v0.27.0.
+
 ## [v0.25.1] - 2026-08-12
 
 ### Fixed

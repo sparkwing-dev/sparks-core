@@ -1,6 +1,6 @@
 // Package deploy is sparks-core's deploy dispatcher: pick between
-// kind/kustomize, kubectl rollout restart, and gitops+ArgoCD based
-// on environment hints and the caller's declared target.
+// kubectl rollout restart and gitops+ArgoCD from the target the caller
+// declared.
 package deploy
 
 import (
@@ -24,13 +24,16 @@ type Config struct {
 	DeployMap   map[string]string
 	Local       bool
 	FilePatches map[string]map[string]string
+	// ArgoCD names the server the remote path syncs against and the
+	// token it authenticates with. An empty Server probes the
+	// in-cluster service.
+	ArgoCD gitops.ArgoCDConfig
 }
 
 // Run executes a deployment using the appropriate strategy based on
 // the target:
 //
-//   - Local (kind): restarts deployments directly via kubectl, or
-//     applies the repo-owned k8s/ kustomization when present.
+//   - Local: restarts deployments directly via kubectl.
 //   - Remote (prod): pushes image tags to gitops repo and kicks
 //     ArgoCD.
 //
@@ -55,7 +58,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	if changed {
-		return gitops.SyncArgoCD(ctx, cfg.AppName, cfg.Tag)
+		return gitops.SyncArgoCD(ctx, cfg.ArgoCD, cfg.AppName, cfg.Tag)
 	}
 	sparkwing.Info(ctx, "deploy: skipping argocd sync - tags unchanged")
 	return nil

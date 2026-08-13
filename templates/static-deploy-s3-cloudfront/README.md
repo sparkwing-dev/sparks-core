@@ -53,7 +53,7 @@ Edit the rendered `.sparkwing/jobs/<name>.go` to:
   site reads (the default forwards `NEXT_PUBLIC_` and `NEXT_EXPORT`).
 - Add `Excludes` if a separate pipeline ships artifacts to the same
   bucket (e.g. `releases/*` for a CLI binary tarball).
-- Add a `.Cache(...)` modifier if you want skip-on-noop behavior --
+- Add a `.Memoize(...)` modifier if you want skip-on-noop behavior --
   commits that don't change `out/` replay instead of redeploying.
   Override `Plan` on the outer type and attach the cache to the job,
   keying on the build output:
@@ -61,7 +61,7 @@ Edit the rendered `.sparkwing/jobs/<name>.go` to:
   ```go
   func (d *Deploy) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
   	sparkwing.Job(plan, run.Pipeline, d.Run).
-  		Cache(func(context.Context) sparkwing.CacheKey {
+  		Memoize(func(context.Context) sparkwing.CacheKey {
   			return sparkwing.Key("static-deploy", buildOutputHash())
   		})
   	return nil
