@@ -94,8 +94,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/sparkwing-dev/sparks-core/gitops v0.25.0 h1:ktOZJQkAPYkYAsLTrU1oyxLWzlE+vSlCaaZvgxJ6Ias=
-github.com/sparkwing-dev/sparks-core/gitops v0.25.0/go.mod h1:m0aQbSKyv6HcDzE4EpBGDXcTDWOFlwWEtjVfWWpvGdc=
+github.com/sparkwing-dev/sparks-core/gitops v0.27.0 h1:XCoxPUNkCH7vitqlZ+GUROOeFWTsyBW260qxg0AWYsk=
+github.com/sparkwing-dev/sparks-core/gitops v0.27.0/go.mod h1:R8xGBhhyFnyQc/1qG3obUaEmeq7G6ilxIC1hdN7/TVY=
 github.com/sparkwing-dev/sparks-core/kube v0.25.0 h1:tKMbpVsF3qlzcEZoyx3ObGM6+ybk1acXOUsMpBrdmec=
 github.com/sparkwing-dev/sparks-core/kube v0.25.0/go.mod h1:14cL1c/21iw7nBHijJK7PzLz1K4d0m8kPNBu3Y9XESM=
 github.com/sparkwing-dev/sparks-core/step v0.24.0 h1:77ENVVza1VRs2UIvW2wwwdfyhhZc5l6b7vkVr6sw5hM=

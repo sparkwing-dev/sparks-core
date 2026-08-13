@@ -3,7 +3,7 @@ module github.com/sparkwing-dev/sparks-core/rollback
 go 1.26.0
 
 require (
-	github.com/sparkwing-dev/sparks-core/gitops v0.25.0
+	github.com/sparkwing-dev/sparks-core/gitops v0.27.0
 	github.com/sparkwing-dev/sparks-core/kube v0.25.0
 	github.com/sparkwing-dev/sparkwing v0.31.0
 )
