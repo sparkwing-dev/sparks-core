@@ -5,14 +5,14 @@ description: |
   manifests with kubectl. A post-deploy HTTP probe verifies the new
   revision; a definitively-unhealthy result rolls the deployment back
   via kubectl rollout undo. A multi-node DAG (test -> build -> deploy)
-  composed from sparks-core blocks -- edit any node freely. The GCP twin
-  of go-test-build-deploy-k8s.
+  composed from sparks-core blocks -- edit any node freely.
 whenToUse: |
   Reach for this on GCP when your repo owns its Kubernetes YAML and you
   apply it directly with kubectl (no gitops repo, no ArgoCD, no kustomize
   indirection), and you want a deploy that self-rolls-back on a failed
-  health check. GCP twin of go-test-build-deploy-k8s (which targets
-  ECR/EKS on AWS). If you deploy through a gitops repo + ArgoCD, use
+  health check. It is the only kubectl-apply template: on AWS, start
+  here and swap the GAR push and the get-credentials node for ECR and
+  EKS. If you deploy through a gitops repo + ArgoCD, use
   docker-deploy-gar-gke instead. If you don't run a GKE cluster and want
   managed serverless containers, use docker-deploy-gar-cloudrun (own the
   image) or cloudrun-deploy-source (let Cloud Build build). Language

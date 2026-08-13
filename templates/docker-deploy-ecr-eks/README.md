@@ -31,8 +31,9 @@ separate gitops repo.
 
 - You're on GCP -- use `docker-deploy-gar-gke`.
 - Your deploy doesn't involve gitops (raw `kubectl apply`, helm
-  upgrade, etc.) -- start from `go-test-build-deploy-k8s`, which applies
-  the repo's own manifests with kubectl, and edit its deploy node.
+  upgrade, etc.) -- start from `gke-deploy-gar-kubectl`, which applies
+  the repo's own manifests with kubectl, and swap its GAR push and
+  `get-credentials` node for ECR and EKS.
 - You only need static assets -- use `static-deploy-s3-cloudfront`.
 
 ## Prerequisites

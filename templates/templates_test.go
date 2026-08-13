@@ -52,13 +52,16 @@ func TestList_AllHaveWhenToUse(t *testing.T) {
 	}
 }
 
-// TestRender_GoTestBuildDeployK8s_TestCmdEmpty exercises the conditional
+// TestRender_GkeDeployGarKubectl_TestCmdEmpty exercises the conditional
 // branch where test-cmd="" elides the test node; the result must still
 // be valid Go with no `test` node wired.
-func TestRender_GoTestBuildDeployK8s_TestCmdEmpty(t *testing.T) {
-	out, err := Render("go-test-build-deploy-k8s", map[string]string{
+func TestRender_GkeDeployGarKubectl_TestCmdEmpty(t *testing.T) {
+	out, err := Render("gke-deploy-gar-kubectl", map[string]string{
 		"image":      "x",
-		"registry":   "1234.dkr.ecr.us-west-2.amazonaws.com",
+		"registry":   "us-west1-docker.pkg.dev/proj/repo",
+		"cluster":    "x",
+		"region":     "us-west1",
+		"project":    "proj",
 		"namespace":  "x",
 		"health-url": "https://x/healthz",
 		"app-name":   "x",
@@ -242,13 +245,6 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 			"gitops-path": "apps/test",
 			"app-name":    "test-app",
 			"namespace":   "test",
-		}},
-		{"go-test-build-deploy-k8s", map[string]string{
-			"image":      "test-app",
-			"registry":   "1234.dkr.ecr.us-west-2.amazonaws.com",
-			"namespace":  "test",
-			"health-url": "https://test-app.example.com/healthz",
-			"app-name":   "test-app",
 		}},
 		{"go-test-migrate-deploy-argo", map[string]string{
 			"image":       "test-app",

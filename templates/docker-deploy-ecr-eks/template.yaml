@@ -9,7 +9,8 @@ whenToUse: |
   Use for a stateless service deploy. On GCP (GAR + gitops/GKE) use
   docker-deploy-gar-gke instead. If the deploy needs migrations and
   integration tests, use go-test-migrate-deploy-argo. If you apply k8s
-  YAML directly with kubectl (no gitops), use go-test-build-deploy-k8s.
+  YAML directly with kubectl (no gitops), use gke-deploy-gar-kubectl and
+  swap its GCP nodes for ECR and EKS.
   For a container on ECS/Fargate with no Kubernetes use
   container-deploy-ecs-fargate; for a scale-to-zero request function use
   lambda-deploy.
