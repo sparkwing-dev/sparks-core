@@ -14,7 +14,6 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// repo is a throwaway git repository rooted at a temp dir.
 type repo struct {
 	t   *testing.T
 	dir string
@@ -205,9 +204,8 @@ func TestContentKey_EmptyMatchIsStableNotError(t *testing.T) {
 	}
 }
 
-// TestContentKey_LargeFileSetChunksArgv uses enough long-named files that a
-// single argv would blow past the per-exec byte budget, forcing hashObjects to
-// batch. It checks the key is stable and still reflects a one-file edit.
+// The file names are long enough that a single argv would blow past the
+// per-exec byte budget, forcing hashObjects to batch.
 func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
 	r := newRepo(t)
 	const n = 4000
@@ -233,10 +231,7 @@ func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
 	}
 }
 
-// TestContentKey_DeletedTrackedFileDropsFromKey removes a tracked file from the
-// working tree without staging the removal, so `git ls-files` still lists it.
-// The key must still compute (not degrade to NoCache) and must change to
-// reflect the deletion.
+// The removal is left unstaged, so `git ls-files` still lists the file.
 func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	r := newRepo(t)
 	r.write("a.go", "package p\n")
@@ -257,9 +252,8 @@ func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	}
 }
 
-// lockDir revokes search permission on a tracked directory so Lstat on
-// paths under it fails with a real non-ENOENT error (EACCES), the same
-// shape as a transient EMFILE/EAGAIN under load.
+// lockDir makes Lstat fail with EACCES, the same shape as a transient
+// EMFILE or EAGAIN under load.
 func lockDir(t *testing.T, dir string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -435,10 +429,8 @@ func TestChanged_IsInverseOfUnchanged(t *testing.T) {
 	}
 }
 
-// goModuleRepo builds a two-package git repo module (testmod) where
-// package app imports package lib, plus app's test. It is the minimal
-// shape GoDeps must reason about: a target package, a same-module
-// dependency, and test files.
+// goModuleRepo is the minimal shape GoDeps must reason about: a target
+// package, a same-module dependency, and test files.
 func goModuleRepo(t *testing.T) *repo {
 	t.Helper()
 	t.Setenv("GOWORK", "off")

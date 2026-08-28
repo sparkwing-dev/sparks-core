@@ -18,24 +18,18 @@ import (
 
 var awsWordRe = regexp.MustCompile(`\baws\b`)
 
-// awsProfileResolvers are the helpers that make an aws CLI call target an
-// explicit account/profile (or correctly no profile under IRSA). A
-// function that shells aws must reference one of them, directly or
-// through a local wrapper: resolvesProfileName also accepts any name
-// ending in ProfileArgs or ProfileFlag, which is how ecs and lambda
-// build their argv (regionProfileArgs). CallerIdentityArgs is here
-// because it appends ProfileArgs itself, and is what a caller runs to
-// confirm the account before a destructive call.
+// awsProfileResolvers make an aws call target an explicit account, or
+// correctly no profile under IRSA. CallerIdentityArgs counts because it
+// appends ProfileArgs itself.
 var awsProfileResolvers = map[string]bool{
 	"ProfileArgs":        true,
 	"ProfileFlag":        true,
 	"CallerIdentityArgs": true,
 }
 
-// stringSliceParams returns the names of fn's []string parameters.
-// Helpers take the resolved argv, or the resolved profile flags, as such
-// a parameter and thread it down (ecs's rp, lambda's args), so an aws
-// call whose argv references one was already targeted by the caller.
+// stringSliceParams finds the parameters helpers thread resolved argv and
+// profile flags down through, so an aws call referencing one was already
+// targeted by its caller.
 func stringSliceParams(fn *ast.FuncDecl) map[string]bool {
 	names := map[string]bool{}
 	for _, field := range fn.Type.Params.List {
@@ -53,9 +47,8 @@ func stringSliceParams(fn *ast.FuncDecl) map[string]bool {
 	return names
 }
 
-// referencesAny reports whether node mentions any of names. A local built
-// from a resolved parameter carries the same resolution, which is how ecs
-// reaches its exec: args := describeServicesArgs(..., rp).
+// referencesAny treats a local built from a resolved parameter as carrying
+// the same resolution.
 func referencesAny(node ast.Node, names map[string]bool) bool {
 	found := false
 	ast.Inspect(node, func(inner ast.Node) bool {
@@ -67,22 +60,16 @@ func referencesAny(node ast.Node, names map[string]bool) bool {
 	return found
 }
 
-// resolvesProfileName reports whether a called function resolves the aws
-// profile, either by being one of awsProfileResolvers or by wrapping one
-// under a name that carries the same suffix.
 func resolvesProfileName(name string) bool {
 	return awsProfileResolvers[name] ||
 		strings.HasSuffix(name, "ProfileArgs") ||
 		strings.HasSuffix(name, "ProfileFlag")
 }
 
-// checkNoRawAWS fails the push if any function shells out to the aws CLI
-// without also resolving the AWS profile (aws.ProfileArgs / ProfileFlag).
-// A bare aws call rides ambient credentials -- whatever AWS_PROFILE
-// happens to be set, or the default -- which can hit the wrong account.
-// Unlike kubectl there's no single exec wrapper; the safe pattern is to
-// append the profile flags, so the rule is scoped per function: if you
-// run aws here, resolve the profile here.
+// checkNoRawAWS refuses an aws CLI call in a function that never resolves
+// the profile, since a bare call rides whatever AWS_PROFILE is ambient and
+// can hit the wrong account. Unlike kubectl there is no single exec wrapper
+// to route through, so the rule is scoped per function.
 func checkNoRawAWS(ctx context.Context) error {
 	root := sparkwing.WorkDir()
 	if root == "" {
@@ -119,10 +106,8 @@ func checkNoRawAWS(ctx context.Context) error {
 	return nil
 }
 
-// scanGoForRawAWS returns the line numbers of aws CLI calls that live in
-// a function which never references a profile resolver. Per-function
-// scope so a closure's aws call still sees a ProfileArgs reference in its
-// enclosing function body. Pure for unit testing.
+// scanGoForRawAWS scopes per function so a closure's aws call still sees a
+// resolver reference in its enclosing body.
 func scanGoForRawAWS(filename string, src []byte) ([]int, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filename, src, 0)

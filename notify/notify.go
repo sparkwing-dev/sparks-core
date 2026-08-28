@@ -1,15 +1,6 @@
-// Package notify posts deploy/run notifications to an HTTP webhook
-// (Slack-style or arbitrary JSON). It's shaped as func(ctx) error so it
-// drops into a Job step or an OnFailure recovery handler:
-//
-//	OnFailure("rollback", func(ctx context.Context, f sparkwing.Failure) error {
-//	    _ = notify.Slack(ctx, slackURL, "deploy failed: "+f.Err.Error())
-//	    return rollback.Run(ctx, rollback.Config{...})
-//	})
-//
-// An empty URL is a no-op with a warning rather than an error, so a
-// missing webhook never fails the recovery path it's wired into -- but
-// the warning keeps the silence visible in the logs.
+// Package notify posts deploy and run notifications to an HTTP webhook. An
+// empty URL warns rather than erroring, so a missing webhook never fails the
+// recovery path it is wired into.
 package notify
 
 import (
@@ -26,22 +17,18 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// WebhookConfig drives Webhook.
 type WebhookConfig struct {
-	// URL is the webhook endpoint. Empty means "skip" (logged warning).
+	// URL empty skips the notification with a warning.
 	URL string
 	// Payload is JSON-marshaled into the request body.
 	Payload any
-	// Headers are added to the request (Content-Type defaults to
-	// application/json).
+	// Headers add to the request; Content-Type defaults to application/json.
 	Headers map[string]string
-	// Timeout bounds the request. Defaults to 10s.
+	// Timeout defaults to 10s.
 	Timeout time.Duration
 }
 
-// Webhook POSTs cfg.Payload as JSON to cfg.URL. A non-2xx response is an
-// error. An empty URL is a no-op (warns, returns nil) so it can sit in a
-// recovery path without turning a missing webhook into a hard failure.
+// Webhook POSTs cfg.Payload as JSON to cfg.URL, erroring on a non-2xx response.
 func Webhook(ctx context.Context, cfg WebhookConfig) error {
 	if cfg.URL == "" {
 		sparkwing.Warn(ctx, "notify: no webhook URL configured - skipping notification")
@@ -77,8 +64,7 @@ func Webhook(ctx context.Context, cfg WebhookConfig) error {
 	})
 }
 
-// Slack posts text to a Slack-compatible incoming webhook (the
-// {"text": ...} shape most chat webhooks accept).
+// Slack posts text as the {"text": ...} shape most chat webhooks accept.
 func Slack(ctx context.Context, webhookURL, text string) error {
 	return Webhook(ctx, WebhookConfig{
 		URL:     webhookURL,

@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // lint-test-python`. Edit freely -- nothing here re-runs.
-//
-// Python CI hygiene on the uv/ruff/pytest stack: install once, then
-// ruff format --check, ruff check, mypy, and pytest fan out in a
-// parallel independent-node DAG so one run surfaces every failure.
 package jobs
 
 import (
@@ -12,11 +8,9 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} installs the environment, then runs the
-// format, lint, typecheck, and test checks in parallel. Each check is
-// independent -- a failure doesn't stop its peers, so one run reports
-// every problem at once. Targets Python {{.python_version}}. Any check
-// whose command was left empty at scaffold time is absent from the DAG.
+// {{pascal .pipeline_name}} installs the environment, then runs the format,
+// lint, typecheck, and test checks as independent parallel nodes on Python
+// {{.python_version}}. A check whose command is empty is absent from the DAG.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {

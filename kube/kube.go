@@ -1,7 +1,5 @@
-// Package kube holds kubectl-based deploy helpers that sparks-core
-// pipelines chain into their build/push steps. DeployKubectl is the
-// primary path: no kustomize, just rollout restart. Apply covers the
-// manifest-owning case.
+// Package kube holds kubectl-based deploy helpers: DeployKubectl for a
+// rollout restart, Apply for repos that own their manifests.
 package kube
 
 import (
@@ -13,15 +11,13 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// IsRunningInK8s returns true when the current process is executing
-// inside a Kubernetes pod (KUBERNETES_SERVICE_HOST set).
+// IsRunningInK8s reports whether the process is executing inside a pod.
 func IsRunningInK8s() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
-// DetectNodeArch returns the architecture of the cluster's nodes as a
-// Docker platform string (e.g. "linux/arm64", "linux/amd64"). Queries
-// the first node's labels via kubectl. Empty string on failure.
+// DetectNodeArch returns the first node's architecture as a Docker platform
+// string, or "" on failure.
 func DetectNodeArch(ctx context.Context) string {
 	arch, err := kubectlCapture(ctx, "", "get", "nodes", "-o", "jsonpath={.items[0].status.nodeInfo.architecture}")
 	if err != nil || arch == "" {
@@ -30,9 +26,7 @@ func DetectNodeArch(ctx context.Context) string {
 	return "linux/" + arch
 }
 
-// DeployKubectl restarts deployments directly via kubectl rollout
-// restart. The deployMap maps image names to k8s deployment names
-// (e.g. "myapp" -> "deploy/myapp").
+// DeployKubectl restarts the deployments deployMap names for each image.
 func DeployKubectl(ctx context.Context, images []string, deployMap map[string]string, namespace string) error {
 	if namespace == "" {
 		namespace = "sparkwing"

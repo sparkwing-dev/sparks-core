@@ -8,15 +8,7 @@ import (
 	"strings"
 )
 
-// parseLCOV computes total line coverage from an lcov tracefile as the
-// sum of hit lines over found lines across every record. It reads the
-// per-record summary lines
-//
-//	LF:<lines found>
-//	LH:<lines hit>
-//
-// which lcov emits for each source file, and errors when no LF line is
-// present or the counts do not parse.
+// parseLCOV sums the per-record LH lines over the LF lines.
 func parseLCOV(data []byte) (float64, error) {
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -55,7 +47,6 @@ func parseLCOV(data []byte) (float64, error) {
 	return 100 * float64(hit) / float64(found), nil
 }
 
-// parseLCOVCount parses the integer after an lcov "XX:" prefix.
 func parseLCOVCount(line, prefix string) (int64, error) {
 	v := strings.TrimSpace(strings.TrimPrefix(line, prefix))
 	n, err := strconv.ParseInt(v, 10, 64)

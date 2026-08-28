@@ -1,12 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // scheduled-db-backup`. Edit freely -- nothing here re-runs.
-//
-// Dump the {{.engine}} database behind the {{.dsn_secret}} secret, gzip
-// it, and upload a timestamped object to {{.backup_dest}}. Intended to
-// run on a schedule ("{{.schedule}}") -- add the trigger to
-// .sparkwing/sparkwing.yaml (see the template README). Retention is an
-// object-store lifecycle rule ({{.max_age_days}} days), not an
-// in-pipeline delete.
 package jobs
 
 import (
@@ -50,11 +43,9 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// backup reads the source DSN from a sparkwing secret so it never lands
-// in the pipeline source, then dumps, compresses, and ships the artifact
-// to the configured destination. The cloud upload honors SPARKWING_DRY_RUN;
-// the dump itself always runs, which is why this template is compile-only
-// in the registry (it needs a reachable database).
+// backup always runs the dump for real even under SPARKWING_DRY_RUN, which
+// is why this template is compile-only in the registry: it needs a reachable
+// database.
 func (p *{{pascal .pipeline_name}}) backup(ctx context.Context) error {
 	dsn, err := sparkwing.Secret(ctx, {{pascal .pipeline_name}}Secret)
 	if err != nil {

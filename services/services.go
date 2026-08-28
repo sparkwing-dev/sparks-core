@@ -1,21 +1,8 @@
-// Package services starts ephemeral backing services (Postgres, Redis,
-// ...) in Docker for integration tests, then tears them down. It exists
-// so an integration-test step can stand up real dependencies without a
-// compose file or a shared, stateful test database.
-//
-// The entry points run a container, publish its port to an ephemeral
-// host port, wait until it reports ready, invoke a caller-supplied
-// function with the connection details, and force-remove the container
-// afterward -- even when the function or the surrounding run fails.
-// Only `docker` is required on the runner.
-//
-//	sw.Job(plan, "integration-test", func(ctx context.Context) error {
-//	    return services.WithPostgres(ctx, services.Postgres{}, func(ctx context.Context, dsn string) error {
-//	        _, err := sw.Bash(ctx, "go test -tags=integration ./...").
-//	            Env("DATABASE_URL", dsn).Run()
-//	        return err
-//	    })
-//	})
+// Package services starts ephemeral backing services in Docker for
+// integration tests: it runs a container, publishes its port to an ephemeral
+// host port, waits for readiness, calls a caller-supplied function with the
+// connection details, and force-removes the container afterward even when
+// that function or the surrounding run fails.
 package services
 
 import (
@@ -30,21 +17,18 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// Spec describes a single ephemeral container.
 type Spec struct {
-	// Image is the container image to run. Required.
+	// Image and ContainerPort are required.
 	Image string
-	// Name is the container name. Defaults to a unique generated name.
+	// Name defaults to a unique generated name.
 	Name string
-	// Env is the container environment.
-	Env map[string]string
-	// ContainerPort is the port inside the container to publish to an
-	// ephemeral host port. Required.
+	Env  map[string]string
+	// ContainerPort is published to an ephemeral host port.
 	ContainerPort int
-	// Ready is a command run via `docker exec` to test readiness; exit
-	// zero means ready. Empty skips the readiness wait.
+	// Ready runs via `docker exec`; exit zero means ready, and an empty Ready
+	// skips the wait.
 	Ready []string
-	// ReadyTimeout bounds the readiness wait. Defaults to 30s.
+	// ReadyTimeout defaults to 30s.
 	ReadyTimeout time.Duration
 }
 
@@ -57,10 +41,8 @@ func (s *Spec) defaults() {
 	}
 }
 
-// With starts the container described by spec, waits for readiness,
-// invokes fn with the ephemeral host port the container port maps to,
-// then force-removes the container. The container is always removed,
-// even when fn returns an error or ctx is cancelled.
+// With starts spec's container, waits for readiness, invokes fn with the
+// ephemeral host port, and always force-removes the container.
 func With(ctx context.Context, spec Spec, fn func(ctx context.Context, hostPort int) error) (err error) {
 	spec.defaults()
 	if spec.Image == "" {
@@ -100,7 +82,6 @@ func With(ctx context.Context, spec Spec, fn func(ctx context.Context, hostPort 
 	})
 }
 
-// hostPortFor reads the ephemeral host port the container port maps to.
 func hostPortFor(ctx context.Context, name string, containerPort int) (int, error) {
 	out, err := sparkwing.Exec(ctx, "docker", "port", name, strconv.Itoa(containerPort)+"/tcp").String()
 	if err != nil {
@@ -109,8 +90,6 @@ func hostPortFor(ctx context.Context, name string, containerPort int) (int, erro
 	return parseHostPort(out)
 }
 
-// parseHostPort extracts the host port from `docker port` output, which
-// looks like "127.0.0.1:49161" (one line per protocol/binding).
 func parseHostPort(out string) (int, error) {
 	line := strings.TrimSpace(out)
 	if line == "" {
@@ -149,24 +128,21 @@ func waitReady(ctx context.Context, spec Spec) error {
 	}
 }
 
-// Postgres configures an ephemeral Postgres container for WithPostgres.
 type Postgres struct {
-	// Image is the Postgres image. Defaults to "postgres:16-alpine".
+	// Image defaults to "postgres:16-alpine".
 	Image string
-	// User, Password, DB seed the container. Each defaults to "postgres".
+	// User, Password, and DB each default to "postgres".
 	User     string
 	Password string
 	DB       string
-	// Name is the container name. Defaults to a unique generated name.
+	// Name defaults to a unique generated name.
 	Name string
-	// ReadyTimeout bounds the readiness wait. Defaults to 30s.
+	// ReadyTimeout defaults to 30s.
 	ReadyTimeout time.Duration
 }
 
-// WithPostgres starts an ephemeral Postgres, waits until it accepts
-// connections, and invokes fn with a ready-to-use DSN
-// ("postgres://user:pass@localhost:PORT/db?sslmode=disable"). The
-// container is removed afterward.
+// WithPostgres is [With] for an ephemeral Postgres, invoking fn with a
+// ready-to-use DSN.
 func WithPostgres(ctx context.Context, cfg Postgres, fn func(ctx context.Context, dsn string) error) error {
 	if cfg.Image == "" {
 		cfg.Image = "postgres:16-alpine"
@@ -197,8 +173,7 @@ func WithPostgres(ctx context.Context, cfg Postgres, fn func(ctx context.Context
 	})
 }
 
-// PostgresDSN builds a libpq-style connection string for a Postgres
-// listening on localhost:port.
+// PostgresDSN builds a libpq connection string for localhost:port.
 func PostgresDSN(user, password string, port int, db string) string {
 	return fmt.Sprintf("postgres://%s:%s@localhost:%d/%s?sslmode=disable", user, password, port, db)
 }

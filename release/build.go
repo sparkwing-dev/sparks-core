@@ -14,44 +14,32 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// CrossBuildConfig describes a GOOS/GOARCH build matrix for a Go binary.
 type CrossBuildConfig struct {
-	// MainPkg is the package to build, relative to the repo root (e.g.
-	// "./cmd/app"). Defaults to ".".
+	// MainPkg defaults to ".".
 	MainPkg string
-	// BinaryName is the base output name; each artifact is
-	// "<BinaryName>_<Version>_<goos>_<goarch>" (with a ".exe" suffix on
-	// windows). Required.
+	// BinaryName and Version are required; see ArtifactPath for the names
+	// they produce.
 	BinaryName string
-	// Version stamps the artifact filenames. Required.
-	Version string
-	// Platforms is the list of "goos/arch" pairs to build. Empty defaults
-	// to linux/amd64, linux/arm64, and darwin/arm64.
+	Version    string
+	// Platforms are "goos/arch" pairs, defaulting to linux/amd64,
+	// linux/arm64, and darwin/arm64.
 	Platforms []string
-	// OutDir is where artifacts are written, relative to the repo root.
-	// Defaults to "dist".
-	OutDir string
-	// LDFlags, when set, is passed through as `-ldflags`.
+	// OutDir defaults to "dist".
+	OutDir  string
 	LDFlags string
-	// Trimpath appends `-trimpath`, stripping local filesystem paths from
-	// the binary for reproducible release builds.
+	// Trimpath strips local filesystem paths for reproducible builds.
 	Trimpath bool
-	// Tags are build tags passed as a single comma-joined `-tags` value.
+	// Tags are comma-joined into a single -tags value.
 	Tags []string
-	// BuildFlags are extra `go build` flags appended verbatim, after the
-	// managed flags and before the package. An escape hatch for the long
-	// tail of go build options this config does not model directly.
+	// BuildFlags are appended verbatim after the managed flags.
 	BuildFlags []string
-	// EnableCgo builds with CGO_ENABLED=1. The default (false) builds with
-	// CGO_ENABLED=0 for static, cross-compilable binaries; set it when the
-	// binary links a cgo dependency (sqlite, etc.).
+	// EnableCgo builds with CGO_ENABLED=1; the default 0 yields static,
+	// cross-compilable binaries.
 	EnableCgo bool
 }
 
-// CrossBuildGo compiles the configured GOOS/GOARCH matrix and returns the
-// artifact paths (relative to the repo root), sorted for determinism.
-// This is a local build that mutates nothing remote, so it always runs
-// for real, including under SPARKWING_DRY_RUN.
+// CrossBuildGo compiles the configured matrix and returns the artifact
+// paths, sorted for determinism.
 func CrossBuildGo(ctx context.Context, cfg CrossBuildConfig) ([]string, error) {
 	if cfg.BinaryName == "" {
 		return nil, fmt.Errorf("release: CrossBuildGo BinaryName is required")
@@ -111,8 +99,6 @@ func CrossBuildGo(ctx context.Context, cfg CrossBuildConfig) ([]string, error) {
 	return artifacts, nil
 }
 
-// buildArgs assembles the `go build` argv (without the GOOS/GOARCH env,
-// which the caller sets). Pure, for testing.
 func buildArgs(cfg CrossBuildConfig, out string) []string {
 	args := []string{"build", "-o", out}
 	if cfg.Trimpath {
@@ -128,9 +114,8 @@ func buildArgs(cfg CrossBuildConfig, out string) []string {
 	return append(args, cfg.MainPkg)
 }
 
-// ArtifactPath returns the output path for one matrix entry:
-// "<outDir>/<binary>_<version>_<goos>_<goarch>", with a ".exe" suffix on
-// windows.
+// ArtifactPath returns "<outDir>/<binary>_<version>_<goos>_<goarch>", with
+// a ".exe" suffix on windows.
 func ArtifactPath(outDir, binary, version, goos, goarch string) string {
 	name := fmt.Sprintf("%s_%s_%s_%s", binary, version, goos, goarch)
 	if goos == "windows" {
@@ -139,7 +124,6 @@ func ArtifactPath(outDir, binary, version, goos, goarch string) string {
 	return filepath.Join(outDir, name)
 }
 
-// splitPlatform parses a "goos/arch" pair.
 func splitPlatform(platform string) (goos, goarch string, err error) {
 	parts := strings.Split(strings.TrimSpace(platform), "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -148,22 +132,17 @@ func splitPlatform(platform string) (goos, goarch string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// ChecksumConfig describes a sha256 manifest over release artifacts.
 type ChecksumConfig struct {
-	// Dir is the directory whose files are checksummed, relative to the
-	// repo root. Defaults to "dist". Used only when Files is empty.
+	// Dir defaults to "dist" and is used only when Files is empty.
 	Dir string
-	// Files is an explicit list of files to checksum (relative to the repo
-	// root). When empty, every regular file directly in Dir is used,
-	// excluding the output file itself.
+	// Files empty checksums every regular file directly in Dir, excluding
+	// the output file itself.
 	Files []string
-	// Output is the checksums file to write, relative to the repo root.
-	// Defaults to "<Dir>/checksums.txt".
+	// Output defaults to "<Dir>/checksums.txt".
 	Output string
 }
 
-// Checksums writes a sha256sum-format manifest (`<hex>  <basename>` per
-// line) over the configured artifacts. Local only; always runs for real.
+// Checksums writes a sha256sum-format manifest over the configured artifacts.
 func Checksums(ctx context.Context, cfg ChecksumConfig) error {
 	if cfg.Dir == "" {
 		cfg.Dir = "dist"
@@ -208,8 +187,6 @@ func Checksums(ctx context.Context, cfg ChecksumConfig) error {
 	})
 }
 
-// listDirFiles returns the regular-file names directly in dir, excluding
-// the manifest file itself, sorted for a deterministic manifest.
 func listDirFiles(dir, exclude string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -226,7 +203,6 @@ func listDirFiles(dir, exclude string) ([]string, error) {
 	return names, nil
 }
 
-// sha256File returns the lowercase hex SHA-256 of a file's contents.
 func sha256File(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

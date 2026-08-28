@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // next-build-and-push`. Edit freely -- nothing here re-runs.
-//
-// Build-only flavor of the static-deploy templates. Produces an
-// out.tar.gz artifact and uploads it, keyed by commit SHA; the deploy
-// step lives elsewhere (typically a separate pipeline gated on manual
-// approval).
 package jobs
 
 import (
@@ -19,9 +14,8 @@ import (
 // the resulting tarball to an S3 artifact bucket, keyed by commit SHA.
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
-	// key is the S3 object key computed once in Plan from the commit
-	// SHA and reused by upload, so the artifact is addressable by the
-	// commit it was built from.
+	// key is computed once in Plan and reused by upload, so the artifact
+	// stays addressable by the commit it was built from.
 	key string
 }
 

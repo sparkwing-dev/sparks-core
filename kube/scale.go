@@ -10,30 +10,21 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// ScaleConfig drives Scale: `kubectl scale` a deployment to a replica
-// count, then wait for the resulting rollout. It widens or narrows a
-// slice of traffic -- e.g. scale a canary Deployment up before probing
-// it, or down to zero before deleting it.
 type ScaleConfig struct {
-	// Deployment is the scale target, e.g. "deploy/myapp-canary".
-	// Required.
+	// Deployment is required.
 	Deployment string
-	// Replicas is the desired replica count. Zero is valid and narrows
-	// the deployment to no pods.
+	// Replicas zero is valid and narrows the deployment to no pods.
 	Replicas int
-	// Namespace is the -n target. Defaults to "default".
+	// Namespace defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty resolves via ResolveContext
-	// and fails closed rather than using the current kubeconfig context.
+	// Context empty resolves via ResolveContext.
 	Context string
-	// Timeout bounds the rollout-status wait. Defaults to "180s".
+	// Timeout defaults to "180s".
 	Timeout string
-	// ExtraArgs are appended verbatim to the `kubectl scale` argv, an
-	// escape hatch for the CLI's long tail (--current-replicas to guard a
-	// canary widen/narrow against a concurrent scale).
+	// ExtraArgs are appended verbatim to the scale argv; --current-replicas
+	// guards a widen or narrow against a concurrent scale.
 	ExtraArgs []string
-	// DryRun forces echo mode for this call even when SPARKWING_DRY_RUN is
-	// unset: the argv is logged and no scale is executed.
+	// DryRun forces echo mode even when SPARKWING_DRY_RUN is unset.
 	DryRun bool
 }
 
@@ -46,20 +37,16 @@ func (c *ScaleConfig) defaults() {
 	}
 }
 
-// scaleArgs builds the argv for `kubectl scale <deployment> --replicas=N`.
 func scaleArgs(namespace, deployment string, replicas int, extra []string) []string {
 	args := []string{"scale", deployment, "--replicas=" + strconv.Itoa(replicas), "-n", namespace}
 	return append(args, extra...)
 }
 
-// rolloutStatusArgs builds the argv for a bounded rollout-status wait.
 func rolloutStatusArgs(namespace, deployment, timeout string) []string {
 	return []string{"rollout", "status", deployment, "-n", namespace, "--timeout=" + timeout}
 }
 
-// Scale sets a deployment's replica count via `kubectl scale` and waits
-// for the rollout to settle. Under SPARKWING_DRY_RUN it echoes the
-// kubectl argv and returns success without contacting the cluster.
+// Scale sets a deployment's replica count and waits for the rollout to settle.
 func Scale(ctx context.Context, cfg ScaleConfig) error {
 	cfg.defaults()
 	if cfg.Deployment == "" {

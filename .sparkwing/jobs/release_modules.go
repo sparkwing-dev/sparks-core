@@ -10,19 +10,15 @@ import (
 	sw "github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// ReleaseModulesInputs are the typed CLI flags for `sparkwing run release-modules`.
-//
-// Note: --dry-run is reserved by `sparkwing run` and would be intercepted
-// before reaching this pipeline, so we use --preview for the "show what
-// would happen" mode.
+// ReleaseModulesInputs uses --preview rather than --dry-run, which
+// `sparkwing run` reserves and intercepts before it reaches the pipeline.
 type ReleaseModulesInputs struct {
 	Version string `flag:"version" desc:"Semver tag (e.g. v0.1.0) applied to root + each module" default:"v0.1.0"`
 	Preview bool   `flag:"preview" desc:"Print the tags that would be created and pushed, without doing it"`
 }
 
-// ReleaseModules tags every module in spark.json at the given version
-// and pushes the new tags to origin. Deliberately does NOT create a
-// `vX.Y.Z` tag at the repo root -- see tagNames() for why.
+// ReleaseModules tags every module in spark.json at the given version and
+// pushes the new tags to origin. The repo root is not tagged; see tagNames.
 type ReleaseModules struct{ sw.Base }
 
 func (p ReleaseModules) ShortHelp() string { return "Tag and push per-module release tags" }
@@ -59,12 +55,8 @@ func (j *ReleaseModulesJob) Work(w *sw.Work) (*sw.WorkStep, error) {
 
 var versionRE = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
-// refusePostV0 hard-blocks any version >= v1.0.0. While sparks-core
-// is pre-1.0, every release ships under v0.x.y; stepping to v1.0.0+
-// commits the API surface of every module in spark.json, which is
-// a decision that must be made deliberately. Removing this gate is
-// the unlock: edit refusePostV0 (or its caller in tagNames) when
-// the time comes.
+// refusePostV0 blocks v1.0.0+, which would commit the API surface of every
+// module in spark.json. Editing this function is the unlock.
 func refusePostV0(version string) error {
 	rest := strings.TrimPrefix(version, "v")
 	parts := strings.SplitN(rest, ".", 2)

@@ -81,8 +81,7 @@ func TestCrossBuildGo_RequiresBinaryAndVersion(t *testing.T) {
 	}
 }
 
-// TestSHA256File checks sha256File against the known digest of "hello",
-// reproducible with `printf hello | sha256sum`.
+// The want digest is reproducible with `printf hello | sha256sum`.
 func TestSHA256File(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.txt")
@@ -132,9 +131,6 @@ func TestChecksums_NoFilesErrors(t *testing.T) {
 	}
 }
 
-// setWorkDir points sparkwing.WorkDir() at dir for the test, restoring
-// the previous value on cleanup so the repo-relative helpers resolve
-// against a scratch tree.
 func setWorkDir(t *testing.T, dir string) {
 	t.Helper()
 	orig := sparkwing.WorkDir()

@@ -8,25 +8,11 @@ import (
 	"text/template"
 )
 
-// Render renders the named template's body against the supplied
-// parameter map. Validates that every required parameter is present
-// and that no unknown parameters are passed -- both are surfaced as
-// hard errors rather than silently producing a malformed pipeline.
-//
-// Default values declared in the manifest are auto-filled when the
-// caller omits them, so consumers only need to pass the required +
-// any-they-want-to-override subset.
-//
-// Helper functions exposed inside the template:
-//   - quote: Go strconv.Quote-style escaping (%q) for safe Go literals.
-//   - default: returns first arg if non-empty, else the fallback.
-//   - capitalize: first letter uppercase only.
-//   - pascal: kebab/snake case -> PascalCase, for Go identifiers
-//     derived from hyphenated params (`lint-test` -> `LintTest`).
-//
-// Hyphens in parameter names are translated to underscores in the
-// rendering context: a manifest declaring `pipeline-name` is read as
-// `{{.pipeline_name}}` inside the body. The CLI flag stays hyphenated.
+// Render renders the named template's body against params, auto-filling
+// manifest defaults and erroring on a missing required or unknown
+// parameter. Hyphens in parameter names become underscores in the
+// rendering context: `pipeline-name` is read as `{{.pipeline_name}}`.
+// See funcs for the helpers templates can call.
 func Render(name string, params map[string]string) (string, error) {
 	t, err := Get(name)
 	if err != nil {
@@ -35,15 +21,11 @@ func Render(name string, params map[string]string) (string, error) {
 	return renderTemplate(t, params)
 }
 
-// renderTemplate is the testable core of Render -- the public entry point
-// handles loading, this handles validation + execution.
-//
-// Every declared parameter ends up in resolved so the template engine's
-// missingkey=error fires on typo'd field references in the body, not on
-// intentionally-empty optional params. Explicit-empty (`--param foo=`) is
-// honored as "no value" rather than falling back to the default -- consumers
-// who want the default omit the flag, which lets templates use
-// `{{ if .test_cmd }}...{{ end }}` to elide a step.
+// renderTemplate puts every declared parameter in resolved so
+// missingkey=error fires on a typo'd field reference rather than on an
+// intentionally-empty optional param. An explicit `--param foo=` means "no
+// value" rather than the default, so templates can elide a step with
+// `{{ if .test_cmd }}`.
 func renderTemplate(t Template, params map[string]string) (string, error) {
 	if params == nil {
 		params = map[string]string{}
@@ -104,25 +86,15 @@ func renderTemplate(t Template, params map[string]string) (string, error) {
 	return buf.String(), nil
 }
 
-// underscored converts hyphens to underscores so templates can refer to a
-// parameter via `.foo_bar` even when the manifest spells it `foo-bar`.
-// Go's text/template forbids hyphens in field access (`.foo-bar` parses as
-// subtraction), while the CLI flag stays hyphenated (`--param foo-bar=x`).
-// This is a one-way transform -- the manifest is canonical.
+// underscored exists because text/template parses `.foo-bar` as subtraction.
+// It is one-way: the hyphenated manifest name stays canonical.
 func underscored(s string) string {
 	return strings.ReplaceAll(s, "-", "_")
 }
 
-// funcs are the helper functions exposed inside templates. Kept
-// minimal: we want templates to be obvious to a reader, not a tiny
-// DSL.
-//
-//   - quote: %q on a string. Safe Go-literal escaping.
-//   - default: first non-empty arg.
-//   - capitalize: just first-letter uppercase, no separator handling.
-//   - pascal: kebab-or-snake case to PascalCase. Use this to derive a
-//     valid Go identifier from a hyphenated parameter (struct names,
-//     receiver names) -- `lint-test` -> `LintTest`.
+// funcs are the helpers exposed inside templates: quote (%q), default
+// (first non-empty), capitalize (first letter only), and pascal
+// (kebab-or-snake to a Go identifier).
 func funcs() template.FuncMap {
 	return template.FuncMap{
 		"quote": func(s string) string {
@@ -144,10 +116,6 @@ func funcs() template.FuncMap {
 	}
 }
 
-// pascalCase converts kebab/snake to PascalCase: "build-test-deploy"
-// -> "BuildTestDeploy", "lint_test" -> "LintTest". Matches the
-// kebabToPascal helper sparkwing's CLI scaffolder uses for struct
-// names.
 func pascalCase(s string) string {
 	if s == "" {
 		return s

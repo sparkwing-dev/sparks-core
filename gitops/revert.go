@@ -12,29 +12,21 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// RevertConfig configures a gitops rollback via git revert.
 type RevertConfig struct {
 	// GitopsRepo is the SSH URL of the gitops repo. Required.
 	GitopsRepo string
-	// Commit is the commit to revert. Defaults to "HEAD" -- the most
-	// recent deploy.
-	Commit string
-	// CommitMsg overrides the revert commit message.
+	// Commit defaults to "HEAD", the most recent deploy.
+	Commit    string
 	CommitMsg string
-	// MaxRetries bounds the pull-and-retry loop on push conflicts.
-	// Defaults to 5.
+	// MaxRetries bounds the pull-and-retry loop on push conflicts,
+	// defaulting to 5.
 	MaxRetries int
 }
 
-// Revert rolls a gitops deployment back by reverting a commit (the last
-// deploy by default) and pushing. ArgoCD then syncs the cluster back to
-// the prior image tags. Returns (changed, err); changed is true iff a
-// revert commit was pushed.
-//
-// Unlike Deploy, Revert clones full history (a revert needs the parent
-// commit) and does not phone the controller for authorization -- a
-// rollback is a recovery action that should not be gated on the same
-// approval path that may have just failed.
+// Revert reverts a gitops commit and pushes, leaving ArgoCD to sync the
+// cluster back. changed is true only when a revert commit was pushed. Unlike
+// Deploy it skips controller authorization, because a recovery action should
+// not be gated on the approval path that may have just failed.
 func Revert(ctx context.Context, cfg RevertConfig) (changed bool, err error) {
 	if cfg.GitopsRepo == "" {
 		return false, fmt.Errorf("gitops revert: GitopsRepo required")

@@ -9,18 +9,11 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// PrePush gates pushes to main. Each check runs as its own parallel
-// Work step so failures surface independently in the dashboard.
-//
-// sparks-core is a multi-module monorepo: lint, test, vuln, and
-// tidy run against every go.mod discovered under the repo root
-// (excluding vendor / node_modules / .git). The non-module checks
-// (replace ban, go.work ban, version freshness, shellcheck,
-// markdownlint) run once at the repo level.
-//
-// Wire it to git: declare `pre_push:` in pipelines.yaml and run
-// `sparkwing pipeline hooks install`. Tooling assumed on PATH:
-// golangci-lint, shellcheck, markdownlint-cli2.
+// PrePush gates pushes to main. Per-module checks run against every go.mod
+// under the repo root; the rest run once at the repo level. Wire it to git
+// by declaring `pre_push:` in pipelines.yaml and running `sparkwing pipeline
+// hooks install`. It assumes golangci-lint, shellcheck, and
+// markdownlint-cli2 on PATH.
 type PrePush struct{ sparkwing.Base }
 
 func (PrePush) ShortHelp() string {
@@ -49,9 +42,8 @@ func (p *PrePush) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoIn
 	return nil
 }
 
-// Work declares one step per check so they dispatch in parallel and
-// surface independently in the dashboard. No Needs() edges -- the
-// checks are mutually independent.
+// Work declares one step per check, with no Needs() edges, so they dispatch
+// in parallel and surface independently.
 func (p *PrePush) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	sparkwing.Step(w, "no-replace", checkNoReplaceDirectivesInCommittedGoMods)
 	sparkwing.Step(w, "no-go-work", checkNoCommittedGoWorkFiles)
@@ -67,8 +59,6 @@ func (p *PrePush) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	return nil, nil
 }
 
-// allModuleDirs returns the directories containing each tracked
-// go.mod under the repo, sorted for deterministic output.
 func allModuleDirs() ([]string, error) {
 	mods, err := findGoModFiles(sparkwing.WorkDir())
 	if err != nil {
@@ -81,16 +71,11 @@ func allModuleDirs() ([]string, error) {
 	return dirs, nil
 }
 
-// tidyAllModules runs `go mod tidy` in every module and fails if
-// any produced a diff against HEAD. tidy itself can fail in
-// workspaces with unreleased local siblings; swallow it and rely
-// on the captured diff as the signal.
-//
-// Capture-output check rather than `git diff --quiet`: the latter's
-// exit code has been observed to occasionally report dirty under
-// sparkwing.Bash even when the tree is clean. Combining tidy + diff
-// into one bash invocation also avoids any chance of the diff
-// observing pre-tidy state.
+// tidyAllModules swallows tidy's own error, which fires in workspaces with
+// unreleased local siblings, and relies on the captured diff instead. It
+// captures output rather than using `git diff --quiet`, whose exit code has
+// been seen reporting dirty on a clean tree under sparkwing.Bash, and runs
+// both in one bash invocation so the diff cannot observe pre-tidy state.
 func tidyAllModules(ctx context.Context) error {
 	dirs, err := allModuleDirs()
 	if err != nil {
@@ -126,19 +111,15 @@ func testRaceAllModules(ctx context.Context) error {
 	return forEachModuleDir(ctx, "go test -race", "go test -race ./...")
 }
 
-// govulncheckAllModules compiles govulncheck against the current
-// toolchain so the scan reports against the actual stdlib version
-// the project builds with. A standalone `govulncheck` on PATH is
-// frozen to the Go version that installed it and produces stale
-// false-positives after a system Go upgrade.
+// govulncheckAllModules compiles govulncheck against the current toolchain,
+// because a standalone binary on PATH is frozen to the Go version that
+// installed it and false-positives after a system Go upgrade.
 func govulncheckAllModules(ctx context.Context) error {
 	return forEachModuleDir(ctx, "govulncheck", "go run golang.org/x/vuln/cmd/govulncheck@latest ./...")
 }
 
-// forEachModuleDir runs cmd in each module directory and aggregates
-// failures so the caller sees every offending module in one report
-// instead of just the first. Modules with no Go packages (e.g. a
-// monorepo root that only carries the go.work) are skipped silently.
+// forEachModuleDir aggregates failures so every offending module shows in
+// one report, and skips modules with no Go packages.
 func forEachModuleDir(ctx context.Context, label, cmd string) error {
 	dirs, err := allModuleDirs()
 	if err != nil {
@@ -164,10 +145,8 @@ func forEachModuleDir(ctx context.Context, label, cmd string) error {
 	return nil
 }
 
-// moduleHasNoPackages reports whether `go list ./...` from dir
-// matches zero packages. Empty modules legitimately exist in
-// monorepo roots (a parent go.mod that only carries module metadata)
-// and should not fail per-module checks.
+// moduleHasNoPackages exists because a monorepo root go.mod carrying only
+// module metadata should not fail per-module checks.
 func moduleHasNoPackages(ctx context.Context, dir string) (bool, error) {
 	out, err := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && go list ./... 2>&1 || true`, dir)).String()
 	if err != nil {
@@ -193,11 +172,9 @@ func runMarkdownlint(ctx context.Context) error {
 	return err
 }
 
-// checkNoReplaceDirectivesInCommittedGoMods refuses to let any
-// committed go.mod ship with a `replace` line. Replace directives
-// are intended for local iteration; once they leak into main they
-// break every consumer of this repo (Go module proxy can't resolve
-// a local-path replace, so anyone cloning will fail to build).
+// checkNoReplaceDirectivesInCommittedGoMods refuses a committed `replace`
+// line, which the module proxy cannot resolve, so anyone cloning fails to
+// build.
 func checkNoReplaceDirectivesInCommittedGoMods(ctx context.Context) error {
 	out, err := sparkwing.Bash(ctx,
 		`git ls-files '*go.mod' | xargs -I {} grep -lE '^replace ' {} 2>/dev/null || true`,
@@ -216,10 +193,8 @@ func checkNoReplaceDirectivesInCommittedGoMods(ctx context.Context) error {
 	)
 }
 
-// checkNoCommittedGoWorkFiles refuses to let a workspace file ship.
-// `go.work` and `go.work.sum` are local-iteration scaffolding (they
-// point at relative paths on the developer's machine) and break
-// builds for anyone who clones the repo.
+// checkNoCommittedGoWorkFiles refuses a committed workspace file, which
+// points at relative paths on one developer's machine.
 func checkNoCommittedGoWorkFiles(ctx context.Context) error {
 	out, err := sparkwing.Bash(ctx,
 		`git ls-files | grep -E '(^|/)go\.work(\.sum)?$' || true`,

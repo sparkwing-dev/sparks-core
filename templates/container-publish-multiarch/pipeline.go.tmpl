@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // container-publish-multiarch`. Edit freely -- nothing here re-runs.
-//
-// Build a multi-arch container image with `docker buildx` and push a
-// single manifest to {{.registry}}. No cluster deploy: the pipeline
-// stops at a pushed image.
 package jobs
 
 import (
@@ -16,9 +12,8 @@ import (
 	"github.com/sparkwing-dev/sparks-core/docker"
 )
 
-// {{pascal .pipeline_name}} authenticates with the {{.registry_kind}}
-// registry, then builds {{.image}} for {{.platforms}} and pushes one
-// multi-arch manifest to {{.registry}}.
+// {{pascal .pipeline_name}} builds {{.image}} for {{.platforms}} and pushes
+// one multi-arch manifest to {{.registry}}.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -30,10 +25,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// publish logs the docker client into the registry (auth dispatches on
-// registry kind) and then builds + pushes the multi-arch manifest with a
-// BuildKit layer cache. Under SPARKWING_DRY_RUN both blocks echo their
-// argv instead of touching the registry.
 func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
 	if err := docker.RegistryLogin(ctx, docker.LoginConfig{
 		Kind:        docker.RegistryKind({{quote .registry_kind}}),
@@ -62,8 +53,6 @@ func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
 	})
 }
 
-// splitTags parses a comma-separated tag list into the slice
-// BuildxConfig.Tags wants, dropping blank entries.
 func splitTags(spec string) []string {
 	var out []string
 	for _, tag := range strings.Split(spec, ",") {
@@ -74,9 +63,6 @@ func splitTags(spec string) []string {
 	return out
 }
 
-// parseBuildArgs parses a KEY=VAL,KEY=VAL string into the map
-// BuildxConfig.BuildArgs wants. Blank and malformed entries are skipped, so
-// an empty spec yields a nil map and no --build-arg flags.
 func parseBuildArgs(spec string) map[string]string {
 	out := map[string]string{}
 	for _, pair := range strings.Split(spec, ",") {

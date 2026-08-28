@@ -12,30 +12,21 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// dryRunEnv toggles command-echo mode for every registry-mutating helper
-// in this module; a non-empty value skips execution and logs the argv.
 const dryRunEnv = "SPARKWING_DRY_RUN"
 
-// defaultGHCRUsername is the docker-login username used for ghcr when
-// LoginConfig.Username is empty. A GitHub token authenticates regardless
-// of the username, so a placeholder works for classic tokens; override
-// Username with the owning account for a fine-grained token.
+// defaultGHCRUsername is a placeholder: a classic GitHub token
+// authenticates regardless of username. A fine-grained token needs the
+// owning account in LoginConfig.Username.
 const defaultGHCRUsername = "x-access-token"
 
-// dryRun reports whether SPARKWING_DRY_RUN is active.
 func dryRun() bool {
 	return os.Getenv(dryRunEnv) != ""
 }
 
-// echoArgv logs the exact command a dry run would have executed. Callers
-// return nil after this so a registry-mutating step is a no-op that still
-// shows its argv in the log stream.
 func echoArgv(ctx context.Context, name string, args []string) {
 	sparkwing.Info(ctx, "DRY RUN: %s %s", name, strings.Join(args, " "))
 }
 
-// registryHost returns the host portion of a registry URL, dropping any
-// trailing repository path (e.g. "ghcr.io/org" -> "ghcr.io").
 func registryHost(registry string) string {
 	if i := strings.IndexByte(registry, '/'); i >= 0 {
 		return registry[:i]
@@ -43,49 +34,33 @@ func registryHost(registry string) string {
 	return registry
 }
 
-// RegistryKind selects the authentication backend RegistryLogin uses.
 type RegistryKind string
 
 const (
-	// RegistryECR authenticates with AWS Elastic Container Registry via
-	// `aws ecr get-login-password`.
+	// RegistryECR authenticates via `aws ecr get-login-password`.
 	RegistryECR RegistryKind = "ecr"
-	// RegistryGAR authenticates with Google Artifact Registry by
-	// registering gcloud as a docker credential helper.
+	// RegistryGAR registers gcloud as a docker credential helper.
 	RegistryGAR RegistryKind = "gar"
-	// RegistryGHCR authenticates with the GitHub Container Registry via a
-	// token piped into `docker login`.
+	// RegistryGHCR pipes a token into `docker login`.
 	RegistryGHCR RegistryKind = "ghcr"
 )
 
-// LoginConfig drives RegistryLogin.
 type LoginConfig struct {
-	// Kind selects the auth backend. Empty defaults to RegistryECR.
+	// Kind defaults to RegistryECR.
 	Kind RegistryKind
-	// Registry is the registry host or host/prefix to authenticate with
-	// (e.g. an ECR endpoint, "us-west1-docker.pkg.dev/proj/repo", or
-	// "ghcr.io/org"). Required.
+	// Registry is the host or host/prefix to authenticate with. Required.
 	Registry string
-	// AWSProfile is the profile for ECR logins on local runs; empty
-	// resolves via AWS_PROFILE or drops entirely under IRSA. See
-	// aws.ProfileFlag. Ignored for gar/ghcr.
+	// AWSProfile empty resolves via AWS_PROFILE or drops under IRSA. ECR only.
 	AWSProfile string
-	// TokenSecret is the sparkwing secret name holding the registry token
-	// for ghcr. Required for ghcr, ignored for ecr/gar (cloud CLI auth).
+	// TokenSecret names the sparkwing secret holding the token. Required for
+	// ghcr, which is also the only kind that reads Username.
 	TokenSecret string
-	// Username is the docker-login username for ghcr. Empty uses
-	// defaultGHCRUsername. Ignored for ecr/gar.
+	// Username defaults to defaultGHCRUsername.
 	Username string
 }
 
 // RegistryLogin authenticates the local docker client with a container
-// registry, dispatching on LoginConfig.Kind. It generalizes ECRLogin
-// across the three registries sparks-core publishes to: ECR (AWS), GAR
-// (GCP), and GHCR (token login).
-//
-// Under SPARKWING_DRY_RUN the login argv is echoed and no credentials are
-// exchanged, so a scaffolded publish pipeline goes green locally with no
-// cloud or registry access.
+// registry, dispatching on LoginConfig.Kind.
 func RegistryLogin(ctx context.Context, cfg LoginConfig) error {
 	switch cfg.Kind {
 	case RegistryECR, "":
@@ -99,9 +74,6 @@ func RegistryLogin(ctx context.Context, cfg LoginConfig) error {
 	}
 }
 
-// ecrLogin authenticates docker with an ECR registry. The pipe-through-
-// shell shape mirrors the AWS docs so failures surface with useful
-// context.
 func ecrLogin(ctx context.Context, registry, awsProfile string) error {
 	return step.Run(ctx, "ecr login", func(ctx context.Context) error {
 		region := ECRRegion(registry)
@@ -130,14 +102,10 @@ func ecrLogin(ctx context.Context, registry, awsProfile string) error {
 	})
 }
 
-// garLoginArgs is the gcloud argv garLogin runs.
 func garLoginArgs(host string) []string {
 	return []string{"auth", "configure-docker", host, "--quiet"}
 }
 
-// garLogin registers gcloud as a docker credential helper for a Google
-// Artifact Registry host so subsequent pushes authenticate via the active
-// gcloud identity.
 func garLogin(ctx context.Context, registry string) error {
 	host := registryHost(registry)
 	args := garLoginArgs(host)
@@ -151,14 +119,10 @@ func garLogin(ctx context.Context, registry string) error {
 	})
 }
 
-// ghcrLoginArgs is the docker argv ghcrLogin runs; the token arrives on
-// stdin rather than argv so it never appears in the echoed command.
 func ghcrLoginArgs(host, username string) []string {
 	return []string{"login", host, "--username", username, "--password-stdin"}
 }
 
-// ghcrLogin authenticates docker with the GitHub Container Registry using
-// a token read from LoginConfig.TokenSecret and piped in on stdin.
 func ghcrLogin(ctx context.Context, cfg LoginConfig) error {
 	host := registryHost(cfg.Registry)
 	username := cfg.Username

@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // static-deploy-gcs-cloudcdn`. Edit freely -- nothing here re-runs.
-//
-// GCP counterpart of static-deploy-s3-cloudfront. Runs the build on
-// the host and drives GCS + Cloud CDN through gsutil and gcloud, so a
-// scaffold pulls in no sparks-core GCP dependency.
 package jobs
 
 import (
@@ -37,22 +33,19 @@ func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Pl
 	return nil
 }
 
-// build produces the static export with a lockfile-exact `npm ci` so
-// repeated runs of the same commit install the same dependency tree.
-// The build runs on the host: the runner must have node + npm on PATH.
+// build uses a lockfile-exact `npm ci` so repeated runs of the same commit
+// install the same tree. It runs on the host, which needs node and npm.
 func ({{pascal .pipeline_name}}) build(ctx context.Context) error {
 	_, err := sparkwing.Bash(ctx, `npm ci && NEXT_EXPORT=1 npm run build`).Run()
 	return err
 }
 
-// sync uploads the export and prunes removed objects with rsync -d.
-// The immutable Cache-Control is stamped at upload time via gsutil's
-// -h flag so only objects this run writes are touched; a second pass
-// overrides HTML to no-cache so a redeploy is served on the next
-// request.
+// sync stamps Cache-Control at upload time so only objects this run writes
+// are touched, then overrides HTML to no-cache so a redeploy is served on
+// the next request.
 //
-// safety: rsync -d and the HTML setmeta act on the whole bucket, so
-// the bucket must be dedicated to this site.
+// safety: rsync -d and the HTML setmeta act on the whole bucket, so the
+// bucket must be dedicated to this site.
 func ({{pascal .pipeline_name}}) sync(ctx context.Context) error {
 	bucket := "gs://" + {{quote .bucket}}
 	outDir := {{quote .out_dir}}
@@ -66,9 +59,8 @@ func ({{pascal .pipeline_name}}) sync(ctx context.Context) error {
 	return err
 }
 
-// invalidate clears Cloud CDN cache for /* against the configured URL
-// map and waits for the invalidation to finish before reporting the
-// deploy, so the logged URL is serving the new build.
+// invalidate waits for the invalidation to finish, so the logged URL is
+// already serving the new build.
 func ({{pascal .pipeline_name}}) invalidate(ctx context.Context) error {
 	_, err := sparkwing.Exec(ctx, "gcloud", "compute", "url-maps", "invalidate-cdn-cache",
 		{{quote .url_map}},

@@ -19,52 +19,34 @@ type StaticSiteConfig struct {
 	Bucket string
 	OutDir string
 
-	// AWSProfile is the profile to pass to the aws CLI. Empty passes
-	// no --profile, leaving the CLI its own credential chain, which is
-	// what an assumed role in CI needs. See aws.ProfileArgs.
+	// AWSProfile is empty for an assumed role in CI, leaving the aws CLI its
+	// own credential chain.
 	AWSProfile string
 
-	// ExpectedAccountID, when set, is checked against the account the
-	// credentials actually resolve to before anything is written. A
-	// profile name pins which credentials get selected and not which
-	// account they belong to, and under federated auth there is no
-	// profile to name, so this is the only way for a caller to say
-	// which account it means. Empty skips the check.
+	// ExpectedAccountID, when set, is checked before anything is written. A
+	// profile name pins which credentials are selected, not which account
+	// they belong to, and federated auth has no profile to name, so this is
+	// the only way a caller can say which account it means.
 	ExpectedAccountID string
 
-	// Delete removes files in S3 that no longer exist in OutDir.
-	// Filters apply, so the asset pass only deletes non-HTML orphans
-	// and the HTML pass only deletes HTML orphans. (Implementation:
-	// asset pass uses `aws s3 sync --delete`; HTML pass always uses
-	// `aws s3 cp --recursive` for upload, then a separate
-	// `aws s3 sync --delete` purely for orphan removal -- see the
-	// comment on htmlCopyArgs for why HTML can't use sync for
-	// upload.)
+	// Delete removes S3 files no longer in OutDir. Filters apply per pass,
+	// so each pass only deletes orphans of its own kind.
 	Delete bool
 
-	// Excludes is a list of glob patterns (in `aws s3 sync --exclude`
-	// syntax) preserved across both sync passes. Combined with
-	// Delete, this is how callers protect non-OutDir prefixes (e.g.
-	// release artifacts uploaded by a separate pipeline) from getting
-	// wiped on the next site deploy. Patterns are bucket-relative.
+	// Excludes are bucket-relative `aws s3 sync --exclude` globs preserved
+	// across both passes, protecting non-OutDir prefixes from Delete.
 	Excludes []string
 }
 
-// SyncResult reports per-pass upload counts so callers can detect
-// suspicious deploys (e.g. asset uploads with zero HTML uploads --
-// see ISS-034).
+// SyncResult reports per-pass upload counts, which callers use to detect an
+// internally inconsistent deploy such as new assets with unchanged HTML.
 type SyncResult struct {
 	AssetUploads int
 	HTMLUploads  int
 }
 
-// DeployStaticSite syncs a static site build to S3 with cache headers:
-//   - Non-HTML assets: 1-year immutable cache (fingerprinted by bundler)
-//   - HTML files: no-cache (always serve fresh content)
-//
-// Returns per-pass upload counts. Callers can use the counts to detect
-// internally inconsistent deploys (e.g. new chunks shipped while HTML
-// is unchanged).
+// DeployStaticSite syncs a static site build to S3, giving fingerprinted
+// assets a 1-year immutable cache and HTML no-cache.
 func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, error) {
 	var res SyncResult
 	if cfg.Bucket == "" {
@@ -120,8 +102,6 @@ func DeployStaticSite(ctx context.Context, cfg StaticSiteConfig) (SyncResult, er
 	return res, nil
 }
 
-// assetSyncArgs builds the aws argv for the non-HTML asset pass:
-// long-lived immutable cache headers, optional --delete.
 func assetSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
 	args := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 	args = append(args, profileArgs...)
@@ -136,7 +116,6 @@ func assetSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []st
 	return append(args, excludeArgs...)
 }
 
-// htmlCopyArgs builds the aws argv for the HTML upload pass.
 // hack: cp --recursive, not sync -- sync's mtime/size compare can skip changed HTML in cached builds, stranding chunk refs.
 func htmlCopyArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
 	args := []string{"s3", "cp", cfg.OutDir + "/", "s3://" + cfg.Bucket}
@@ -151,8 +130,6 @@ func htmlCopyArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []str
 	return append(args, excludeArgs...)
 }
 
-// htmlOrphanSyncArgs builds the aws argv for the HTML orphan-removal
-// pass that runs only under Delete (upload happens in htmlCopyArgs).
 func htmlOrphanSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string) []string {
 	args := []string{"s3", "sync", cfg.OutDir + "/", "s3://" + cfg.Bucket}
 	args = append(args, profileArgs...)
@@ -165,10 +142,8 @@ func htmlOrphanSyncArgs(cfg StaticSiteConfig, profileArgs, excludeArgs []string)
 	return append(args, excludeArgs...)
 }
 
-// countUploads counts `upload: ...` lines in stdout. Both
-// `aws s3 sync` and `aws s3 cp` print one such line per file
-// uploaded to S3 (despite the latter being conceptually a "copy");
-// a no-op pass prints none.
+// countUploads reads the `upload: ...` lines both `aws s3 sync` and
+// `aws s3 cp` print, one per uploaded file.
 func countUploads(stdout string) int {
 	n := 0
 	for _, line := range strings.Split(stdout, "\n") {
@@ -190,15 +165,12 @@ func countFiles(dir string) int {
 	return n
 }
 
-// dryRun reports whether SPARKWING_DRY_RUN asks for a no-op run. It is
-// the one setting read from the environment rather than passed in,
-// because it can only make a run less destructive.
+// dryRun is the one setting read from the environment rather than passed
+// in, because it can only make a run less destructive.
 func dryRun() bool { return os.Getenv("SPARKWING_DRY_RUN") != "" }
 
-// verifyAccount fails when the resolved credentials belong to an
-// account other than want. It runs before the first write, because the
-// sync deletes and a wrong-account deploy is not recoverable by
-// re-running with the right one.
+// verifyAccount runs before the first write, because the sync deletes and a
+// wrong-account deploy is not recoverable by re-running.
 func verifyAccount(ctx context.Context, want, profile string) error {
 	if want == "" {
 		return nil

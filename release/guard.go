@@ -13,37 +13,23 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// VersionFileConfig locates a declared-version field in a manifest file
-// and the tag naming that gates re-publishing it.
+// VersionFileConfig locates a declared-version field in a manifest file and
+// the tag naming that gates re-publishing it.
 type VersionFileConfig struct {
-	// Path is the manifest file, relative to the repo root, whose
-	// declared version gates the release (e.g. "package.json",
-	// "pyproject.toml"). Required.
+	// Path is a manifest file relative to the repo root. Required.
 	Path string
-	// Field is the dotted key of the version within the file. Defaults by
-	// extension: "version" for .json, "project.version" for .toml. For a
-	// Poetry project pass "tool.poetry.version".
+	// Field is the dotted key of the version, defaulting to "version" for
+	// .json and "project.version" for .toml. Poetry needs
+	// "tool.poetry.version".
 	Field string
-	// TagPrefix is prepended to the declared version to form the git tag
-	// checked for existence. The zero value defaults to "v" (so version
-	// "1.2.3" gates on tag "v1.2.3").
+	// TagPrefix defaults to "v", so version "1.2.3" gates on tag "v1.2.3".
 	TagPrefix string
 }
 
-// GuardVersionFile reads the version declared in a manifest file and
-// errors if the corresponding git tag already exists, so a pipeline
-// refuses to re-publish an already-released version. It returns the
-// declared version on success. Shared verbatim by the npm and PyPI
-// publish templates as their pre-publish gate.
-//
-// This reads repository state only (the manifest file and the local tag
-// list) and always runs for real, including under SPARKWING_DRY_RUN.
-//
-// The check consults the local tag list, so the release tags must be
-// present in the checkout. On a shallow or otherwise tagless clone
-// `git tag --list` finds nothing, the guard sees no existing tag, and it
-// passes even for an already-released version. Fetch tags first (a full
-// clone or `git fetch --tags`) before relying on this gate.
+// GuardVersionFile returns the version declared in a manifest file, erroring
+// if its git tag already exists. It consults the local tag list, so on a
+// tagless clone it passes even for an already-released version: fetch tags
+// before relying on this gate.
 func GuardVersionFile(ctx context.Context, cfg VersionFileConfig) (string, error) {
 	if cfg.Path == "" {
 		return "", fmt.Errorf("release: version file Path is required")
@@ -95,8 +81,6 @@ func GuardVersionFile(ctx context.Context, cfg VersionFileConfig) (string, error
 	return version, nil
 }
 
-// defaultVersionField returns the conventional version field for a
-// manifest file, keyed on extension.
 func defaultVersionField(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".toml":
@@ -106,9 +90,6 @@ func defaultVersionField(path string) string {
 	}
 }
 
-// extractVersionField pulls a dotted field out of a manifest file. JSON
-// files are parsed structurally; TOML files use a minimal table+key
-// scan sufficient for the `version` keys publish manifests declare.
 func extractVersionField(path string, data []byte, field string) (string, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".json":
@@ -120,8 +101,6 @@ func extractVersionField(path string, data []byte, field string) (string, error)
 	}
 }
 
-// extractJSONField walks a dotted path through a decoded JSON object and
-// returns the string value at the leaf.
 func extractJSONField(data []byte, field string) (string, error) {
 	var doc any
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -147,11 +126,8 @@ func extractJSONField(data []byte, field string) (string, error) {
 	return s, nil
 }
 
-// extractTOMLField finds a dotted field in TOML: the last segment is the
-// key, the preceding segments name the table header ("[a.b]"). A field
-// with no dots is looked up at the top level. Only the string-value form
-// (key = "value", single or double quoted) is recognized, which is all
-// a version declaration uses.
+// extractTOMLField recognizes only the string-value form, which is all a
+// version declaration uses.
 func extractTOMLField(data []byte, field string) (string, error) {
 	parts := strings.Split(field, ".")
 	key := parts[len(parts)-1]
@@ -179,8 +155,6 @@ func extractTOMLField(data []byte, field string) (string, error) {
 	return "", fmt.Errorf("release: field %q not found", field)
 }
 
-// stripTOMLComment trims a trailing unquoted "# ..." comment from a TOML
-// line. A "#" inside a quoted value is preserved.
 func stripTOMLComment(line string) string {
 	inSingle, inDouble := false, false
 	for i, r := range line {
@@ -202,8 +176,6 @@ func stripTOMLComment(line string) string {
 	return line
 }
 
-// splitTOMLKeyValue parses a "key = \"value\"" line, returning the key
-// and the unquoted string value. Non-string values return ok=false.
 func splitTOMLKeyValue(line string) (key, value string, ok bool) {
 	eq := strings.IndexByte(line, '=')
 	if eq < 0 {
@@ -217,7 +189,6 @@ func splitTOMLKeyValue(line string) (key, value string, ok bool) {
 	return "", "", false
 }
 
-// tagExists reports whether a git tag with the given name exists locally.
 func tagExists(ctx context.Context, tag string) (bool, error) {
 	out, err := sparkwing.Exec(ctx, "git", "tag", "--list", tag).String()
 	if err != nil {

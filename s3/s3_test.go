@@ -100,12 +100,9 @@ func TestHTMLOrphanSyncArgs_DeleteScopedToHTML(t *testing.T) {
 	}
 }
 
-// fakeAWSCLI puts a stub named "aws" first on PATH that appends one
-// line per argument, then a "---" terminator, to a log file, and
-// returns that log path. It lets a test read back exactly what
-// DeployStaticSite asked the aws CLI to do without touching S3, which
-// is the only way to pin the config-to-argv wiring inside the block
-// itself rather than re-deriving it in the test.
+// fakeAWSCLI puts a stub "aws" first on PATH that logs one line per
+// argument then a "---" terminator, so a test reads back the real argv
+// instead of re-deriving it.
 func fakeAWSCLI(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -120,8 +117,6 @@ func fakeAWSCLI(t *testing.T) string {
 	return logPath
 }
 
-// recordedInvocations reads a fakeAWSCLI log back as one argv slice per
-// aws invocation, in call order.
 func recordedInvocations(t *testing.T, logPath string) [][]string {
 	t.Helper()
 	data, err := os.ReadFile(logPath)
@@ -141,7 +136,6 @@ func recordedInvocations(t *testing.T, logPath string) [][]string {
 	return runs
 }
 
-// siteDir builds a minimal build output directory: one asset, one HTML.
 func siteDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -153,8 +147,6 @@ func siteDir(t *testing.T) string {
 	return dir
 }
 
-// hasFlagValue reports whether argv contains flag immediately followed
-// by value.
 func hasFlagValue(argv []string, flag, value string) bool {
 	for i, a := range argv {
 		if a == flag && i+1 < len(argv) && argv[i+1] == value {

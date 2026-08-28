@@ -1,40 +1,11 @@
-// Package ecs is sparks-core's ECS/Fargate rollout helper: register a
-// new task-definition revision from the running one with a swapped
-// container image, point the service at it, and wait for the service to
-// stabilize -- returning the prior task-definition ARN so a failed
-// post-deploy check can roll the service back.
+// Package ecs rolls an ECS/Fargate service to a new image by re-registering
+// its task definition, and rolls it back to the prior revision Deploy
+// returns. It shells out to the `aws` CLI and honors SPARKWING_DRY_RUN by
+// echoing argv, reads included, so a dry run needs no AWS credentials.
 //
-// Deploy returns that prior ARN; feed it into Rollback from a
-// Job.OnFailure hook. Rollback is a plain update-service back to the
-// captured revision, shaped to plug straight into OnFailure:
-//
-//	prev, err := ecs.Deploy(ctx, ecs.DeployConfig{
-//	    Cluster: "prod", Service: "web", TaskFamily: "web",
-//	    ContainerName: "web", Image: image,
-//	})
-//	// ... on a failed post-deploy Verify:
-//	ecs.Rollback(ctx, ecs.RollbackConfig{
-//	    Cluster: "prod", Service: "web", TaskDefinition: prev,
-//	})
-//
-// The re-registered revision copies the running task definition's
-// container definitions, roles, and settings, but not its
-// task-definition tags: describe reads only the taskDefinition body, so
-// tags used for cost allocation or ownership are not carried across
-// revisions. Reapply them out of band if you rely on them.
-//
-// All AWS work shells out to the `aws` CLI (assumed present) as explicit
-// argv through the sparkwing exec helpers; profile/IRSA resolution comes
-// from the aws module.
-//
-// Dry-run: when cfg.DryRun is set or SPARKWING_DRY_RUN is non-empty, the
-// mutating rollout (register-task-definition, update-service) does not
-// touch AWS. Both Deploy and Rollback echo the exact `aws` argv they
-// would run and return success. The describe-task-definition read is
-// skipped too rather than executed for real, so a dry run stays green
-// without AWS credentials or a live service -- which is what the
-// template verify gate relies on. Deploy therefore returns an empty
-// prior ARN under dry-run.
+// A re-registered revision does not carry the running task definition's
+// tags: describe reads only the taskDefinition body, so cost-allocation or
+// ownership tags must be reapplied out of band.
 package ecs
 
 import (
@@ -49,17 +20,12 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// stablePollInterval is the delay between describe-services reads when a
-// Timeout replaces the built-in aws waiter.
 const stablePollInterval = 15 * time.Second
 
-// dryRunEnv toggles command-echo mode for every cloud-mutating block in
-// sparks-core; a non-empty value skips execution and logs argv.
 const dryRunEnv = "SPARKWING_DRY_RUN"
 
 // registerReadOnlyKeys are fields describe-task-definition returns that
-// register-task-definition rejects on input; they are stripped before a
-// revision is re-registered.
+// register-task-definition rejects on input.
 var registerReadOnlyKeys = []string{
 	"taskDefinitionArn",
 	"revision",
@@ -71,43 +37,24 @@ var registerReadOnlyKeys = []string{
 	"deregisteredAt",
 }
 
-// DeployConfig drives Deploy.
 type DeployConfig struct {
-	// Cluster is the ECS cluster the service runs in. Required.
-	Cluster string
-	// Service is the ECS service to update. Required.
-	Service string
-	// TaskFamily is the task-definition family; the current revision is
-	// described and re-registered with the fresh image. Required.
-	TaskFamily string
-	// ContainerName is the container within the task definition whose
-	// image is swapped. Required.
+	// Cluster, Service, TaskFamily, ContainerName, and Image are required.
+	Cluster       string
+	Service       string
+	TaskFamily    string
 	ContainerName string
-	// Image is the full image reference (registry/name:tag) to roll to.
-	// Required.
-	Image string
-	// Region is the AWS region of the cluster. Empty omits --region and
-	// lets the aws CLI resolve it from the environment or config.
+	Image         string
+	// Region empty omits --region and lets the aws CLI resolve it.
 	Region string
-	// AWSProfile is the profile for local runs. Empty resolves via
-	// AWS_PROFILE, or is dropped entirely under IRSA. See aws.ProfileArgs.
-	AWSProfile string
-	// RegisterArgs are extra flags appended verbatim to `aws ecs
-	// register-task-definition`, an escape hatch for the CLI's long tail.
-	// Empty adds nothing.
-	RegisterArgs []string
-	// UpdateServiceArgs are extra flags appended verbatim to `aws ecs
-	// update-service` (e.g. "--force-new-deployment",
-	// "--health-check-grace-period-seconds", "600"). Empty adds nothing.
+	// AWSProfile empty resolves via AWS_PROFILE, or is dropped under IRSA.
+	AWSProfile        string
+	RegisterArgs      []string
 	UpdateServiceArgs []string
-	// Timeout bounds the wait for the service to stabilize. Zero uses the
-	// aws CLI's built-in `wait services-stable` waiter, whose cap is fixed
-	// at roughly ten minutes. A non-zero value instead polls
-	// describe-services until the service is stable or the deadline
-	// passes, allowing waits both shorter and longer than that cap.
+	// Timeout zero uses the aws CLI's built-in `wait services-stable`
+	// waiter, whose cap is fixed at roughly ten minutes; a non-zero value
+	// polls describe-services instead, allowing shorter and longer waits.
 	Timeout time.Duration
-	// DryRun echoes the aws argv without executing, same as setting
-	// SPARKWING_DRY_RUN. Either signal activates dry-run.
+	// DryRun echoes the aws argv without executing, as SPARKWING_DRY_RUN does.
 	DryRun bool
 }
 
@@ -138,15 +85,9 @@ func (c DeployConfig) dryRun() bool {
 	return c.DryRun || os.Getenv(dryRunEnv) != ""
 }
 
-// Deploy rolls a service to a new image: it describes the family's
-// current task definition, re-registers it as a fresh revision with the
-// container image swapped, updates the service to that revision, and
-// waits for the service to reach a stable state. It returns the prior
-// task-definition ARN so a failing post-deploy check can hand it to
-// Rollback.
-//
-// Under dry-run (DeployConfig.DryRun or SPARKWING_DRY_RUN) it echoes the
-// aws argv and returns an empty prior ARN without contacting AWS.
+// Deploy rolls a service to a new image and waits for it to stabilize,
+// returning the prior task-definition ARN for Rollback. That ARN is empty
+// under dry-run.
 func Deploy(ctx context.Context, cfg DeployConfig) (prevTaskDef string, err error) {
 	if verr := cfg.validate(); verr != nil {
 		return "", verr
@@ -190,9 +131,6 @@ func Deploy(ctx context.Context, cfg DeployConfig) (prevTaskDef string, err erro
 	return prevTaskDef, err
 }
 
-// waitArgv returns the argv the dry-run echo shows for the stability
-// wait: the describe-services poll when a Timeout is set, otherwise the
-// built-in waiter.
 func waitArgv(cfg DeployConfig, rp []string) []string {
 	if cfg.Timeout > 0 {
 		return describeServicesArgs(cfg.Cluster, cfg.Service, rp)
@@ -200,9 +138,6 @@ func waitArgv(cfg DeployConfig, rp []string) []string {
 	return waitStableArgs(cfg.Cluster, cfg.Service, rp)
 }
 
-// waitForStable blocks until the service reaches a steady state. With no
-// Timeout it defers to the aws CLI waiter (fixed ~10-minute cap); with a
-// Timeout it polls describe-services until stable or the deadline.
 func waitForStable(ctx context.Context, cfg DeployConfig, rp []string) error {
 	if cfg.Timeout <= 0 {
 		if _, err := sparkwing.Exec(ctx, "aws", waitStableArgs(cfg.Cluster, cfg.Service, rp)...).Run(); err != nil {
@@ -213,9 +148,6 @@ func waitForStable(ctx context.Context, cfg DeployConfig, rp []string) error {
 	return pollStable(ctx, cfg.Cluster, cfg.Service, rp, cfg.Timeout)
 }
 
-// pollStable reads describe-services on a fixed interval until the
-// service is stable or timeout elapses, returning a deadline error if it
-// never settles.
 func pollStable(ctx context.Context, cluster, service string, rp []string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	args := describeServicesArgs(cluster, service, rp)
@@ -242,19 +174,14 @@ func pollStable(ctx context.Context, cluster, service string, rp []string, timeo
 	}
 }
 
-// RollbackConfig drives Rollback.
 type RollbackConfig struct {
-	// Cluster is the ECS cluster the service runs in. Required.
-	Cluster string
-	// Service is the ECS service to roll back. Required.
-	Service string
-	// TaskDefinition is the revision to restore, typically the ARN
-	// Deploy returned. Required.
+	// Cluster, Service, and TaskDefinition are required; TaskDefinition is
+	// typically the ARN Deploy returned.
+	Cluster        string
+	Service        string
 	TaskDefinition string
-	// Region is the AWS region of the cluster. Empty omits --region.
-	Region string
-	// AWSProfile is the profile for local runs. See aws.ProfileArgs.
-	AWSProfile string
+	Region         string
+	AWSProfile     string
 }
 
 func (c RollbackConfig) validate() error {
@@ -275,12 +202,7 @@ func (c RollbackConfig) validate() error {
 }
 
 // Rollback points a service back at a prior task-definition revision and
-// waits for it to stabilize. It is Job.OnFailure-shaped: pass the ARN
-// Deploy returned as RollbackConfig.TaskDefinition and wire it to a
-// failed Verify.
-//
-// Under SPARKWING_DRY_RUN it echoes the aws argv and returns without
-// contacting AWS.
+// waits for it to stabilize.
 func Rollback(ctx context.Context, cfg RollbackConfig) error {
 	if err := cfg.validate(); err != nil {
 		return err

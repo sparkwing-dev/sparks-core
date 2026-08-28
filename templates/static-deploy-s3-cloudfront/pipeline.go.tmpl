@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // static-deploy-s3-cloudfront`. Edit freely -- nothing here re-runs.
-//
-// A Next.js static export, S3 sync, and CloudFront invalidation built on
-// sparks-core's StaticDeploy + NextJSBuild, so the Docker-build-container,
-// cache-volume, and env-prefix forwarding logic lives in one tested
-// upstream place.
 package jobs
 
 import (
@@ -13,9 +8,8 @@ import (
 	"github.com/sparkwing-dev/sparks-core/pipelines"
 )
 
-// {{pascal .pipeline_name}} wraps sparks-core StaticDeploy with this
-// repo's config. The outer type gives the dashboard a project-named
-// entrypoint instead of the shared "StaticDeploy" label.
+// {{pascal .pipeline_name}} wraps StaticDeploy with this repo's config,
+// giving the dashboard a project-named entrypoint.
 type {{pascal .pipeline_name}} struct{ pipelines.StaticDeploy }
 
 func init() {

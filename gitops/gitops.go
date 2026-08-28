@@ -22,7 +22,6 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// DeployConfig configures a gitops deployment.
 type DeployConfig struct {
 	GitopsRepo string
 	GitopsPath string
@@ -31,21 +30,14 @@ type DeployConfig struct {
 	Tag        string
 	CommitMsg  string
 	MaxRetries int
-	// FilePatches is a map of relative file paths (within GitopsPath)
-	// to key-value replacements. Each entry patches "key: <old>" to
-	// "key: <new>" in the specified file, in the same commit as the
-	// image tag updates. Used to keep deployment env vars in sync
-	// with image tags.
+	// FilePatches maps a path under GitopsPath to "key: <old>" -> "key:
+	// <new>" replacements, applied in the same commit as the tag updates.
 	FilePatches map[string]map[string]string
 }
 
-// Deploy clones the gitops repo, patches kustomize image tags, and
-// pushes. Returns (changed, err) -- changed is true iff the push
-// actually updated anything.
-//
-// Clone is via gitcache when reachable (fast read cache); push is
-// direct to GitHub via GITHUB_TOKEN PAT, falling back to SSH.
-// Retries on concurrent push conflicts.
+// Deploy clones the gitops repo, patches kustomize image tags, and pushes,
+// retrying on concurrent push conflicts. changed is true only when the push
+// updated something.
 func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 	if cfg.Tag == "" {
 		return false, fmt.Errorf("tag required for gitops deploy")
@@ -165,12 +157,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 	return changed, err
 }
 
-// patchYAMLValue finds "name: <key>" in a k8s YAML file and replaces
-// the "value:" on the following line. Handles the common env var
-// pattern:
-//
-//   - name: SPARKWING_RUNNER_IMAGE
-//     value: old-image:old-tag
+// patchYAMLValue finds "name: <key>" and replaces the "value:" that follows.
 func patchYAMLValue(ctx context.Context, content, key, newValue string) string {
 	nameNeedle := "name: " + key
 	nameIdx := strings.Index(content, nameNeedle)
@@ -200,11 +187,8 @@ func patchYAMLValue(ctx context.Context, content, key, newValue string) string {
 	return content
 }
 
-// pushTransport returns the push URL for the gitops repo. Prefers
-// GitHub HTTPS+PAT (direct, no gitcache in write path), falls back to
-// SSH. Returns "" when neither is available (origin URL from the clone
-// is used as-is). SSH key setup is handled by setSSHEnv in the caller;
-// this function only resolves the remote URL.
+// pushTransport prefers HTTPS+PAT so the write path skips gitcache, and
+// returns "" to leave the clone's origin URL in place.
 func pushTransport(ctx context.Context, sshURL string) string {
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		httpsURL := sshToHTTPS(sshURL, token)
@@ -220,8 +204,6 @@ func pushTransport(ctx context.Context, sshURL string) string {
 	return ""
 }
 
-// sshToHTTPS converts "git@github.com:owner/repo.git" to
-// "https://x-access-token:<token>@github.com/owner/repo.git".
 func sshToHTTPS(sshURL, token string) string {
 	if !strings.HasPrefix(sshURL, "git@") {
 		return ""
@@ -236,26 +218,18 @@ func sshToHTTPS(sshURL, token string) string {
 	return fmt.Sprintf("https://x-access-token:%s@%s/%s", token, host, path)
 }
 
-// ArgoCDConfig names the ArgoCD API server to sync against and the
-// token to authenticate with.
+// ArgoCDConfig names the ArgoCD API server to sync against.
 type ArgoCDConfig struct {
-	// Server is the ArgoCD API base URL. Empty probes the in-cluster
-	// service, which is a fact about where the code runs rather than a
-	// choice of target, and fails closed when it is unreachable.
+	// Server empty probes the in-cluster service and fails closed when it is
+	// unreachable, rather than guessing another target.
 	Server string
-	// Token is the ArgoCD API bearer token. Resolve it through
-	// sparkwing.Secret rather than hardcoding it. Empty is valid
-	// in-cluster, where the API may accept an unauthenticated call.
+	// Token should come from sparkwing.Secret. Empty is valid in-cluster.
 	Token string
 }
 
-// SyncArgoCD triggers a hard ArgoCD sync for the named application
-// and waits until the synced revision advances past the starting
-// point and reports Synced + Healthy.
-//
-// Uses the ArgoCD REST API, so it works from anywhere the caller can
-// name a server. An empty [ArgoCDConfig.Server] falls back to
-// in-cluster service discovery.
+// SyncArgoCD triggers a hard sync of the named application and waits until
+// the synced revision advances past the starting point and reports Synced
+// and Healthy.
 func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ...string) error {
 	return step.Run(ctx, "argocd sync", func(ctx context.Context) error {
 		server, token := argocdConfig(ctx, argocd)
@@ -329,11 +303,6 @@ func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ..
 	})
 }
 
-// argocdConfig resolves the server to talk to: the one the caller
-// named, or the in-cluster service when it named none. Probing the
-// in-cluster service asks where this code runs, not what the caller
-// meant, so an unreachable probe returns an empty server and the call
-// fails rather than guessing another target.
 func argocdConfig(ctx context.Context, argocd ArgoCDConfig) (server, token string) {
 	server, token = argocd.Server, argocd.Token
 
@@ -446,11 +415,9 @@ func shortRev(r string) string {
 	return r
 }
 
-// sshCommandValue returns the value for the GIT_SSH_COMMAND environment
-// variable when cluster SSH key material is present, or "" when the
-// default SSH agent should be used. In k8s pods, copies key material
-// from the secret mount to /tmp (k8s strips trailing newlines on
-// volume mounts). Locally, returns "" -- the default agent is assumed.
+// sshCommandValue copies key material out of the secret mount before use
+// because k8s strips trailing newlines on volume mounts. It returns "" when
+// no cluster key is mounted, leaving the default SSH agent in place.
 func sshCommandValue() string {
 	if _, err := os.Stat("/etc/ssh-key/id_ed25519"); err == nil {
 		sshDir := "/tmp/ssh-keys"
@@ -474,16 +441,9 @@ func sshCommandValue() string {
 	return ""
 }
 
-// setSSHEnv writes GIT_SSH_COMMAND into the process environment when
-// cluster SSH key material is present and returns a cleanup function
-// that restores the previous value. Call with defer:
-//
-//	restore := setSSHEnv(ctx)
-//	defer restore()
-//
-// Not reentrant: two concurrent callers would clobber each other's
-// cleanup. gitops.Deploy is not called concurrently against itself
-// today so this is safe; use a per-command Env option if that changes.
+// setSSHEnv sets GIT_SSH_COMMAND and returns a cleanup that restores the
+// previous value. Not reentrant: two concurrent callers clobber each other's
+// cleanup, which only holds because Deploy is never run against itself.
 func setSSHEnv(ctx context.Context) func() {
 	val := sshCommandValue()
 	if val == "" {
@@ -503,23 +463,12 @@ func setSSHEnv(ctx context.Context) func() {
 	}
 }
 
-// authorizeDeployWithController calls the controller's /authorize
-// endpoint before pushing to the gitops repo. The controller logs
-// the request for audit and verifies the commit is on the protected
-// branch.
-//
-// Every variable below is the harness channel: the sparkwing runner
-// sets them on a job it dispatched, so they describe the run rather
-// than name a target. That is why they stay environment reads while
-// the ArgoCD server and token became arguments.
-//
-// Behavior:
-//   - SPARKWING_NO_VERIFY=1: skip entirely, print warning (break-glass)
-//   - SPARKWING_CONTROLLER unset: skip silently (no controller)
-//   - Controller unreachable: warn but continue
-//   - Controller returns 403: error (unless we're inside a dispatched
-//     job; that means the controller already approved the commit at
-//     dispatch time and a 403 here likely means a stale gitcache).
+// authorizeDeployWithController asks the controller to approve the push. The
+// variables it reads are the harness channel the runner sets on a dispatched
+// job, describing the run rather than naming a target, which is why they are
+// environment reads and the ArgoCD server is an argument. A 403 inside a
+// dispatched job is tolerated: the controller already approved the commit at
+// dispatch, so it most likely means a stale gitcache.
 func authorizeDeployWithController(ctx context.Context, cfg DeployConfig) error {
 	if os.Getenv("SPARKWING_NO_VERIFY") == "1" {
 		sparkwing.Info(ctx, "warning: --no-verify set - skipping deploy authorization")

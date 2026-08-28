@@ -11,7 +11,6 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// BuildConfig configures a Docker image build and push.
 type BuildConfig struct {
 	Image      string
 	Dockerfile string
@@ -20,18 +19,14 @@ type BuildConfig struct {
 	Tags       sparkwingDocker.ImageTag
 	AWSProfile string
 	Platform   string
-	// BuildArgs are forwarded as --build-arg K=V (order-independent). Set
-	// PROXY_URL here to route package installs through a dependency proxy.
-	BuildArgs map[string]string
-	// CacheFrom are BuildKit --cache-from specs; see BuildCacheRef.
+	BuildArgs  map[string]string
+	// CacheFrom and CacheTo are BuildKit specs; see BuildCacheRef.
 	CacheFrom []string
-	// CacheTo are BuildKit --cache-to specs; see BuildCacheRef.
-	CacheTo []string
+	CacheTo   []string
 }
 
-// ecrLoginOnce ensures each ECR registry is authenticated exactly
-// once, even when BuildAndPush is called concurrently from multiple
-// goroutines.
+// Each ECR registry authenticates exactly once, even under concurrent
+// BuildAndPush calls.
 var (
 	ecrLoginMu    sync.Mutex
 	ecrLoginOnces = map[string]*sync.Once{}
@@ -53,11 +48,10 @@ func ensureECRLogin(ctx context.Context, registry, awsProfile string) error {
 	return ecrLoginErrs[registry]
 }
 
-// BuildAndPush builds a Docker image and pushes to all registries.
-// Each image is built with multiple tags locally; only the deploy-
-// relevant tag is actually pushed per registry to keep push time
-// bounded. Safe to call concurrently -- ECR login is serialized via
-// sync.Once.
+// BuildAndPush builds a Docker image and pushes it to every registry. It
+// tags the image several ways locally but pushes only the deploy-relevant
+// tag per registry, keeping push time bounded. It is safe to call
+// concurrently.
 func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 	if cfg.Context == "" {
 		cfg.Context = "."

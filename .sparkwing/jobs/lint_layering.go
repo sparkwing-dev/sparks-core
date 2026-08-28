@@ -14,28 +14,10 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// moduleLayer assigns each sparks-core module a layer. The rule the
-// linter enforces: a module may import another sparks-core module only
-// when the imported module sits in a STRICTLY lower layer. That makes
-// the dependency graph one-directional -- no cycles, no sideways edges,
-// no module reaching "up" into a higher-level one.
-//
-//	0  step, aws, probe, templates,  leaves (no sparks-core deps)
-//	   contentkey
-//	1  docker, s3, kube, gitops,     capability blocks (-> step / a leaf)
-//	   migrate, services, notify,
-//	   checks, gcp, ecs, lambda,
-//	   release, coverage, terraform,
-//	   dbbackup
-//	2  deploy, rollback, cloudrun    orchestrators (-> blocks)
-//	3  pipelines                     high-level primitives (-> blocks/orchestrators)
-//
-// Adding a module? Put it here. An unlisted module's imports aren't
-// checked, so a new block silently escapes the rule until it's added.
-//
-// templates is layer 0 AND carries an extra rule (templatesMustBeSDKFree):
-// it must not import the sparkwing SDK, because the sparkwing CLI depends
-// on templates as a pure, SDK-free leaf.
+// moduleLayer is the layer each module may import strictly downward from:
+// 0 leaves, 1 capability blocks, 2 orchestrators, 3 high-level primitives.
+// An unlisted module's imports are not checked at all, so a new one
+// silently escapes the rule until it is added here.
 var moduleLayer = map[string]int{
 	"step": 0, "aws": 0, "probe": 0, "templates": 0,
 	"contentkey": 0,
@@ -52,8 +34,8 @@ const (
 	sparkwingSDK     = "github.com/sparkwing-dev/sparkwing"
 )
 
-// checkModuleLayering fails the push if any module imports a sparks-core
-// module that isn't strictly below it, or if templates imports the SDK.
+// checkModuleLayering also refuses an SDK import from templates, which the
+// sparkwing CLI depends on as an SDK-free leaf.
 func checkModuleLayering(ctx context.Context) error {
 	root := sparkwing.WorkDir()
 	if root == "" {
@@ -94,9 +76,6 @@ func checkModuleLayering(ctx context.Context) error {
 	return nil
 }
 
-// layeringViolation returns a message if module importing importPath
-// breaks the layering rule (or the templates-SDK-free rule), else "".
-// Pure for unit testing.
 func layeringViolation(module, importPath string) string {
 	myLayer, known := moduleLayer[module]
 	if !known {
@@ -122,8 +101,7 @@ func layeringViolation(module, importPath string) string {
 	return ""
 }
 
-// isSparkwingSDK reports whether importPath is the sparkwing SDK module
-// (or a subpackage), not sparks-core (which shares the org prefix).
+// isSparkwingSDK excludes sparks-core, which shares the org prefix.
 func isSparkwingSDK(importPath string) bool {
 	if strings.HasPrefix(importPath, sparksCorePrefix) {
 		return false
@@ -131,7 +109,6 @@ func isSparkwingSDK(importPath string) bool {
 	return importPath == sparkwingSDK || strings.HasPrefix(importPath, sparkwingSDK+"/")
 }
 
-// importPaths returns the import paths of a Go source file.
 func importPaths(src []byte) ([]string, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "x.go", src, parser.ImportsOnly)

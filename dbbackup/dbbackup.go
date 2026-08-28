@@ -1,43 +1,8 @@
-// Package dbbackup dumps a database to a compressed artifact, ships it
-// to an object store, restores it into a target database, and verifies
-// the restore. It is the shared block behind the scheduled-db-backup
-// (dump + upload) and db-backup-restore-drill (dump + restore + verify)
-// templates.
-//
-// Two databases engines are supported, selected by Config.Engine:
-// "postgres" (pg_dump / psql) and "mysql" (mysqldump / mysql). The
-// dump is written as plain SQL and gzip-compressed in-process, so the
-// artifact is always a `<db>-<timestamp>.sql.gz` object regardless of
-// engine.
-//
-// Destinations are chosen by URL scheme on Config.Dest (and the source
-// scheme on Config.Source for Restore):
-//
-//   - a local directory: the artifact is copied there.
-//   - s3://bucket/prefix: uploaded with `aws s3 cp` (see the aws module
-//     for profile / IRSA resolution).
-//   - gs://bucket/prefix: uploaded with `gcloud storage cp`.
-//
-// Both entry points return a func(ctx) error-shaped unit of work (Dump
-// additionally hands back an Artifact handle), so they drop straight
-// into a sparkwing Job body, a Job.Verify, or an OnFailure recovery.
-// RestoreFunc turns a prior Dump's Artifact into an OnFailure-shaped
-// rollback closure, which is the snapshot-then-migrate safety net.
-//
-// # Dry-run
-//
-// Mutating operations honor the SPARKWING_DRY_RUN environment variable:
-// the s3:// / gs:// uploads and the restore replay into the target
-// database echo the exact command they would run and return success
-// without executing. The dump (read-only against the source, writing
-// only local scratch) and cloud downloads read or produce local state
-// and always run for real.
-//
-// # Required host binaries
-//
-// pg_dump and psql for postgres; mysqldump and mysql for mysql; the
-// `aws` CLI for s3:// destinations; the `gcloud` CLI for gs://
-// destinations.
+// Package dbbackup dumps a database to a gzipped plain-SQL artifact,
+// ships it to a local directory or an s3:// / gs:// prefix, restores it,
+// and verifies the restore. Config.Engine selects postgres or mysql.
+// Uploads and restore replays honor SPARKWING_DRY_RUN; dumps and
+// downloads always run.
 package dbbackup
 
 import (
@@ -58,7 +23,6 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// Engine identifiers accepted by Config.Engine.
 const (
 	EnginePostgres = "postgres"
 	EngineMySQL    = "mysql"
@@ -66,56 +30,41 @@ const (
 
 // Config drives Dump and Restore. A zero Engine resolves to postgres.
 type Config struct {
-	// Engine selects the database toolchain: "postgres" (default) or
-	// "mysql".
+	// Engine is "postgres" (default) or "mysql".
 	Engine string
-	// DSN is the database connection string. It is the source database
-	// for Dump and the target database for Restore. Postgres accepts a
-	// libpq URI or key=value string verbatim; mysql accepts a
-	// mysql://user:pass@host:port/db URL or the go-sql-driver
-	// user:pass@tcp(host:port)/db form.
+	// DSN is a libpq URI/key=value string, or for mysql a mysql:// URL or
+	// the go-sql-driver user:pass@tcp(host:port)/db form.
 	DSN string
 	// Dest is the Dump destination: a local directory, s3://bucket/prefix,
-	// or gs://bucket/prefix. Required by Dump, ignored by Restore.
+	// or gs://bucket/prefix.
 	Dest string
-	// Source is the Restore source: a local .sql.gz path, or an
-	// s3:///gs:// object URL. Required by Restore, ignored by Dump.
+	// Source is the Restore source: a local .sql.gz path or an s3:// / gs://
+	// object URL.
 	Source string
-	// AWSProfile is the profile for s3:// destinations. Empty uses the
-	// runner's default credential chain (or IRSA on EKS). Ignored for
-	// gs:// and local.
+	// AWSProfile names the profile for s3://; empty uses the default
+	// credential chain or IRSA.
 	AWSProfile string
-	// Project is the GCP project for gs:// destinations. Empty omits the
-	// --project flag. Ignored for s3:// and local.
+	// Project is the GCP project for gs://; empty omits --project.
 	Project string
-	// Filename overrides the generated `<db>-<timestamp>.sql.gz`
-	// artifact basename. It names the delivered object only; the
-	// intermediate dump uses a private scratch path, so any basename
-	// (with or without a `.gz` suffix) is safe.
+	// Filename overrides the generated `<db>-<timestamp>.sql.gz` basename.
 	Filename string
-	// WorkDir is the local scratch directory for the intermediate dump.
-	// Defaults to the OS temp dir.
+	// WorkDir is the scratch directory for the intermediate dump,
+	// defaulting to the OS temp dir.
 	WorkDir string
-	// DumpArgs are extra flags appended to the pg_dump / mysqldump argv
-	// (for example --schema-only, --exclude-table, or a --set var). They
-	// are passed through verbatim after the built-in flags.
+	// DumpArgs are passed through verbatim after the built-in pg_dump /
+	// mysqldump flags.
 	DumpArgs []string
-	// RestoreArgs are extra flags appended to the psql / mysql client
-	// argv on Restore. They are passed through verbatim.
+	// RestoreArgs are passed through verbatim to the psql / mysql client.
 	RestoreArgs []string
 }
 
-// Artifact is a handle to a produced backup: the final location (local
-// path, s3://, or gs:// URL) and its compressed size in bytes. Dump
-// returns it so a caller can wire the URI as a later Restore's Source
-// (the returned prior-state handle for a restore drill).
+// Artifact is a handle to a produced backup: its final URI and its
+// compressed size in bytes. Its URI is usable as a later Restore's Source.
 type Artifact struct {
 	URI   string
 	Bytes int64
 	// AWSProfile and Project record the delivery credential context so a
-	// RestoreFunc rollback fetches the object back with the same profile
-	// or GCP project the Dump used. They are the profile name / project
-	// id, not secrets.
+	// RestoreFunc rollback fetches the object back the same way.
 	AWSProfile string
 	Project    string
 }
@@ -127,11 +76,8 @@ func (c *Config) engine() string {
 	return c.Engine
 }
 
-// Dump runs pg_dump/mysqldump against Config.DSN, gzip-compresses the
-// SQL into a `<db>-<timestamp>.sql.gz` artifact, and delivers it to
-// Config.Dest (a local directory, or an s3:// / gs:// prefix). The
-// upload honors SPARKWING_DRY_RUN; the dump itself always runs. The
-// returned Artifact carries the final URI and compressed size.
+// Dump dumps Config.DSN to a gzipped `<db>-<timestamp>.sql.gz` artifact
+// and delivers it to Config.Dest.
 func Dump(ctx context.Context, cfg Config) (Artifact, error) {
 	var art Artifact
 	engine, err := normalizeEngine(cfg.engine())
@@ -183,12 +129,8 @@ func Dump(ctx context.Context, cfg Config) (Artifact, error) {
 	return art, err
 }
 
-// Restore pulls Config.Source (a local .sql.gz, or an s3:// / gs://
-// object), decompresses it, and replays it into Config.DSN with psql
-// (postgres) or the mysql client (mysql). It is shaped as func(ctx)
-// error for a Job body or an OnFailure handler. Restoring into a target
-// database is a local mutation and always runs; a cloud download reads
-// state and also always runs.
+// Restore pulls Config.Source, decompresses it, and replays it into
+// Config.DSN.
 func Restore(ctx context.Context, cfg Config) error {
 	engine, err := normalizeEngine(cfg.engine())
 	if err != nil {
@@ -228,10 +170,8 @@ func Restore(ctx context.Context, cfg Config) error {
 	})
 }
 
-// RestoreFunc returns a func(ctx) error that restores art back into dsn.
-// It is meant as a Job OnFailure handler after a snapshot Dump: dump
-// before a risky migration, wire the returned closure as OnFailure, and
-// a failed migration rolls the database back to the snapshot.
+// RestoreFunc returns an OnFailure-shaped closure that restores art back
+// into dsn.
 func RestoreFunc(art Artifact, engine, dsn string) func(context.Context) error {
 	return func(ctx context.Context) error {
 		return Restore(ctx, Config{
@@ -244,17 +184,14 @@ func RestoreFunc(art Artifact, engine, dsn string) func(context.Context) error {
 	}
 }
 
-// VerifyConfig configures a restore verification query.
 type VerifyConfig struct {
-	// Engine selects the client: "postgres" (default) or "mysql".
+	// Engine is "postgres" (default) or "mysql".
 	Engine string
-	// DSN is the database to query (typically the just-restored target).
-	DSN string
-	// Query is the SQL to run. Defaults to "SELECT 1".
+	DSN    string
+	// Query defaults to "SELECT 1".
 	Query string
-	// MinRows, when > 0, requires the first cell of the first result row
-	// to parse as an integer >= MinRows, turning "SELECT count(*) FROM t"
-	// into a row-count assertion. When 0, any error-free result passes.
+	// MinRows, when > 0, requires the first cell of the first row to parse
+	// as an integer >= MinRows. When 0, any error-free result passes.
 	MinRows int
 }
 
@@ -266,11 +203,7 @@ func (c *VerifyConfig) engine() string {
 }
 
 // VerifyRestore runs VerifyConfig.Query against the database and reports
-// whether the restore looks healthy. With MinRows == 0 it passes when
-// the query returns without error (a smoke check). With MinRows > 0 it
-// parses the first cell of the first row as an integer and fails unless
-// it is at least MinRows. It reads state, so it always runs. Use it as a
-// Job.Verify or a drill assertion.
+// whether the restore looks healthy.
 func VerifyRestore(ctx context.Context, cfg VerifyConfig) error {
 	engine, err := normalizeEngine(cfg.engine())
 	if err != nil {
@@ -316,7 +249,6 @@ func VerifyRestore(ctx context.Context, cfg VerifyConfig) error {
 	})
 }
 
-// dumpSQL shells out to pg_dump/mysqldump writing plain SQL to outPath.
 func dumpSQL(ctx context.Context, engine string, cfg Config, outPath string) error {
 	switch engine {
 	case EnginePostgres:
@@ -335,9 +267,6 @@ func dumpSQL(ctx context.Context, engine string, cfg Config, outPath string) err
 	return fmt.Errorf("dbbackup: unsupported engine %q", engine)
 }
 
-// replaySQL feeds a plain-SQL file into the target database. It replays
-// into an external database server, so it honors SPARKWING_DRY_RUN: under
-// dry-run it echoes the client command and returns without executing.
 func replaySQL(ctx context.Context, engine string, cfg Config, sqlPath string) error {
 	switch engine {
 	case EnginePostgres:
@@ -368,8 +297,6 @@ func replaySQL(ctx context.Context, engine string, cfg Config, sqlPath string) e
 	return fmt.Errorf("dbbackup: unsupported engine %q", engine)
 }
 
-// deliver places the local gz artifact at the destination and returns
-// its final URI. Cloud uploads honor SPARKWING_DRY_RUN.
 func deliver(ctx context.Context, cfg Config, dest location, gzPath, name string) (string, error) {
 	switch dest.scheme {
 	case schemeLocal:
@@ -397,9 +324,6 @@ func deliver(ctx context.Context, cfg Config, dest location, gzPath, name string
 	return "", fmt.Errorf("dbbackup: unsupported destination scheme %q", dest.scheme)
 }
 
-// fetch resolves the Restore source to a local gz path, downloading from
-// s3:///gs:// when needed. The returned cleanup removes any temp file it
-// created (a no-op for a local source).
 func fetch(ctx context.Context, cfg Config, src location, workDir string) (string, func(), error) {
 	noop := func() {}
 	switch src.scheme {
@@ -421,8 +345,6 @@ func fetch(ctx context.Context, cfg Config, src location, workDir string) (strin
 	return "", noop, fmt.Errorf("dbbackup: unsupported source scheme %q", src.scheme)
 }
 
-// runCloud runs a cloud-mutating command, or under SPARKWING_DRY_RUN
-// echoes the exact argv it would run and returns nil without executing.
 func runCloud(ctx context.Context, name string, args ...string) error {
 	if dryRun() {
 		sparkwing.Info(ctx, "[dry-run] would exec: %s", renderArgv(name, args))
@@ -431,8 +353,6 @@ func runCloud(ctx context.Context, name string, args ...string) error {
 	return execWithRetry(ctx, name, args...)
 }
 
-// cloudExecRetries is the number of attempts execWithRetry makes for a
-// network-flaky object-store transfer before giving up.
 const cloudExecRetries = 3
 
 // execWithRetry runs an object-store transfer command with a bounded
@@ -460,8 +380,6 @@ func execWithRetry(ctx context.Context, name string, args ...string) error {
 
 func dryRun() bool { return os.Getenv("SPARKWING_DRY_RUN") != "" }
 
-// renderArgv joins a command and its arguments into a single inspectable
-// line for the dry-run echo.
 func renderArgv(name string, args []string) string {
 	return strings.Join(append([]string{name}, args...), " ")
 }
@@ -478,8 +396,6 @@ type location struct {
 	scheme scheme
 }
 
-// classifyLocation determines whether a dest/source URI is local,
-// s3://, or gs://.
 func classifyLocation(uri string) (location, error) {
 	switch {
 	case strings.HasPrefix(uri, "s3://"):
@@ -493,8 +409,6 @@ func classifyLocation(uri string) (location, error) {
 	}
 }
 
-// normalizeEngine canonicalizes an engine string, accepting a few
-// common aliases, and rejects anything unsupported.
 func normalizeEngine(engine string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(engine)) {
 	case "", EnginePostgres, "postgresql", "pg":
@@ -506,8 +420,6 @@ func normalizeEngine(engine string) (string, error) {
 	}
 }
 
-// dumpFilename builds the timestamped `<db>-<timestamp>.sql.gz` object
-// basename.
 func dumpFilename(dbName string, now time.Time) string {
 	if dbName == "" {
 		dbName = "db"
@@ -515,8 +427,6 @@ func dumpFilename(dbName string, now time.Time) string {
 	return fmt.Sprintf("%s-%s.sql.gz", dbName, now.Format("20060102T150405Z"))
 }
 
-// dbNameFromDSN extracts a database name from a DSN for the artifact
-// filename, defaulting to "db" when it can't be parsed.
 func dbNameFromDSN(engine, dsn string) string {
 	if engine == EngineMySQL {
 		if conn, err := parseMySQLDSN(dsn); err == nil && conn.DB != "" {
@@ -535,16 +445,12 @@ func dbNameFromDSN(engine, dsn string) string {
 	return name
 }
 
-// remoteObjectURI joins a bucket prefix and object name into a single
-// s3:///gs:// object URI.
 func remoteObjectURI(prefix, name string) string {
 	return strings.TrimRight(prefix, "/") + "/" + name
 }
 
-// pgConn splits a libpq URI DSN into a password-free DSN plus a PGPASSWORD
-// env entry, keeping the secret off the argv (and out of the process
-// table). A non-URI DSN, or one without a password in its userinfo, is
-// returned unchanged with a nil env.
+// safety: the password moves from the DSN into PGPASSWORD so it never lands
+// on the argv the process table exposes.
 func pgConn(dsn string) (string, map[string]string) {
 	u, err := url.Parse(dsn)
 	if err != nil || u.User == nil {
@@ -558,41 +464,30 @@ func pgConn(dsn string) (string, map[string]string) {
 	return u.String(), map[string]string{"PGPASSWORD": pw}
 }
 
-// pgDumpArgs builds the pg_dump argv for a plain-SQL dump to outPath,
-// appending any caller-supplied passthrough flags.
 func pgDumpArgs(dsn, outPath string, extra []string) []string {
 	args := []string{"--dbname=" + dsn, "--no-owner", "--no-privileges", "--file=" + outPath}
 	return append(args, extra...)
 }
 
-// pgRestoreArgs builds the psql argv to replay a plain-SQL file. It
-// stops on the first error so a broken dump fails the restore, and
-// appends any caller-supplied passthrough flags.
 func pgRestoreArgs(dsn, sqlPath string, extra []string) []string {
 	args := []string{"--dbname=" + dsn, "--set", "ON_ERROR_STOP=1", "--quiet", "--file=" + sqlPath}
 	return append(args, extra...)
 }
 
-// pgVerifyArgs builds the psql argv to run a single verification query
-// returning an unaligned, tuples-only result.
 func pgVerifyArgs(dsn, query string) []string {
 	return []string{"--dbname=" + dsn, "-tAc", query}
 }
 
-// s3UploadArgs builds the `aws s3 cp` argv for a single-object upload.
 func s3UploadArgs(localPath, remoteURI, profile string) []string {
 	args := []string{"s3", "cp", localPath, remoteURI}
 	return append(args, aws.ProfileArgs(profile)...)
 }
 
-// s3DownloadArgs builds the `aws s3 cp` argv to fetch a single object.
 func s3DownloadArgs(remoteURI, localPath, profile string) []string {
 	args := []string{"s3", "cp", remoteURI, localPath}
 	return append(args, aws.ProfileArgs(profile)...)
 }
 
-// gsUploadArgs builds the `gcloud storage cp` argv for a single-object
-// upload, adding --project only when project is set.
 func gsUploadArgs(localPath, remoteURI, project string) []string {
 	args := []string{"storage", "cp", localPath, remoteURI}
 	if project != "" {
@@ -601,8 +496,6 @@ func gsUploadArgs(localPath, remoteURI, project string) []string {
 	return args
 }
 
-// gsDownloadArgs builds the `gcloud storage cp` argv to fetch a single
-// object.
 func gsDownloadArgs(remoteURI, localPath, project string) []string {
 	args := []string{"storage", "cp", remoteURI, localPath}
 	if project != "" {
@@ -611,8 +504,8 @@ func gsDownloadArgs(remoteURI, localPath, project string) []string {
 	return args
 }
 
-// conn holds decomposed connection parameters for the mysql client
-// family, which (unlike libpq) does not accept a URL DSN.
+// conn is decomposed because the mysql client family, unlike libpq, does
+// not accept a URL DSN.
 type conn struct {
 	Host     string
 	Port     string
@@ -621,8 +514,6 @@ type conn struct {
 	DB       string
 }
 
-// parseMySQLDSN parses a mysql://user:pass@host:port/db URL or the
-// go-sql-driver user:pass@tcp(host:port)/db form into connection parts.
 func parseMySQLDSN(dsn string) (conn, error) {
 	var c conn
 	if strings.HasPrefix(dsn, "mysql://") {
@@ -679,7 +570,6 @@ func parseMySQLDSN(dsn string) (conn, error) {
 	return c, nil
 }
 
-// mysqlConnArgs builds the shared host/port/user connection flags.
 func mysqlConnArgs(c conn) []string {
 	return []string{"--host=" + c.Host, "--port=" + c.Port, "--user=" + c.User}
 }
@@ -693,10 +583,8 @@ func mysqlEnv(c conn) map[string]string {
 	return map[string]string{"MYSQL_PWD": c.Password}
 }
 
-// mysqlDumpArgs builds the mysqldump argv (and env) for a plain-SQL dump
-// to outPath. It defaults to --single-transaction so an InnoDB dump is
-// consistent without locking tables, then appends caller passthrough
-// flags before the positional database name.
+// mysqlDumpArgs defaults to --single-transaction so an InnoDB dump is
+// consistent without locking tables.
 func mysqlDumpArgs(c conn, outPath string, extra []string) ([]string, map[string]string) {
 	args := mysqlConnArgs(c)
 	args = append(args, "--single-transaction", "--result-file="+outPath)
@@ -705,10 +593,8 @@ func mysqlDumpArgs(c conn, outPath string, extra []string) ([]string, map[string
 	return args, mysqlEnv(c)
 }
 
-// mysqlRestoreLine builds the bash line (and env) to replay a plain-SQL
-// file into the target via stdin redirection. Every interpolated field
-// is shell-quoted so a value containing a space or metacharacter cannot
-// break the redirection or inject into the line.
+// safety: every interpolated field is shell-quoted so a value carrying a
+// space or metacharacter cannot break the redirection or inject into the line.
 func mysqlRestoreLine(c conn, sqlPath string, extra []string) (string, map[string]string) {
 	parts := []string{"mysql"}
 	for _, a := range mysqlConnArgs(c) {
@@ -721,22 +607,16 @@ func mysqlRestoreLine(c conn, sqlPath string, extra []string) (string, map[strin
 	return strings.Join(parts, " "), mysqlEnv(c)
 }
 
-// shellQuote wraps s in single quotes for safe interpolation into a bash
-// line, escaping any embedded single quote.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// mysqlVerifyArgs builds the mysql client argv (and env) to run a single
-// query in batch mode without column headers.
 func mysqlVerifyArgs(c conn, query string) ([]string, map[string]string) {
 	args := mysqlConnArgs(c)
 	args = append(args, "-N", "-B", "-e", query, c.DB)
 	return args, mysqlEnv(c)
 }
 
-// parseRowCount reads the first whitespace-delimited token of query
-// output as an integer.
 func parseRowCount(out string) (int, error) {
 	fields := strings.Fields(out)
 	if len(fields) == 0 {
@@ -745,7 +625,6 @@ func parseRowCount(out string) (int, error) {
 	return strconv.Atoi(fields[0])
 }
 
-// gzipFile gzip-compresses src into dst and returns dst's size.
 func gzipFile(src, dst string) (int64, error) {
 	in, err := os.Open(src)
 	if err != nil {
@@ -775,7 +654,6 @@ func gzipFile(src, dst string) (int64, error) {
 	return fi.Size(), nil
 }
 
-// gunzipFile decompresses a gzip src into dst.
 func gunzipFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {

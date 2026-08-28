@@ -6,27 +6,20 @@ import (
 	"strings"
 )
 
-// ChangeSummary is the parsed result of a `terraform plan` change line.
 type ChangeSummary struct {
 	Adds     int
 	Changes  int
 	Destroys int
-	// Summary is the human-readable line the counts came from (the
-	// "Plan: ..." line, or the "No changes." line), trimmed. Empty when
-	// no recognizable summary was found.
+	// Summary is the trimmed line the counts came from, empty when none
+	// was recognized.
 	Summary string
 }
 
 var planLineRE = regexp.MustCompile(`Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy`)
 
-// ParseChangeSummary extracts the add/change/destroy counts from
-// `terraform plan` stdout. It recognizes the "Plan: N to add, N to
-// change, N to destroy." line and the "No changes." message (both worded
-// as counts of zero). When neither is present the counts are zero and
-// Summary is empty.
-//
-// Parse against -no-color output; the Plan block passes -no-color so no
-// ANSI stripping is needed here.
+// ParseChangeSummary reads the "Plan: ..." line or the "No changes."
+// message, leaving zero counts when neither is present. It expects
+// -no-color output and does no ANSI stripping.
 func ParseChangeSummary(stdout string) ChangeSummary {
 	var cs ChangeSummary
 	for _, line := range strings.Split(stdout, "\n") {

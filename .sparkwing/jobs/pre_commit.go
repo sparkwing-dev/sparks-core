@@ -14,14 +14,9 @@ import (
 	"github.com/sparkwing-dev/sparks-core/checks"
 )
 
-// PreCommit gates local commits with fast deterministic checks. The
-// gofmt + go vet pair covers the .sparkwing/ Go module; the comment
-// gate enforces the repo comment policy across the Go source; the two
-// regex sweeps cover the staged change for em dashes and internal
-// tracker IDs (IMP-, SDK-, LOCAL-, RUN-, ORG-, REG-, TOD-).
-//
-// Wire it to git: declare the `pre_commit:` trigger in pipelines.yaml
-// and run `sparkwing pipeline hooks install`.
+// PreCommit gates local commits with fast deterministic checks. Wire it to
+// git by declaring the `pre_commit:` trigger in pipelines.yaml and running
+// `sparkwing pipeline hooks install`.
 type PreCommit struct{ sparkwing.Base }
 
 func (PreCommit) ShortHelp() string {
@@ -43,11 +38,8 @@ func (p *PreCommit) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.No
 	return nil
 }
 
-// Work declares one step per check so they dispatch in parallel. A
-// failed step doesn't block its siblings; the node's terminal outcome
-// rolls up from the steps, and the dashboard surfaces each check's
-// status independently. No Needs() edges between steps -- they're
-// fully independent.
+// Work declares one step per check, with no Needs() edges, so they dispatch
+// in parallel and a failure does not block its siblings.
 func (p *PreCommit) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
 	sparkwing.Step(w, "gofmt", runGofmt)
 	sparkwing.Step(w, "vet", runVet)
@@ -61,7 +53,6 @@ func runGofmt(ctx context.Context) error {
 	return sparkwing.Bash(ctx, `gofmt -l .sparkwing/`).MustBeEmpty("files need formatting")
 }
 
-// commentGatePaths are the top-level Go trees the comment gate scans.
 var commentGatePaths = []string{
 	".sparkwing", "aws", "checks", "cloudrun", "contentkey", "coverage",
 	"dbbackup", "deploy", "docker", "ecs", "gcp", "gitops", "kube",
@@ -149,16 +140,12 @@ func checkTrackerIDs(ctx context.Context) error {
 	return fmt.Errorf("tracker IDs in %d file(s)", len(bad))
 }
 
-// regexCheckFiles returns the file list the regex sweeps judge: the staged
-// change, so a commit is never charged for content it did not touch. Swept
-// whole-tree, these checks refuse a clean commit over history it never went
-// near, and the only way past that is the bypass the gate exists to prevent.
-// Deletions are excluded because there is no content left to read. tickets/
-// and archive/ are exempt because historical content is allowed to carry
-// whatever style it was written with.
-//
-// Set SPARKWING_REGEX_SWEEP_ALL=1 for the whole-tree audit, which is how
-// pre-existing drift gets found without blocking an unrelated commit.
+// regexCheckFiles judges the staged change only, so a commit is never
+// charged for content it did not touch -- swept whole-tree these checks
+// refuse a clean commit over untouched history, and the only way past that
+// is the bypass the gate exists to prevent. tickets/ and archive/ are exempt
+// as historical content. SPARKWING_REGEX_SWEEP_ALL=1 runs the whole-tree
+// audit that finds pre-existing drift.
 func regexCheckFiles(ctx context.Context) ([]string, error) {
 	list := `git diff --cached --name-only --diff-filter=ACMR`
 	if os.Getenv("SPARKWING_REGEX_SWEEP_ALL") != "" {

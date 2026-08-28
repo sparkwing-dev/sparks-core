@@ -12,38 +12,28 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// GitHubReleaseConfig configures a `gh release create` invocation.
 type GitHubReleaseConfig struct {
-	// Tag is the git tag the release is cut from (e.g. "v1.2.3"). Required.
+	// Tag is required.
 	Tag string
-	// Title is the release title. Defaults to Tag.
+	// Title defaults to Tag.
 	Title string
-	// Notes is the release body text, used when NotesFile is empty.
 	Notes string
-	// NotesFile is a path to a notes file, passed as `--notes-file`. Takes
-	// precedence over Notes.
+	// NotesFile takes precedence over Notes.
 	NotesFile string
-	// Assets are files uploaded with the release (built artifacts,
-	// checksums), relative to the repo root.
+	// Assets are uploaded with the release, relative to the repo root.
 	Assets []string
-	// Repo optionally targets a specific "owner/name" via `--repo`.
-	Repo string
-	// Draft creates the release as a draft.
-	Draft bool
-	// Prerelease marks the release as a prerelease.
+	// Repo is an "owner/name" override.
+	Repo       string
+	Draft      bool
 	Prerelease bool
-	// TokenSecret is the sparkwing secret name holding the GitHub token
-	// `gh` authenticates with, exported as GH_TOKEN. Empty relies on gh's
-	// ambient auth.
+	// TokenSecret names the sparkwing secret exported as GH_TOKEN. Empty
+	// relies on gh's ambient auth.
 	TokenSecret string
 	// DryRun forces echo-and-skip regardless of SPARKWING_DRY_RUN.
 	DryRun bool
 }
 
-// GitHubRelease cuts a GitHub Release with `gh release create`, uploading
-// any assets and attaching the notes. Honors the dry-run convention:
-// under DryRun or SPARKWING_DRY_RUN it echoes the argv and returns nil
-// without reaching GitHub.
+// GitHubRelease cuts a GitHub Release with `gh release create`.
 func GitHubRelease(ctx context.Context, cfg GitHubReleaseConfig) error {
 	if cfg.Tag == "" {
 		return fmt.Errorf("release: GitHubRelease Tag is required")
@@ -67,7 +57,6 @@ func GitHubRelease(ctx context.Context, cfg GitHubReleaseConfig) error {
 	})
 }
 
-// ghArgs builds the `gh release create` argv. Pure, for testing.
 func ghArgs(cfg GitHubReleaseConfig) []string {
 	args := []string{"release", "create", cfg.Tag}
 	if cfg.Repo != "" {
@@ -92,38 +81,24 @@ func ghArgs(cfg GitHubReleaseConfig) []string {
 	return append(args, cfg.Assets...)
 }
 
-// NpmPublishConfig configures an `npm publish` invocation.
 type NpmPublishConfig struct {
-	// Dir is the package directory (containing package.json), relative to
-	// the repo root. Defaults to ".".
+	// Dir is the package directory, defaulting to ".".
 	Dir string
-	// Registry is the target registry URL (`--registry`). Empty uses npm's
-	// configured default.
-	Registry string
-	// Access is the `--access` value ("public" or "restricted"). Empty
-	// omits the flag.
-	Access string
-	// Tag is the dist-tag to publish under (`--tag`). Empty omits the flag
-	// (npm defaults to "latest").
-	Tag string
-	// Provenance publishes with `--provenance`.
+	// Registry, Access, and Tag map to the like-named npm flags; each empty
+	// value omits its flag.
+	Registry   string
+	Access     string
+	Tag        string
 	Provenance bool
-	// TokenSecret is the sparkwing secret name holding the npm auth token.
-	// npm does not read auth from an environment variable, so NpmPublish
-	// writes a temporary userconfig (.npmrc) mapping the target registry
-	// to the token and passes it via `--userconfig`; the token itself is
-	// exported as NODE_AUTH_TOKEN and interpolated by that .npmrc.
+	// TokenSecret names the sparkwing secret holding the npm auth token. npm
+	// reads auth from an .npmrc rather than the environment, so a temporary
+	// one is written and passed with --userconfig.
 	TokenSecret string
 	// DryRun forces echo-and-skip regardless of SPARKWING_DRY_RUN.
 	DryRun bool
 }
 
-// NpmPublish publishes a package with `npm publish`. When TokenSecret is
-// set it materializes a temporary .npmrc authenticating the target
-// registry (npm reads auth from an `_authToken` line, not from an
-// environment variable) and points npm at it with `--userconfig`. Honors
-// the dry-run convention: under DryRun or SPARKWING_DRY_RUN it echoes the
-// argv and returns nil without reaching the registry.
+// NpmPublish publishes a package with `npm publish`.
 func NpmPublish(ctx context.Context, cfg NpmPublishConfig) error {
 	args := npmArgs(cfg)
 	return step.Run(ctx, "npm publish", func(ctx context.Context) error {
@@ -156,13 +131,9 @@ func NpmPublish(ctx context.Context, cfg NpmPublishConfig) error {
 	})
 }
 
-// writeNpmAuthConfig writes a temporary npm userconfig (.npmrc) that maps
-// the target registry to an `_authToken` interpolated from the
-// NODE_AUTH_TOKEN environment variable, returning its path. npm does not
-// authenticate from NODE_AUTH_TOKEN on its own; it reads `_authToken`
-// lines from an .npmrc, so a real publish needs this file even though the
-// token value stays in the environment. The caller passes the path via
-// `--userconfig` and removes it afterward.
+// writeNpmAuthConfig exists because npm does not authenticate from
+// NODE_AUTH_TOKEN on its own; it reads `_authToken` lines from an .npmrc.
+// The caller removes the returned path.
 func writeNpmAuthConfig(registry string) (string, error) {
 	f, err := os.CreateTemp("", "sparkwing-npmrc-*")
 	if err != nil {
@@ -181,9 +152,6 @@ func writeNpmAuthConfig(registry string) (string, error) {
 	return f.Name(), nil
 }
 
-// npmAuthHost derives the `host[/path]/` prefix an npm `_authToken` line
-// keys on from a registry URL, defaulting to the public registry when the
-// URL is empty or unparseable.
 func npmAuthHost(registry string) string {
 	if registry != "" {
 		if u, err := url.Parse(registry); err == nil && u.Host != "" {
@@ -193,7 +161,6 @@ func npmAuthHost(registry string) string {
 	return "registry.npmjs.org/"
 }
 
-// npmArgs builds the `npm publish` argv. Pure, for testing.
 func npmArgs(cfg NpmPublishConfig) []string {
 	args := []string{"publish"}
 	if cfg.Registry != "" {
@@ -211,37 +178,25 @@ func npmArgs(cfg NpmPublishConfig) []string {
 	return args
 }
 
-// PyPIPublishConfig configures a Python wheel/sdist upload.
 type PyPIPublishConfig struct {
-	// Dir is the working directory the upload runs from, relative to the
-	// repo root. Defaults to ".".
+	// Dir is the working directory, defaulting to ".".
 	Dir string
-	// Dist is the glob of built distributions to upload. Defaults to
-	// "dist/*".
+	// Dist is the glob of built distributions, defaulting to "dist/*".
 	Dist string
-	// Repository is the twine repository name (`--repository`), e.g.
-	// "testpypi" or "pypi". Used only by the twine tool; empty uses
-	// twine's default (pypi). For the uv tool set PublishURL instead, since
-	// uv wants a full endpoint URL rather than a named repository.
+	// Repository is a twine repository name; uv wants a full endpoint URL in
+	// PublishURL instead. Each is ignored by the other tool.
 	Repository string
-	// PublishURL is the full upload endpoint URL for the uv tool
-	// (`--publish-url`), e.g. "https://test.pypi.org/legacy/". Used only
-	// when Tool is "uv"; ignored by twine. Empty uses uv's default index.
 	PublishURL string
-	// Tool selects the uploader: "twine" (default) or "uv".
+	// Tool is "twine" (default) or "uv".
 	Tool string
-	// TokenSecret is the sparkwing secret name holding the registry token.
-	// For twine it is exported as TWINE_PASSWORD (with TWINE_USERNAME set
-	// to "__token__"); for uv as UV_PUBLISH_TOKEN.
+	// TokenSecret names the sparkwing secret exported as TWINE_PASSWORD, with
+	// TWINE_USERNAME "__token__", or as UV_PUBLISH_TOKEN.
 	TokenSecret string
 	// DryRun forces echo-and-skip regardless of SPARKWING_DRY_RUN.
 	DryRun bool
 }
 
-// PyPIPublish uploads built distributions to a Python package index with
-// `twine upload` (default) or `uv publish`. Honors the dry-run
-// convention: under DryRun or SPARKWING_DRY_RUN it echoes the argv and
-// returns nil without reaching the index.
+// PyPIPublish uploads built distributions with `twine upload` or `uv publish`.
 func PyPIPublish(ctx context.Context, cfg PyPIPublishConfig) error {
 	tool := cfg.Tool
 	if tool == "" {
@@ -276,8 +231,6 @@ func PyPIPublish(ctx context.Context, cfg PyPIPublishConfig) error {
 	})
 }
 
-// pypiArgs builds the uploader command and argv for the selected tool.
-// Pure, for testing.
 func pypiArgs(tool string, cfg PyPIPublishConfig) (name string, args []string) {
 	dist := cfg.Dist
 	if dist == "" {

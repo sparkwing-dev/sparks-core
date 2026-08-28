@@ -8,24 +8,11 @@ import (
 	"strings"
 )
 
-// verifyHTMLChunkRefs scans every *.html file under outDir for local
-// asset references (src="/_next/..." / href="/_next/...", and the
-// non-Next /static/ equivalent) and checks that each referenced file
-// exists on disk under outDir.
-//
-// Catches the failure mode in ISS-034: a Next.js build where
-// `output: "export"` did not engage regenerates JS chunks under
-// `out/_next/static/chunks/` with new content hashes but does not
-// refresh `out/*.html`. The stale HTML keeps pointing at chunk
-// filenames from the prior export-mode build that the current build
-// did not emit. If we synced this to S3, the asset pass would
-// `--delete` the live chunks (because they no longer exist locally)
-// and the HTML pass would no-op, leaving live pages referencing
-// chunks that 404. Failing here keeps S3 internally consistent.
-//
-// Only paths under known static-asset prefixes are verified. Routes
-// (e.g. `/about`) and external URLs are left alone; this check is
-// scoped to "files the build claims to have emitted".
+// verifyHTMLChunkRefs checks that every static-asset path the built HTML
+// references exists on disk. A Next.js build whose `output: "export"` did
+// not engage emits fresh chunk hashes without refreshing the HTML; syncing
+// that to S3 would --delete the live chunks the stale HTML still points at.
+// Routes and external URLs are not verified.
 func verifyHTMLChunkRefs(outDir string) error {
 	htmlFiles, err := filepath.Glob(filepath.Join(outDir, "*.html"))
 	if err != nil {
@@ -74,10 +61,8 @@ func verifyHTMLChunkRefs(outDir string) error {
 	return nil
 }
 
-// staticRefRE matches src= / href= attributes whose value starts with
-// a known static-asset prefix. Only single- or double-quoted values
-// are matched; bare attribute values are HTML5-legal but Next/React
-// emit quoted attributes.
+// staticRefRE matches only quoted attribute values; bare ones are
+// HTML5-legal but Next and React emit quoted attributes.
 var staticRefRE = regexp.MustCompile(
 	`(?:src|href)\s*=\s*["'](?P<path>/(?:_next/static|static)/[^"'?#]+)["']`,
 )

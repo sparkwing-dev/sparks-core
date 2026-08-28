@@ -1,8 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template test-shards`.
 // Edit freely -- nothing here re-runs.
-//
-// Run a test suite split into {{.shards}} parallel shards, gated by a
-// node that passes only when every shard passes. Fully local.
 package jobs
 
 import (
@@ -15,8 +12,7 @@ import (
 const {{pascal .pipeline_name}}ShardTotal = {{.shards}}
 
 // {{pascal .pipeline_name}} fans {{.shards}} shard jobs out in parallel,
-// then a gate node depends on the whole group so it runs only when
-// every shard passed.
+// behind a gate that passes only when every shard passed.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -38,19 +34,15 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// {{pascal .pipeline_name}}Shard runs one shard of the suite. Its test
-// command sees SHARD_INDEX (0-based) and SHARD_TOTAL in the environment
-// and selects its slice from them -- the default splits the module's
-// packages by list position; a test runner's native --shard flag works
-// too.
+// {{pascal .pipeline_name}}Shard exports SHARD_INDEX (0-based) and
+// SHARD_TOTAL for the test command to select its slice from.
 type {{pascal .pipeline_name}}Shard struct {
 	sparkwing.Base
 	index int
 }
 
-// Prefers biases every shard onto a runner advertising the configured
-// label. It is a soft preference, not a hard Requires, so a
-// single-runner setup still dispatches the shard.
+// Prefers is soft rather than a hard Requires, so a single-runner setup
+// still dispatches the shard.
 func ({{pascal .pipeline_name}}Shard) Prefers() []string {
 	label := {{quote .runner_label}}
 	if label == "" {

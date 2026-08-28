@@ -9,26 +9,19 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// ApplyConfig drives Apply: a raw `kubectl apply` against one or more
-// manifest paths. Use this for repos that own plain k8s YAML (no
-// kustomize, no gitops) and want the pipeline to apply it directly.
+// ApplyConfig drives Apply, for repos that own plain k8s YAML.
 type ApplyConfig struct {
-	// Paths are files or directories passed to `kubectl apply -f`.
-	// Required.
+	// Paths are files or directories for `kubectl apply -f`. Required.
 	Paths []string
-	// Namespace is the -n target. Defaults to "default".
+	// Namespace defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty resolves via ResolveContext,
-	// which accepts an in-cluster service account and otherwise fails
-	// closed rather than silently using the current kubeconfig context.
+	// Context empty resolves via ResolveContext.
 	Context string
-	// ServerSide applies with --server-side, the safer choice for large
-	// or CRD-heavy manifests.
+	// ServerSide is the safer choice for large or CRD-heavy manifests.
 	ServerSide bool
-	// Wait lists deployment names (e.g. "deploy/myapp") to block on via
-	// `kubectl rollout status` after the apply. Empty waits on nothing.
+	// Wait names deployments to block on via `kubectl rollout status`.
 	Wait []string
-	// Timeout bounds each rollout-status wait. Defaults to "180s".
+	// Timeout defaults to "180s".
 	Timeout string
 }
 
@@ -41,10 +34,8 @@ func (c *ApplyConfig) defaults() {
 	}
 }
 
-// Apply runs `kubectl apply` for each configured path, then waits for
-// any listed deployments to finish rolling out. A plain-YAML deploy
-// path, parallel to DeployKindKustomize (kustomize) and DeployKubectl
-// (rollout restart).
+// Apply runs `kubectl apply` for each path, then waits on any listed
+// deployments.
 func Apply(ctx context.Context, cfg ApplyConfig) error {
 	cfg.defaults()
 	if len(cfg.Paths) == 0 {
@@ -71,22 +62,16 @@ func Apply(ctx context.Context, cfg ApplyConfig) error {
 	})
 }
 
-// SetImageConfig drives SetImage.
 type SetImageConfig struct {
-	// Deployment is the rollout target, e.g. "deploy/myapp". Required.
+	// Deployment, Container, and Image are required.
 	Deployment string
-	// Container is the container name within the pod spec to retag.
-	// Required.
-	Container string
-	// Image is the full image reference (registry/name:tag) to roll to.
-	// Required.
-	Image string
-	// Namespace is the -n target. Defaults to "default".
+	Container  string
+	Image      string
+	// Namespace defaults to "default".
 	Namespace string
-	// Context is the kubectl --context. Empty resolves via ResolveContext
-	// and fails closed rather than using the current kubeconfig context.
+	// Context empty resolves via ResolveContext.
 	Context string
-	// Timeout bounds the rollout-status wait. Defaults to "180s".
+	// Timeout defaults to "180s".
 	Timeout string
 }
 
@@ -99,11 +84,9 @@ func (c *SetImageConfig) defaults() {
 	}
 }
 
-// SetImage points a deployment's container at a new image via
-// `kubectl set image` and waits for the resulting rollout. Each distinct
-// image tag is a new ReplicaSet, so RolloutUndo can roll back to the
-// prior tag -- which is why a CD pipeline should set the freshly built,
-// content-addressed tag here rather than re-applying a floating :latest.
+// SetImage points a deployment's container at a new image and waits for the
+// rollout. Pass a content-addressed tag, not a floating :latest: each
+// distinct tag is a new ReplicaSet, which is what RolloutUndo rolls back to.
 func SetImage(ctx context.Context, cfg SetImageConfig) error {
 	cfg.defaults()
 	if cfg.Deployment == "" || cfg.Container == "" || cfg.Image == "" {
@@ -118,18 +101,15 @@ func SetImage(ctx context.Context, cfg SetImageConfig) error {
 	})
 }
 
-// RolloutUndoConfig drives RolloutUndo.
 type RolloutUndoConfig struct {
-	// Deployments to roll back, e.g. "deploy/myapp". Required.
+	// Deployments to roll back. Required.
 	Deployments []string
-	// Namespace is the -n target. Defaults to "default".
+	// Namespace defaults to "default".
 	Namespace string
-	// Context is the kubectl --context, ideally the same one the deploy
-	// used. Empty resolves via ResolveContext, which fails closed unless
-	// the run is in-cluster, so a rollback never silently targets a
-	// different (e.g. production) cluster than the deploy did.
+	// Context should be the one the deploy used; empty resolves via
+	// ResolveContext, which fails closed rather than target another cluster.
 	Context string
-	// Timeout bounds each rollout-status wait. Defaults to "180s".
+	// Timeout defaults to "180s".
 	Timeout string
 }
 
@@ -142,10 +122,8 @@ func (c *RolloutUndoConfig) defaults() {
 	}
 }
 
-// RolloutUndo rolls each deployment back to its previous ReplicaSet via
-// `kubectl rollout undo`, then waits for the rollback to complete. It is
-// the kubectl-side rollback primitive: pair it with a failed Verify in
-// an OnFailure handler, or call it from the rollback dispatcher.
+// RolloutUndo rolls each deployment back to its previous ReplicaSet and
+// waits for the rollback to complete.
 func RolloutUndo(ctx context.Context, cfg RolloutUndoConfig) error {
 	cfg.defaults()
 	return step.Run(ctx, "rollback (kubectl rollout undo)", func(ctx context.Context) error {

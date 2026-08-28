@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // lint-test-node`. Edit freely -- nothing here re-runs.
-//
-// Node CI hygiene: install, then lint + typecheck + test in a parallel
-// independent-node DAG. No external concerns; the Node twin of
-// lint-test-go.
 package jobs
 
 import (
@@ -16,10 +12,8 @@ import (
 )
 
 // {{pascal .pipeline_name}} installs dependencies, then runs lint,
-// typecheck, and test as independent parallel nodes gated on install.
-// The checks don't stop each other, so a single CI run surfaces every
-// failure at once. Any of the check commands can be blanked out to drop
-// its node (an empty typecheck-cmd is the plain-JS path).
+// typecheck, and test as independent parallel nodes. A check whose command
+// is empty is absent from the DAG.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {

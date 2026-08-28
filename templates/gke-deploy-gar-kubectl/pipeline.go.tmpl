@@ -1,12 +1,5 @@
 // Scaffolded from the gke-deploy-gar-kubectl template. Edit freely --
 // nothing here re-runs.
-//
-// A raw-composition DAG: each node calls a sparks-core block directly,
-// so the orchestration (what runs when, what verifies, what rolls back)
-// is visible and editable. The blocks do the heavy lifting. This is the
-// GCP twin of go-test-build-deploy-k8s: it pushes to Google Artifact
-// Registry, bootstraps GKE credentials, and applies the repo's own
-// manifests with kubectl.
 package jobs
 
 import (
@@ -24,10 +17,8 @@ import (
 	"github.com/sparkwing-dev/sparks-core/rollback"
 )
 
-// {{pascal .pipeline_name}} tests, builds {{.image}} to GAR, and rolls it
-// out to GKE. After the rollout a health probe verifies the new revision;
-// a definitively-unhealthy result rolls the deployment back to the
-// previous revision.
+// {{pascal .pipeline_name}} builds {{.image}} to GAR and rolls it out to
+// GKE, rolling back on a definitively-unhealthy probe.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
@@ -45,9 +36,8 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// build authenticates docker against the GAR host, then builds and pushes
-// the image. GAR auth is the GCP analog of the ECR login docker.BuildAndPush
-// runs itself for ECR registries, so it is done explicitly here first.
+// build authenticates against GAR explicitly first, because
+// docker.BuildAndPush only runs the equivalent login for ECR registries.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	if err := gcp.ConfigureDockerAuth(ctx, p.garHost()); err != nil {
 		return err
@@ -65,10 +55,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	})
 }
 
-// deploy fetches GKE credentials, applies the manifests (idempotent), then
-// rolls the freshly built image. Returning from deploy means the rollout
-// succeeded; the node's Verify probe then decides whether the new revision
-// is actually healthy.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	if err := gcp.GetGKECredentials(ctx, gcp.GKEConfig{
 		Cluster:  {{quote .cluster}},
@@ -95,13 +81,10 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	})
 }
 
-// rollback runs when deploy fails. It rolls back only on a definitive
-// failure. If the verify probe could not even *determine* health
-// (unreachable, timeout, auth -- probe.Indeterminate), that's not
-// evidence the new revision is bad, so rolling back would revert a
-// possibly-healthy deploy because the check itself couldn't run. In that
-// case it surfaces the error instead. Local: true forces the kubectl
-// rollout-undo path (this template owns its YAML, no gitops).
+// rollback acts only on a definitive failure: an indeterminate probe is no
+// evidence the new revision is bad, so reverting on it would move production
+// off a possibly-healthy deploy. Local forces the kubectl rollout-undo path,
+// since this template owns its YAML.
 func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
 	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
 		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)
@@ -115,16 +98,12 @@ func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Fa
 	})
 }
 
-// garHost is the Artifact Registry host that docker authenticates against,
-// the first path segment of the registry URL (e.g.
-// "us-west1-docker.pkg.dev" from "us-west1-docker.pkg.dev/proj/repo").
+// garHost is the first path segment of the registry URL.
 func (p *{{pascal .pipeline_name}}) garHost() string {
 	return strings.SplitN({{quote .registry}}, "/", 2)[0]
 }
 
-// imageRef is the full GAR image reference rolled out to the deployment,
-// kept consistent with the tag docker.BuildAndPush pushes to a non-ECR
-// registry (the content-addressed DeployTag).
+// imageRef must match the tag docker.BuildAndPush pushes to a non-ECR registry.
 func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) string {
 	return {{quote .registry}} + "/" + {{quote .image}} + ":" + tags.DeployTag()
 }

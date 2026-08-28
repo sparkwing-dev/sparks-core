@@ -1,8 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // approval-gated-deploy`. Edit freely -- nothing here re-runs.
-//
-// build -> test -> human approval gate -> deploy. The deploy node runs
-// only after a person approves the gate.
 package jobs
 
 import (
@@ -12,9 +9,8 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} gates the deploy to {{.environment}} behind
-// a human approval: build and test run, then the run blocks at the
-// gate until someone approves (CLI or dashboard), then deploy runs.
+// {{pascal .pipeline_name}} blocks the deploy to {{.environment}} until a
+// person approves the gate.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {

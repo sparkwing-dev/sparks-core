@@ -1,33 +1,14 @@
-// Package lambda deploys AWS Lambda functions for both packaging types
-// -- container image and zip -- behind one module. Each deploy updates
-// the function code, publishes an immutable version, and shifts a named
-// alias (e.g. "live") to that version, returning the version the alias
-// pointed at beforehand so a failed post-deploy check can roll back.
+// Package lambda deploys image- and zip-packaged AWS Lambda functions: each
+// deploy updates the code, publishes a version, and shifts a named alias to
+// it, returning the version the alias held before so Rollback can restore
+// it. The alias must already exist. Mutating calls and the current-alias
+// read honor DryRun and SPARKWING_DRY_RUN by echoing the aws argv, so a dry
+// deploy needs no AWS credentials.
 //
-// DeployImage updates an Image-packaged function, pointing it at a new
-// --image-uri. DeployZip updates a Zip-packaged function, either staging
-// the archive through S3 (set ArtifactBucket, required for archives
-// above the direct-upload limit) or uploading it inline with --zip-file.
-// Rollback shifts an alias back to a prior version and is shaped for a
-// sparkwing Job.OnFailure hook:
-//
-//	prev, err := lambda.DeployImage(ctx, lambda.ImageDeployConfig{
-//	    FunctionName: "checkout", ImageURI: uri, Alias: "live",
-//	})
-//	// ... on a failed Verify:
-//	lambda.Rollback(ctx, lambda.RollbackConfig{
-//	    FunctionName: "checkout", Alias: "live", Version: prev,
-//	})
-//
-// Every state-mutating call honors the dry-run contract: when a config's
-// DryRun field is set or the SPARKWING_DRY_RUN environment variable is
-// non-empty, the exact aws argv is logged and the call returns success
-// without touching the cloud. The current-alias read is skipped under
-// dry-run so a dry deploy needs no AWS credentials.
-//
-// Requires the `aws` CLI on PATH. Profile/IRSA resolution comes from the
-// aws module; the named alias is assumed to already exist (created out of
-// band by the function's infrastructure).
+// Across the config types below, an empty Region lets the aws CLI resolve it
+// from the environment, an empty AWSProfile resolves via AWS_PROFILE or IRSA,
+// an empty Alias means "live", and ExtraArgs append verbatim to
+// update-function-code.
 package lambda
 
 import (
@@ -48,81 +29,44 @@ const (
 	defaultZipPath = "function.zip"
 )
 
-// ImageDeployConfig drives DeployImage.
 type ImageDeployConfig struct {
-	// FunctionName is the Lambda function to update. Required.
+	// FunctionName and ImageURI are required.
 	FunctionName string
-	// ImageURI is the container image the function pulls, including the
-	// registry, repository, and tag or digest. Required.
-	ImageURI string
-	// Alias is shifted to the freshly published version. Defaults to
-	// "live".
-	Alias string
-	// Region is the function's AWS region. Empty omits --region and lets
-	// the aws CLI resolve it from AWS_REGION/AWS_DEFAULT_REGION.
-	Region string
-	// AWSProfile selects the aws CLI profile for local runs; empty
-	// resolves via AWS_PROFILE or IRSA (see the aws module).
-	AWSProfile string
-	// ExtraArgs are appended verbatim to the update-function-code call,
-	// a passthrough for advanced aws flags the module does not model
-	// (e.g. --architectures, --revision-id).
-	ExtraArgs []string
-	// DryRun logs the argv of every mutating aws call and skips
-	// execution, the same effect as a non-empty SPARKWING_DRY_RUN.
-	DryRun bool
+	ImageURI     string
+	Alias        string
+	Region       string
+	AWSProfile   string
+	ExtraArgs    []string
+	DryRun       bool
 }
 
-// ZipDeployConfig drives DeployZip.
 type ZipDeployConfig struct {
-	// FunctionName is the Lambda function to update. Required.
+	// FunctionName is required.
 	FunctionName string
-	// ZipPath is the deployment archive to upload, relative to the
-	// pipeline working directory. Defaults to "function.zip".
+	// ZipPath is relative to the working directory, defaulting to
+	// "function.zip".
 	ZipPath string
-	// ArtifactBucket, when set, stages the archive through S3 before the
-	// code update (required for archives above the ~50MB direct-upload
-	// limit). Empty updates code inline with --zip-file.
+	// ArtifactBucket stages the archive through S3, which archives above the
+	// ~50MB direct-upload limit require. Empty uploads inline.
 	ArtifactBucket string
-	// ArtifactKey is the S3 object key the archive stages to. Defaults
-	// to the base name of ZipPath. Ignored when ArtifactBucket is empty.
+	// ArtifactKey defaults to the base name of ZipPath.
 	ArtifactKey string
-	// Alias is shifted to the freshly published version. Defaults to
-	// "live".
-	Alias string
-	// Region is the function's AWS region. Empty omits --region and lets
-	// the aws CLI resolve it from AWS_REGION/AWS_DEFAULT_REGION.
-	Region string
-	// AWSProfile selects the aws CLI profile for local runs; empty
-	// resolves via AWS_PROFILE or IRSA (see the aws module).
-	AWSProfile string
-	// ExtraArgs are appended verbatim to the update-function-code call,
-	// a passthrough for advanced aws flags the module does not model
-	// (e.g. --architectures, --revision-id).
-	ExtraArgs []string
-	// DryRun logs the argv of every mutating aws call and skips
-	// execution, the same effect as a non-empty SPARKWING_DRY_RUN.
-	DryRun bool
+	Alias       string
+	Region      string
+	AWSProfile  string
+	ExtraArgs   []string
+	DryRun      bool
 }
 
-// RollbackConfig drives Rollback.
 type RollbackConfig struct {
-	// FunctionName is the Lambda function whose alias moves. Required.
+	// FunctionName and Version are required; Version is typically the
+	// prevVersion a preceding deploy returned.
 	FunctionName string
-	// Alias is the alias to shift back. Defaults to "live".
-	Alias string
-	// Version is the version to point the alias at, typically the
-	// prevVersion a preceding DeployImage/DeployZip returned. Required.
-	Version string
-	// Region is the function's AWS region. Empty omits --region and lets
-	// the aws CLI resolve it from AWS_REGION/AWS_DEFAULT_REGION.
-	Region string
-	// AWSProfile selects the aws CLI profile for local runs; empty
-	// resolves via AWS_PROFILE or IRSA (see the aws module).
-	AWSProfile string
-	// DryRun logs the argv of every mutating aws call and skips
-	// execution, the same effect as a non-empty SPARKWING_DRY_RUN.
-	DryRun bool
+	Alias        string
+	Version      string
+	Region       string
+	AWSProfile   string
+	DryRun       bool
 }
 
 func (c *ImageDeployConfig) applyDefaults() {
@@ -141,9 +85,8 @@ func (c *RollbackConfig) applyDefaults() {
 	c.Alias = orDefault(c.Alias, defaultAlias)
 }
 
-// DeployImage points an Image-packaged Lambda at a new image, publishes
-// a version, and shifts the alias to it. It returns the version the
-// alias pointed at before the shift, for a subsequent Rollback.
+// DeployImage points an Image-packaged Lambda at a new image, publishes a
+// version, and shifts the alias to it, returning the alias's prior version.
 func DeployImage(ctx context.Context, cfg ImageDeployConfig) (prevVersion string, err error) {
 	cfg.applyDefaults()
 	if cfg.FunctionName == "" {
@@ -170,10 +113,8 @@ func DeployImage(ctx context.Context, cfg ImageDeployConfig) (prevVersion string
 	return prevVersion, err
 }
 
-// DeployZip updates a Zip-packaged Lambda's code, publishes a version,
-// and shifts the alias to it. When ArtifactBucket is set the archive is
-// staged through S3 first; otherwise it is uploaded inline. It returns
-// the version the alias pointed at before the shift, for a Rollback.
+// DeployZip updates a Zip-packaged Lambda's code, publishes a version, and
+// shifts the alias to it, returning the alias's prior version.
 func DeployZip(ctx context.Context, cfg ZipDeployConfig) (prevVersion string, err error) {
 	cfg.applyDefaults()
 	if cfg.FunctionName == "" {
@@ -212,9 +153,7 @@ func DeployZip(ctx context.Context, cfg ZipDeployConfig) (prevVersion string, er
 	return prevVersion, err
 }
 
-// Rollback shifts a function's alias back to Version. It is the
-// OnFailure-shaped counterpart to DeployImage/DeployZip: feed it the
-// prevVersion the deploy returned. Honors cfg.DryRun and SPARKWING_DRY_RUN.
+// Rollback shifts a function's alias back to Version.
 func Rollback(ctx context.Context, cfg RollbackConfig) error {
 	cfg.applyDefaults()
 	if cfg.FunctionName == "" {
@@ -229,16 +168,12 @@ func Rollback(ctx context.Context, cfg RollbackConfig) error {
 	})
 }
 
-// dryRunEnabled reports whether mutating calls should be echoed instead
-// of executed: true when the caller set DryRun or SPARKWING_DRY_RUN is
-// non-empty.
 func dryRunEnabled(explicit bool) bool {
 	return explicit || os.Getenv("SPARKWING_DRY_RUN") != ""
 }
 
-// currentAliasVersion reads the version the alias currently points at.
-// Under dry-run the read is skipped (no credentials needed) and an
-// empty string is returned.
+// currentAliasVersion skips the read under dry-run so no credentials are
+// needed.
 func currentAliasVersion(ctx context.Context, fn, alias, region string, profile []string, dry bool) (string, error) {
 	if dry {
 		sparkwing.Info(ctx, "[dry-run] skipping current-alias read for %s:%s", fn, alias)
@@ -251,8 +186,6 @@ func currentAliasVersion(ctx context.Context, fn, alias, region string, profile 
 	return version, nil
 }
 
-// publishCode runs an update-function-code invocation and returns the
-// published version. Under dry-run it logs the argv and returns "".
 func publishCode(ctx context.Context, args []string, dry bool) (string, error) {
 	if dry {
 		logDryRun(ctx, args)
@@ -265,8 +198,7 @@ func publishCode(ctx context.Context, args []string, dry bool) (string, error) {
 	return version, nil
 }
 
-// shiftAlias moves the alias to version. Under dry-run the version is
-// unknown (nothing was published), so a placeholder is echoed.
+// shiftAlias echoes a placeholder under dry-run, where nothing was published.
 func shiftAlias(ctx context.Context, fn, alias, version, region string, profile []string, dry bool) error {
 	if dry && version == "" {
 		version = "<published-version>"
@@ -275,8 +207,6 @@ func shiftAlias(ctx context.Context, fn, alias, version, region string, profile 
 	return runAWS(ctx, updateAliasArgs(fn, alias, version, region, profile), dry)
 }
 
-// runAWS runs an aws CLI mutation, or logs its argv and returns nil when
-// dry is set.
 func runAWS(ctx context.Context, args []string, dry bool) error {
 	if dry {
 		logDryRun(ctx, args)
@@ -289,8 +219,6 @@ func logDryRun(ctx context.Context, args []string) {
 	sparkwing.Info(ctx, "[dry-run] would run: aws %s", strings.Join(args, " "))
 }
 
-// appendRegion appends --region when region is non-empty; an empty region
-// is omitted so the aws CLI resolves it from AWS_REGION/AWS_DEFAULT_REGION.
 func appendRegion(args []string, region string) []string {
 	if region == "" {
 		return args

@@ -16,16 +16,12 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// kubectlChokepoint is the one file allowed to shell out to kubectl.
-// Every other kubectl call must route through the helpers it defines so
-// the --context is resolved explicitly (kube.ResolveContext) and fails
-// closed -- never silently the current kubeconfig context.
+// kubectlChokepoint is the one file allowed to shell out to kubectl, so
+// every call resolves --context explicitly and fails closed.
 const kubectlChokepoint = "kube/context.go"
 
-// execCallees are the function names that actually run a command.
-// A "kubectl" string is only a real invocation when passed to one of
-// these -- which keeps the scan off the same word in a log line, error
-// message, or comment.
+// execCallees keep the scan off the word "kubectl" in a log line, error
+// message, or comment: only a string passed to one of these is a real call.
 var execCallees = map[string]bool{
 	"Exec":           true,
 	"Bash":           true,
@@ -36,10 +32,8 @@ var execCallees = map[string]bool{
 
 var kubectlWordRe = regexp.MustCompile(`\bkubectl\b`)
 
-// checkNoRawKubectl fails the push if any tracked Go file shells out to
-// kubectl directly outside the chokepoint. This is the static guard for
-// the "deploy/rollback silently hit the current (wrong) cluster" class
-// of bug: it forces every kubectl call through one context-aware helper.
+// checkNoRawKubectl guards against a deploy or rollback silently hitting the
+// current, wrong cluster by forcing every call through the chokepoint.
 func checkNoRawKubectl(ctx context.Context) error {
 	root := sparkwing.WorkDir()
 	if root == "" {
@@ -79,9 +73,6 @@ func checkNoRawKubectl(ctx context.Context) error {
 	return nil
 }
 
-// scanGoForRawKubectl parses one Go source file and returns the line
-// numbers of any kubectl command passed to an exec helper. Pure and
-// side-effect free for unit testing.
 func scanGoForRawKubectl(filename string, src []byte) ([]int, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filename, src, 0)

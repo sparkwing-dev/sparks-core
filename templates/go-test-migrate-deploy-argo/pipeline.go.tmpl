@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // go-test-migrate-deploy-argo`. Edit freely -- nothing here re-runs.
-//
-// A raw-composition DAG: each node calls a sparks-core block directly,
-// so the orchestration (what runs when, what rolls back) is visible and
-// editable. The blocks do the heavy lifting; this file is the shape.
 package jobs
 
 import (
@@ -23,7 +19,7 @@ import (
 
 // {{pascal .pipeline_name}} integration-tests {{.image}} against an
 // ephemeral Postgres, builds to ECR, migrates the target database, and
-// deploys via gitops + ArgoCD with a verified, self-rolling-back deploy.
+// deploys via gitops and ArgoCD with a verified, self-rolling-back deploy.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
@@ -37,8 +33,8 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// integrationTest stands up a throwaway Postgres, migrates it, and runs
-// the test suite against it -- so tests exercise the real schema.
+// integrationTest migrates the throwaway Postgres first, so the tests
+// exercise the real schema.
 func (p *{{pascal .pipeline_name}}) integrationTest(ctx context.Context) error {
 	return services.WithPostgres(ctx, services.Postgres{Image: {{quote .postgres_image}}}, func(ctx context.Context, dsn string) error {
 		if err := migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn}); err != nil {
@@ -62,8 +58,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	})
 }
 
-// migrateProd runs migrations against the target database. The DSN comes
-// from a sparkwing secret so it never lands in the pipeline source.
 func (p *{{pascal .pipeline_name}}) migrateProd(ctx context.Context) error {
 	dsn, err := sparkwing.Secret(ctx, {{quote .dsn_secret}})
 	if err != nil {
@@ -72,10 +66,6 @@ func (p *{{pascal .pipeline_name}}) migrateProd(ctx context.Context) error {
 	return migrate.Up(ctx, migrate.Config{Dir: {{quote .migrations_dir}}, DSN: dsn})
 }
 
-// deployApp pushes image tags through gitops + ArgoCD. Returning means
-// the sync succeeded; the node's Verify probe then decides whether the
-// new revision is actually healthy, and a verify failure routes to
-// rollBack below.
 func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 	tags, err := sparkwingDocker.ComputeTags(ctx)
 	if err != nil {
@@ -92,10 +82,8 @@ func (p *{{pascal .pipeline_name}}) deployApp(ctx context.Context) error {
 	})
 }
 
-// rollBack reverts the deploy on a definitive failure. If the verify
-// probe could not even determine health (unreachable, timeout, auth --
-// probe.Indeterminate), that's not evidence the new revision is bad, so
-// it surfaces the error instead of reverting a possibly-healthy deploy.
+// rollBack reverts only on a definitive failure: an indeterminate probe is
+// no evidence the new revision is bad.
 func (p *{{pascal .pipeline_name}}) rollBack(ctx context.Context, f sparkwing.Failure) error {
 	if f.Stage == sparkwing.StageVerify && probe.Indeterminate(f.Err) {
 		sparkwing.Warn(ctx, "post-deploy health check could not determine health (%v) - leaving the new revision in place; investigate", f.Err)

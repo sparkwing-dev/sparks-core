@@ -12,7 +12,6 @@ import (
 	"github.com/sparkwing-dev/sparks-core/kube"
 )
 
-// Config configures a deploy operation.
 type Config struct {
 	GitopsRepo  string
 	GitopsPath  string
@@ -24,21 +23,13 @@ type Config struct {
 	DeployMap   map[string]string
 	Local       bool
 	FilePatches map[string]map[string]string
-	// ArgoCD names the server the remote path syncs against and the
-	// token it authenticates with. An empty Server probes the
-	// in-cluster service.
+	// ArgoCD with an empty Server probes the in-cluster service.
 	ArgoCD gitops.ArgoCDConfig
 }
 
-// Run executes a deployment using the appropriate strategy based on
-// the target:
-//
-//   - Local: restarts deployments directly via kubectl.
-//   - Remote (prod): pushes image tags to gitops repo and kicks
-//     ArgoCD.
-//
-// The routing decision is cfg.Local, not whether the code is running
-// inside a cluster. Laptop deploys to prod go through gitops.
+// Run restarts deployments via kubectl, or pushes image tags to the gitops
+// repo and kicks ArgoCD. The routing is cfg.Local, not whether the code runs
+// inside a cluster, so a laptop deploy to prod still goes through gitops.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Local {
 		sparkwing.Info(ctx, "deploy: local -> kubectl rollout restart (ns=%s)", cfg.Namespace)

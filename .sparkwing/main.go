@@ -1,7 +1,4 @@
 // Command sparks-core-pipelines is this repo's local pipeline runner.
-// It re-exports runner.Main, which dispatches based on argv:
-// `sparkwing run <pipeline>` invokes the pipeline; `sparkwing pipeline ...`
-// is the agent/operator surface.
 package main
 
 import (

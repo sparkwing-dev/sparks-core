@@ -8,14 +8,8 @@ import (
 	"strings"
 )
 
-// parseGoProfile computes the statement-weighted total coverage of a Go
-// coverprofile. Each data line is
-//
-//	name.go:startLine.col,endLine.col numStmts count
-//
-// and the total is the sum of numStmts over blocks with count > 0,
-// divided by the sum of all numStmts -- the same figure `go tool cover
-// -func` reports as `total:`. A leading `mode:` line is ignored.
+// parseGoProfile sums numStmts over covered blocks against all numStmts,
+// the same figure `go tool cover -func` reports as `total:`.
 func parseGoProfile(data []byte) (float64, error) {
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)

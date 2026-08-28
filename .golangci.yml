@@ -1,10 +1,4 @@
-# golangci-lint v2 configuration.
-# Run: golangci-lint run ./...
-#
-# The rule set is a balance between catching real bugs (staticcheck,
-# errcheck, errorlint, bodyclose) and avoiding noise on legitimate
-# patterns (no gosec, no godot, no fieldalignment). Trimmed to what
-# the elite Go repos converge on per RESEARCH-elite-comparison.md.
+# golangci-lint v2 configuration. Run: golangci-lint run ./...
 
 version: "2"
 
@@ -15,36 +9,36 @@ linters:
   default: none
   enable:
     - bidichk # CVE-2021-42574 Trojan Source defense
-    - bodyclose # missing http response body Close()
-    - contextcheck # ctx propagated through call chains, not dropped
-    - copyloopvar # loop-variable capture bugs (Go 1.22+ semantics)
-    - depguard # banned imports (deprecated / wrong-version modules)
-    - durationcheck # multiplying two time.Durations (units bug)
-    - errcheck # unchecked error returns
-    - errorlint # %w wrapping + errors.Is/As discipline
-    - forbidigo # banned function calls (panic / os.Exit outside main)
-    - govet # default vet + extras enabled below
-    - ineffassign # assignments whose value is never read
-    - misspell # common english spelling errors
-    - noctx # http requests / sql queries built without a context
-    - nolintlint # stale / malformed nolint directives
-    - staticcheck # SA + S + ST + QF rule families
-    - unconvert # redundant type conversions
-    - usestdlibvars # use stdlib constants (http.StatusOK over 200)
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - durationcheck
+    - errcheck
+    - errorlint
+    - forbidigo
+    - govet
+    - ineffassign
+    - misspell
+    - noctx
+    - nolintlint
+    - staticcheck
+    - unconvert
+    - usestdlibvars
   settings:
     govet:
       enable-all: true
       disable:
-        # fieldalignment is mechanical but rarely affects performance
-        # meaningfully and produces large noisy reorderings.
+        # fieldalignment rarely affects performance meaningfully and
+        # produces large noisy reorderings.
         - fieldalignment
-        # shadow is legitimate often enough that the noise outweighs
-        # the catches; readers can disambiguate.
+        # shadow is legitimate often enough that the noise outweighs the
+        # catches.
         - shadow
     staticcheck:
       checks:
         - all
-        # Stylistic suggestions about formatting that we have own opinions on.
+        # QF is formatting style this repo has its own opinions on.
         - -QF1001
         - -QF1002
         - -QF1003
@@ -57,10 +51,8 @@ linters:
         - -QF1010
         - -QF1011
         - -QF1012
-        # ST1000 / ST1020 / ST1021 require godoc on every package /
-        # exported func / exported type; useful in libraries but a lot
-        # of legitimate internal code doesn't justify it. Enable in
-        # public-SDK config separately if desired.
+        # ST1000 / ST1020 / ST1021 require godoc on every package, exported
+        # func, and exported type.
         - -ST1000
         - -ST1020
         - -ST1021
@@ -82,9 +74,8 @@ linters:
     misspell:
       locale: US
       ignore-rules:
-        # `Cancelled` is the public Outcome constant in sparkwing/outcome.go
-        # and `"cancelled"` is its persisted string value. Renaming would
-        # be a breaking API + schema change.
+        # `Cancelled` is a public constant and persisted string value;
+        # renaming it would break the API and the schema.
         - cancelled
         - cancelling
     nolintlint:
@@ -104,8 +95,8 @@ linters:
             - pkg: github.com/stretchr/testify/assert
               desc: "use testify/require instead so a failed assertion stops the test (assert keeps going and produces follow-on noise)."
     forbidigo:
-      # Each `forbid` pattern fires on call sites by default; analyze-types=false
-      # keeps the rule focused on textual matches (no need to load full type info).
+      # analyze-types=false keeps the rule on textual matches, with no need to
+      # load full type info.
       exclude-godoc-examples: true
       analyze-types: false
       forbid:
@@ -129,27 +120,21 @@ linters:
           msg: "log.Fatal/Panic short-circuit deferred cleanup and crash the process; return an error and let the caller decide. Allowed in cmd/**/main.go (see exclusions)."
   exclusions:
     rules:
-      # Tests often ignore errors deliberately.
       - path: _test\.go
         linters:
           - errcheck
-      # Tests can panic / Println / os.Exit as part of their style.
       - path: _test\.go
         linters:
           - forbidigo
-      # CLI binary subtrees legitimately do panic / os.Exit /
-      # fmt.Println at the process boundary. The forbidigo bans
-      # target library code, not the binary entry points.
+      # The forbidigo bans target library code; a CLI entry point
+      # legitimately panics, exits, and prints at the process boundary.
       - path: cmd/
         linters:
           - forbidigo
-      # planguard.go's API is to panic when a sparkwing invariant
-      # is violated (side effects in Pipeline.Plan()). Panic is
-      # the contract of this package, not a leak.
+      # Panic is planguard's contract, not a leak.
       - path: sparkwing/planguard/
         linters:
           - forbidigo
-      # Generated code should be left alone.
       - path: \.pb\.go$
         linters:
           - all

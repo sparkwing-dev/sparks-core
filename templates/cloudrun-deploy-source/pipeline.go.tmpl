@@ -1,9 +1,5 @@
 // Scaffolded from the cloudrun-deploy-source template. Edit freely --
 // nothing here re-runs.
-//
-// A raw-composition DAG: the deploy node calls a sparks-core block
-// directly, so the orchestration (what deploys, what verifies, what rolls
-// back) is visible and editable. The blocks do the heavy lifting.
 package jobs
 
 import (
@@ -18,18 +14,14 @@ import (
 )
 
 // {{pascal .pipeline_name}} deploys service {{.service}} to Cloud Run
-// straight from source: Cloud Build's buildpacks build the container
-// server-side, no Dockerfile. After the rollout a health probe verifies
-// the new revision at the URL the deploy returns; a definitively-unhealthy
-// result shifts traffic back to the previous revision.
+// straight from source, then probes the new revision and shifts traffic back
+// on a definitively-unhealthy result.
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
-	// url is the service URL the deploy resolves at run time; the Verify
-	// probe reads it. Empty under SPARKWING_DRY_RUN, which skips the probe.
+	// url is empty under SPARKWING_DRY_RUN, which skips the probe.
 	url string
-	// priorRevision is the revision that was serving before this deploy,
-	// captured so a failed verify rolls back to a known-good target instead
-	// of rediscovering one. Empty on a first deploy or under dry-run.
+	// priorRevision is captured so a failed verify rolls back to a known-good
+	// target instead of rediscovering one.
 	priorRevision string
 }
 
@@ -40,10 +32,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// deploy rolls the source tree out to Cloud Run and records the returned
-// service URL for the Verify probe. Returning nil means the rollout
-// succeeded; the node's Verify then decides whether the new revision is
-// actually healthy.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	res, err := cloudrun.DeploySource(ctx, cloudrun.DeployConfig{
 		Service:              {{quote .service}},
@@ -61,9 +49,7 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	return nil
 }
 
-// verify probes the freshly deployed service. Under SPARKWING_DRY_RUN the
-// deploy echoes its argv and returns no URL, so there is nothing live to
-// probe and the check passes.
+// verify passes when the deploy returned no URL, since nothing is live to probe.
 func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
 	if p.url == "" {
 		sparkwing.Info(ctx, "no service URL resolved (dry-run) - skipping health probe")
@@ -72,14 +58,10 @@ func (p *{{pascal .pipeline_name}}) verify(ctx context.Context) error {
 	return probe.HTTP(p.url+{{quote .health_path}}).Retry(30).Interval(2 * time.Second).Check(ctx)
 }
 
-// rollback shifts traffic back only on a definitive unhealthy verdict from
-// the post-deploy probe. A failure before the verify stage (the deploy
-// body itself erroring) rolled nothing out -- the current revision is
-// still serving -- so reverting traffic would move production off a
-// healthy revision in response to a build error; it surfaces the error
-// untouched instead. An indeterminate probe result (unreachable, timeout,
-// auth -- probe.Indeterminate) is not evidence the new revision is bad, so
-// it too leaves the new revision in place to investigate.
+// rollback shifts traffic only on a definitive unhealthy verdict. A failure
+// before the verify stage rolled nothing out, and an indeterminate probe is
+// no evidence the new revision is bad; reverting on either would move
+// production off a healthy revision.
 func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
 	if f.Stage != sparkwing.StageVerify {
 		sparkwing.Warn(ctx, "deploy failed before verification (%s stage: %v) - no new revision took traffic, leaving the service untouched", f.Stage, f.Err)
@@ -98,10 +80,8 @@ func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Fa
 	})(ctx)
 }
 
-// allowUnauthenticated reports whether the service should be publicly
-// reachable (--allow-unauthenticated). Only an explicit truthy value makes
-// it public; "", "false", "0", and "no" all keep the service private, so a
-// falsey-looking string never accidentally exposes it to the internet.
+// allowUnauthenticated requires an explicit truthy value, so a
+// falsey-looking string never exposes the service to the internet.
 func allowUnauthenticated(raw string) bool {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "1", "t", "true", "y", "yes", "on":
@@ -111,8 +91,6 @@ func allowUnauthenticated(raw string) bool {
 	}
 }
 
-// parseEnv turns a "KEY=VAL,KEY=VAL" parameter into the env map the deploy
-// passes to --set-env-vars. An empty string yields no env vars.
 func parseEnv(raw string) map[string]string {
 	if raw == "" {
 		return nil

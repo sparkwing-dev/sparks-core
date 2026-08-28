@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // terraform-apply-gated`. Edit freely -- nothing here re-runs.
-//
-// terraform plan -> human approval gate -> terraform apply. The plan
-// runs and reports its add/change/destroy summary, the run blocks at a
-// human approval gate, and only after someone approves does the exact
-// saved plan get applied. An optional Slack announce reports the result.
 package jobs
 
 import (
@@ -30,9 +25,8 @@ const (
 	slackSecret = {{quote .slack_webhook_secret}}
 )
 
-// {{pascal .pipeline_name}} plans the Terraform root at tfDir, blocks at
-// a human approval gate showing the plan's change summary, then applies
-// exactly that saved plan once a person approves.
+// {{pascal .pipeline_name}} plans the Terraform root at tfDir, blocks at a
+// human approval gate, then applies exactly that saved plan.
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
 	planFile string
@@ -54,8 +48,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// plan runs terraform init + plan, saves the plan file, and annotates the
-// run with the add/change/destroy summary the approver reviews.
 func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 	res, err := terraform.Plan(ctx, tfConfig())
 	if err != nil {
@@ -66,10 +58,8 @@ func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 	return nil
 }
 
-// apply applies exactly the saved plan the approver signed off on, then
-// posts an optional Slack announce read from the slack-webhook-secret
-// sparkwing secret (an unset secret or a dry run skips it). Apply honors
-// SPARKWING_DRY_RUN, echoing its argv instead of mutating real state.
+// apply applies exactly the plan the approver signed off on, then posts an
+// optional Slack announce; an unset slack-webhook-secret skips it.
 func (p *{{pascal .pipeline_name}}) apply(ctx context.Context) error {
 	// safety: apply Needs the approval gate, which Needs plan, so planFile is set.
 	err := terraform.Apply(ctx, tfConfig(), terraform.ApplyOptions{PlanFile: p.planFile})
@@ -88,8 +78,7 @@ func (p *{{pascal .pipeline_name}}) apply(ctx context.Context) error {
 	return err
 }
 
-// tfConfig is the shared terraform working-directory config. The same
-// config backs both plan and apply so the workspace and directory match
+// tfConfig backs both plan and apply so the workspace and directory match
 // the saved plan.
 func tfConfig() terraform.Config {
 	return terraform.Config{
@@ -101,8 +90,6 @@ func tfConfig() terraform.Config {
 	}
 }
 
-// splitList turns a comma-separated parameter into a trimmed slice,
-// dropping blank entries. An empty string yields nil.
 func splitList(raw string) []string {
 	var out []string
 	for _, item := range strings.Split(raw, ",") {
@@ -113,8 +100,6 @@ func splitList(raw string) []string {
 	return out
 }
 
-// parseKeyVals turns a "KEY=VAL,KEY=VAL" parameter into a map, dropping
-// entries without an '='. An empty string yields nil.
 func parseKeyVals(raw string) map[string]string {
 	if raw == "" {
 		return nil

@@ -128,8 +128,7 @@ func withCapture(t *testing.T) (context.Context, *captureLogger) {
 	return ctx, lg
 }
 
-// TestApply_DryRunEchoesArgvWithoutExecuting relies on terraform never being
-// invoked: a real exec of a saved plan against no backend would error, so a nil
+// A real exec of a saved plan against no backend would error, so a nil
 // return proves nothing ran.
 func TestApply_DryRunEchoesArgvWithoutExecuting(t *testing.T) {
 	t.Setenv("SPARKWING_DRY_RUN", "1")

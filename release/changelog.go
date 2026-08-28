@@ -13,24 +13,16 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// NotesConfig locates a changelog and the section to extract from it.
 type NotesConfig struct {
-	// Path is the changelog file, relative to the repo root. Defaults to
-	// "CHANGELOG.md".
+	// Path defaults to "CHANGELOG.md".
 	Path string
-	// Version, when set, selects the section for that exact version (with
-	// or without a leading "v"). When empty, the top-most released section
-	// is used (the first "## " heading that is not "Unreleased").
+	// Version empty selects the top-most released section, the first "## "
+	// heading that is not "Unreleased".
 	Version string
 }
 
-// ChangelogEntry extracts the release notes for one version out of a
-// Keep a Changelog file and returns the notes body together with the
-// version the section is for. With NotesConfig.Version empty it returns
-// the top released section, so a caller that just derived a version can
-// still discover which section it landed on.
-//
-// It reads a local file only and always runs for real.
+// ChangelogEntry returns the notes body for one version of a Keep a
+// Changelog file, along with the version its section is for.
 func ChangelogEntry(ctx context.Context, cfg NotesConfig) (notes, version string, err error) {
 	path := cfg.Path
 	if path == "" {
@@ -60,20 +52,10 @@ func ChangelogEntry(ctx context.Context, cfg NotesConfig) (notes, version string
 	return notes, version, nil
 }
 
-// sectionHeading matches a level-2 changelog heading and captures the
-// text after "## ". Both "## [1.2.0] - 2024-01-01" and "## 1.2.0" forms
-// are captured; the version token is pulled from the captured text by
-// headingVersion.
 var sectionHeading = regexp.MustCompile(`(?m)^##[ \t]+(.+?)[ \t]*$`)
 
-// headingVersionToken pulls the first semver-or-Unreleased token out of a
-// heading's text, tolerating surrounding brackets and a trailing date.
 var headingVersionToken = regexp.MustCompile(`v?\d+\.\d+\.\d+[0-9A-Za-z.\-+]*|(?i:unreleased)`)
 
-// parseChangelog extracts the notes body and version for wantVersion, or
-// for the top-most released (non-Unreleased) section when wantVersion is
-// empty. Version matching ignores a leading "v" and the surrounding
-// brackets of the Keep a Changelog "## [x.y.z]" form.
 func parseChangelog(content, wantVersion string) (notes, version string, err error) {
 	locs := sectionHeading.FindAllStringSubmatchIndex(content, -1)
 	if len(locs) == 0 {
@@ -112,9 +94,6 @@ func parseChangelog(content, wantVersion string) (notes, version string, err err
 	return "", "", fmt.Errorf("release: no changelog section for version %q", wantVersion)
 }
 
-// normalizeVersionToken lowercases and strips a single leading "v" plus
-// any bracket/space decoration so "v1.2.3", "1.2.3", and "[1.2.0]"
-// compare on their bare version.
 func normalizeVersionToken(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.Trim(s, "[]")

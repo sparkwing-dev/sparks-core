@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // build-publish-binary`. Edit freely -- nothing here re-runs.
-//
-// Build a versioned, statically linked Go binary, checksum it, and
-// publish both into a local release directory. Fully local: no cloud,
-// registry, or cluster.
 package jobs
 
 import (
@@ -27,11 +23,9 @@ const (
 	versionVar = {{quote .version_var}}
 )
 
-// {{pascal .pipeline_name}} builds {{.main_package}} into a versioned,
-// statically linked binary, writes a SHA-256 checksums manifest, and
-// publishes both into {{.release_dir}}/. A Verify postcondition re-hashes
-// the published artifact so a corrupted copy fails the run at the verify
-// stage.
+// {{pascal .pipeline_name}} builds {{.main_package}} into a versioned
+// static binary and publishes it with a SHA-256 manifest into
+// {{.release_dir}}/, verifying the published copy by re-hashing it.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -44,10 +38,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// buildPublish derives a version from git (falling back to "dev" in a
-// repo with no tags/commits), cross-builds the host platform with that
-// version stamped via -ldflags into a trimmed, CGO-free binary, then
-// writes a sha256sum-format checksums.txt over the release dir.
 func (p *{{pascal .pipeline_name}}) buildPublish(ctx context.Context) error {
 	version, err := release.DeriveVersion(ctx, release.VersionConfig{
 		Describe:       true,
@@ -77,8 +67,6 @@ func (p *{{pascal .pipeline_name}}) buildPublish(ctx context.Context) error {
 	return nil
 }
 
-// verifyChecksum re-reads checksums.txt and re-hashes every listed
-// artifact, failing the node at the verify stage on any mismatch.
 func (p *{{pascal .pipeline_name}}) verifyChecksum(ctx context.Context) error {
 	root := sparkwing.WorkDir()
 	if root == "" {
@@ -105,7 +93,6 @@ func (p *{{pascal .pipeline_name}}) verifyChecksum(ctx context.Context) error {
 	return nil
 }
 
-// sha256File returns the lowercase hex SHA-256 of a file's contents.
 func sha256File(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

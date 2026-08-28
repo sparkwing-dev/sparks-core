@@ -1,11 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // terraform-plan-pr`. Edit freely -- nothing here re-runs.
-//
-// Run terraform init + terraform plan against {{.tf_dir}} and surface the
-// add/change/destroy summary as a run annotation and an optional webhook
-// comment. This pipeline never applies -- plan is the whole point, so a
-// reviewer sees exactly what a merge would do before anyone touches
-// infrastructure.
 package jobs
 
 import (
@@ -26,7 +20,7 @@ const (
 )
 
 // {{pascal .pipeline_name}} runs terraform plan against tfDir and reports
-// the add/change/destroy summary. It never applies.
+// the change summary, never applying.
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
 	summary string
@@ -42,8 +36,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// plan runs terraform init + plan against tfDir (never apply), parses the
-// change summary, and records it as a run annotation for reviewers.
 func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 	cfg := terraform.Config{Dir: tfDir, Workspace: tfWorkspace}
 	if tfVarFile != "" {
@@ -59,9 +51,7 @@ func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 	return nil
 }
 
-// report POSTs the plan summary to the configured webhook. An empty
-// notify-webhook is a safe no-op, so the node stays green when no webhook
-// is set.
+// report is a no-op for an empty notify-webhook, so the node stays green.
 func (p *{{pascal .pipeline_name}}) report(ctx context.Context) error {
 	// safety: report Needs plan, so p.summary is set.
 	return notify.Slack(ctx, notifyWebhook, p.summary)

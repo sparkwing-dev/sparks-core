@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // docker-deploy-ecr-eks`. Edit freely -- nothing here re-runs.
-//
-// sparks-core's DockerDeploy carries every knob (test, build, push,
-// gitops bump, ArgoCD sync). The outer struct names the pipeline so the
-// dashboard surfaces your entry point rather than the generic
-// "DockerDeploy".
 package jobs
 
 import (
@@ -13,8 +8,7 @@ import (
 	"github.com/sparkwing-dev/sparks-core/pipelines"
 )
 
-// {{pascal .pipeline_name}} wires {{.image}}'s build + deploy knobs into
-// sparks-core's DockerDeploy pipeline.
+// {{pascal .pipeline_name}} wires {{.image}}'s knobs into DockerDeploy.
 type {{pascal .pipeline_name}} struct{ pipelines.DockerDeploy }
 
 func init() {

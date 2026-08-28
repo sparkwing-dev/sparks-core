@@ -9,11 +9,6 @@ import (
 	"testing"
 )
 
-// TestList_AllTemplatesLoadable is the top-level smoke check: every
-// template registered in templateNames has a parseable manifest, a
-// non-empty body, and a non-empty README. Catches authoring mistakes
-// (missing files, manifest-name drift) at PR review time rather than
-// at first user encounter.
 func TestList_AllTemplatesLoadable(t *testing.T) {
 	all, err := List()
 	if err != nil {
@@ -38,8 +33,6 @@ func TestList_AllTemplatesLoadable(t *testing.T) {
 	}
 }
 
-// TestList_AllHaveWhenToUse enforces the catalog contract: every
-// template answers "which one do I pick?" not just "what does it do?".
 func TestList_AllHaveWhenToUse(t *testing.T) {
 	all, err := List()
 	if err != nil {
@@ -52,9 +45,6 @@ func TestList_AllHaveWhenToUse(t *testing.T) {
 	}
 }
 
-// TestRender_GkeDeployGarKubectl_TestCmdEmpty exercises the conditional
-// branch where test-cmd="" elides the test node; the result must still
-// be valid Go with no `test` node wired.
 func TestRender_GkeDeployGarKubectl_TestCmdEmpty(t *testing.T) {
 	out, err := Render("gke-deploy-gar-kubectl", map[string]string{
 		"image":      "x",
@@ -179,9 +169,6 @@ func TestRender_DockerDeployECR_Substitutes(t *testing.T) {
 	}
 }
 
-// TestRender_DockerDeployGAR_TestCmdEmpty exercises the conditional
-// branch in docker-deploy-gar-gke where test-cmd="" elides the test
-// node entirely. The rendered Go must still be parseable.
 func TestRender_DockerDeployGAR_TestCmdEmpty(t *testing.T) {
 	out, err := Render("docker-deploy-gar-gke", map[string]string{
 		"image":       "x",
@@ -210,12 +197,6 @@ func TestRender_LintTestGo_DefaultsApplied(t *testing.T) {
 	}
 }
 
-// TestRender_AllTemplatesProduceParseableGo checks that every
-// registered template, supplied with its required parameters (any
-// reasonable placeholder values), renders to syntactically valid Go.
-// Catches accidental template-syntax bugs (`{{ if .foo }}` without a
-// matching `{{ end }}`, mistyped field names, etc.) before the CLI
-// hands the output to the user.
 func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -286,10 +267,6 @@ func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 	}
 }
 
-// TestList_AllHaveVerificationMetadata enforces the backfill contract:
-// every registered template resolves to a known verification tier and,
-// because the loader validates on read, List() only succeeds when every
-// required parameter has a verify_params sample.
 func TestList_AllHaveVerificationMetadata(t *testing.T) {
 	all, err := List()
 	if err != nil {

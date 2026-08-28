@@ -1,8 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // docker-build-smoketest`. Edit freely -- nothing here re-runs.
-//
-// Build a Docker image and smoke-test that it runs. Needs a Docker
-// daemon; no registry or cluster.
 package jobs
 
 import (
@@ -14,9 +11,8 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} builds {{.image_tag}} from {{.dockerfile}}
-// and, as a Verify postcondition, runs the image so a container that
-// can't start fails the node at the verify stage.
+// {{pascal .pipeline_name}} builds {{.image_tag}} from {{.dockerfile}} and
+// verifies it by running the image.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -46,11 +42,8 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	return err
 }
 
-// smokeTest runs the freshly-built image so a container that can't
-// start fails the node at the verify stage. A non-empty verify-cmd is
-// split on whitespace into arguments appended to the image's own
-// entrypoint, so the real startup path is exercised and shell-less
-// images still work.
+// smokeTest appends verify-cmd to the image's own entrypoint rather than
+// replacing it, so the real startup path runs and shell-less images work.
 func (p *{{pascal .pipeline_name}}) smokeTest(ctx context.Context) error {
 	args := []string{"run", "--rm", {{quote .image_tag}}}
 	args = append(args, strings.Fields({{quote .verify_cmd}})...)
@@ -58,9 +51,6 @@ func (p *{{pascal .pipeline_name}}) smokeTest(ctx context.Context) error {
 	return err
 }
 
-// buildArgFlags parses a KEY=VAL,KEY=VAL string into a flat
-// --build-arg KEY=VAL argv slice. Blank entries are skipped, so an
-// empty spec yields no flags.
 func buildArgFlags(spec string) []string {
 	var out []string
 	for _, pair := range strings.Split(spec, ",") {

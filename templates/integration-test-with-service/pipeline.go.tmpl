@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // integration-test-with-service`. Edit freely -- nothing here re-runs.
-//
-// Run integration tests against a throwaway {{.service_image}} container
-// started before the tests and torn down after (even on failure/panic),
-// via services.With. Needs a Docker daemon.
 package jobs
 
 import (
@@ -17,10 +13,9 @@ import (
 	"github.com/sparkwing-dev/sparks-core/services"
 )
 
-// {{pascal .pipeline_name}} runs the test suite with a {{.service_image}}
-// sidecar. Container port {{.service_port}} is published to an ephemeral
-// host port, injected into the test as {{.port_env}} so it reaches the
-// service at localhost.
+// {{pascal .pipeline_name}} runs the test suite against a throwaway
+// {{.service_image}} container, whose ephemeral host port reaches the test
+// as {{.port_env}}.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -52,8 +47,8 @@ func (p *{{pascal .pipeline_name}}) run(ctx context.Context) error {
 	})
 }
 
-// {{pascal .pipeline_name}}ParseEnv turns a "KEY=VAL,KEY=VAL" string into
-// the container env map (e.g. POSTGRES_PASSWORD for the postgres image).
+// {{pascal .pipeline_name}}ParseEnv turns "KEY=VAL,KEY=VAL" into the
+// container env map.
 func {{pascal .pipeline_name}}ParseEnv(s string) map[string]string {
 	m := map[string]string{}
 	for _, kv := range strings.Split(s, ",") {

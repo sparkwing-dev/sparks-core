@@ -1,22 +1,6 @@
-// Package migrate runs database schema migrations as a sparkwing
-// pipeline step. It drives golang-migrate by shelling out to the
-// `migrate` CLI, so the migrations directory format is golang-migrate's
-// (`NNNN_name.up.sql` / `NNNN_name.down.sql`).
-//
-// The `migrate` binary must be on PATH of the runner, alongside the
-// other host tools sparks-core assumes (docker, kubectl, kind, git).
-// Install: https://github.com/golang-migrate/migrate.
-//
-// Each function is shaped as func(ctx) error so it slots directly into
-// a Job or Step body, typically between build and deploy:
-//
-//	sw.Job(plan, "migrate", func(ctx context.Context) error {
-//	    dsn, err := sw.Secret(ctx, "DATABASE_URL")
-//	    if err != nil {
-//	        return err
-//	    }
-//	    return migrate.Up(ctx, migrate.Config{Dir: "db/migrations", DSN: dsn})
-//	}).Needs(build)
+// Package migrate runs database schema migrations by shelling out to the
+// golang-migrate CLI, so the migrations directory uses its
+// `NNNN_name.up.sql` / `NNNN_name.down.sql` layout.
 package migrate
 
 import (
@@ -27,15 +11,11 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// Config locates the migrations and the target database.
 type Config struct {
-	// Dir is the migrations directory in golang-migrate layout. Passed
-	// to the CLI as a file:// source. Required.
+	// Dir and DSN are required.
 	Dir string
-	// DSN is the database connection string, e.g.
-	// "postgres://user:pass@host:5432/db?sslmode=disable". Required.
 	DSN string
-	// Binary is the migrate CLI to invoke. Defaults to "migrate".
+	// Binary defaults to "migrate".
 	Binary string
 }
 
@@ -55,15 +35,12 @@ func (c Config) validate() error {
 	return nil
 }
 
-// args builds the migrate CLI argument vector: the source + database
-// flags common to every subcommand, followed by the subcommand args.
 func args(c Config, sub ...string) []string {
 	base := []string{"-source", "file://" + c.Dir, "-database", c.DSN}
 	return append(base, sub...)
 }
 
-// Up applies all pending up migrations. A no-op (no error) when the
-// database is already at the latest version.
+// Up applies all pending up migrations, and is a no-op at the latest version.
 func Up(ctx context.Context, cfg Config) error {
 	cfg.defaults()
 	if err := cfg.validate(); err != nil {
@@ -74,9 +51,8 @@ func Up(ctx context.Context, cfg Config) error {
 	})
 }
 
-// Down rolls back migrations. steps > 0 rolls back exactly that many;
-// steps <= 0 rolls back every applied migration. Use during recovery,
-// not in the forward path of a deploy.
+// Down rolls back exactly steps migrations, or every applied one when steps
+// is not positive.
 func Down(ctx context.Context, cfg Config, steps int) error {
 	cfg.defaults()
 	if err := cfg.validate(); err != nil {
@@ -93,10 +69,9 @@ func Down(ctx context.Context, cfg Config, steps int) error {
 	})
 }
 
-// Force sets the migration version without running migrations, clearing
-// the dirty flag golang-migrate sets when a migration fails partway.
-// Recovery only: it tells the schema "you are at version N" without
-// touching the schema, so use it after manually reconciling state.
+// Force clears the dirty flag golang-migrate sets when a migration fails
+// partway, by declaring a version without touching the schema. Use it only
+// after reconciling state by hand.
 func Force(ctx context.Context, cfg Config, version int) error {
 	cfg.defaults()
 	if err := cfg.validate(); err != nil {

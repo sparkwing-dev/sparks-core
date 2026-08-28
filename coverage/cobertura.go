@@ -7,10 +7,6 @@ import (
 	"strings"
 )
 
-// coberturaRoot captures the attributes of a Cobertura report's root
-// <coverage> element. lines-covered / lines-valid are exact integer
-// counts and take precedence; line-rate (a rounded fraction in [0, 1])
-// is the fallback used only when those counts are absent.
 type coberturaRoot struct {
 	XMLName      xml.Name `xml:"coverage"`
 	LineRate     string   `xml:"line-rate,attr"`
@@ -18,12 +14,9 @@ type coberturaRoot struct {
 	LinesValid   string   `xml:"lines-valid,attr"`
 }
 
-// parseCobertura computes total line coverage from a Cobertura XML
-// report. It prefers the exact lines-covered / lines-valid integer
-// counts and falls back to the root line-rate attribute (a [0, 1]
-// fraction scaled to a percentage) only when those counts are absent.
-// line-rate is a value most producers round to a few decimal places, so
-// the integer counts give a truer percentage for a gate near its floor.
+// parseCobertura prefers the exact lines-covered / lines-valid counts over
+// the line-rate attribute, which most producers round to a few decimal
+// places -- too coarse for a gate near its floor.
 func parseCobertura(data []byte) (float64, error) {
 	var root coberturaRoot
 	if err := xml.Unmarshal(data, &root); err != nil {

@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // skip-if-paths-unchanged`. Edit freely -- nothing here re-runs.
-//
-// One job guarded by contentkey.Unchanged: it runs {{.work_cmd}} only
-// when a tracked file under {{.watch_paths}} differs from {{.base_ref}},
-// otherwise the node soft-skips. A `git diff` decides; nothing is
-// stored or replayed.
 package jobs
 
 import (
@@ -22,11 +17,9 @@ const (
 	{{pascal .pipeline_name}}WorkCmd    = {{quote .work_cmd}}
 )
 
-// {{pascal .pipeline_name}} runs a single guarded job. The
-// contentkey.Unchanged predicate compares the watched paths against the
-// base ref and skips the job when nothing under them moved, so an
-// unrelated change never pays for this work. A base ref that does not
-// resolve fails safe: the predicate reports changed and the job runs.
+// {{pascal .pipeline_name}} skips its job when nothing under the watched
+// paths moved against the base ref. A base ref that does not resolve fails
+// safe and the job runs.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -50,8 +43,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// watchPaths{{pascal .pipeline_name}} splits the comma-listed watch paths
-// into git pathspecs, dropping empty entries.
 func watchPaths{{pascal .pipeline_name}}() []string {
 	var out []string
 	for _, p := range strings.Split({{pascal .pipeline_name}}WatchPaths, ",") {

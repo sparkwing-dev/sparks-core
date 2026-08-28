@@ -14,134 +14,74 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// StaticDeploy is a one-node pipeline that builds a static site,
-// syncs to S3, and optionally invalidates a CloudFront distribution.
-// Register via sparkwing.Register with your preferred pipeline name.
-//
-// Example:
-//
-//	func init() {
-//	    sparkwing.Register("build-deploy", func() any {
-//	        return &sparks.StaticDeploy{
-//	            BuildCmd:   "npm ci && npm run build",
-//	            BuildImage: "node:22-alpine",
-//	            Bucket:     "my-website-bucket",
-//	            URL:        "https://example.com",
-//	            BuildEnvPrefixes: []string{"NEXT_PUBLIC_", "NEXT_EXPORT"},
-//	            BuildExtraEnv: map[string]string{
-//	                "NEXT_EXPORT": "1",
-//	            },
-//	        }
-//	    })
-//	}
+// StaticDeploy is a one-node pipeline that builds a static site, syncs it
+// to S3, and optionally invalidates a CloudFront distribution.
 type StaticDeploy struct {
 	sparkwing.Base
 
 	// BuildCmd is the shell command that produces OutDir.
 	BuildCmd string
 
-	// BuildImage, when set, runs BuildCmd inside a Docker container
-	// rather than on the host. Needed when the laptop / runner
-	// doesn't have the toolchain (e.g. Node) installed locally --
-	// typical for Next.js sites on a sparkwing runner pod.
-	//
-	// When set, the work directory is copied into the container via
-	// `docker cp`, the build runs, and OutDir is copied back out.
-	// That layout works in DinD environments where host bind mounts
-	// don't share the runner filesystem.
+	// BuildImage, when set, runs BuildCmd in a container instead of on the
+	// host. The work dir is copied in and OutDir copied back out via
+	// `docker cp`, which works under DinD where bind mounts do not.
 	BuildImage string
 
-	// BuildEnvPrefixes is a list of env-var prefixes. Any variable in
-	// the current process environment whose name starts with one of
-	// these prefixes is forwarded into the build container. Typical
-	// use: `["NEXT_PUBLIC_", "NEXT_EXPORT"]` for Next.js sites.
-	// Ignored when BuildImage is empty.
+	// BuildEnvPrefixes forwards every process env var with one of these
+	// prefixes into the build container. Ignored when BuildImage is empty.
 	BuildEnvPrefixes []string
 
-	// BuildExtraEnv are explicit KEY=VALUE pairs forwarded into the
-	// build subprocess. Useful for injecting defaults that should
-	// apply even when the caller hasn't set them in the process env
-	// (e.g. `NEXT_EXPORT=1`). Honored in both modes: docker (added as
-	// `-e KEY=VALUE` flags on the build container) and host (appended
-	// to the build subprocess env on top of the inherited process env).
+	// BuildExtraEnv are explicit KEY=VALUE pairs forwarded into the build,
+	// in both the docker and host modes.
 	BuildExtraEnv map[string]string
 
-	// BuildCacheVolumes maps docker volume names to container mount
-	// paths. Each entry becomes a `-v <name>:<path>` on the build
-	// container. Volumes persist across builds on the same Docker
-	// daemon -- on DinD this means the cache survives between
-	// pipeline runs as long as the DinD PVC is intact.
-	//
-	// Typical uses (pick per language):
-	//   "sparks-npm":     "/root/.npm"        (node/npm ci)
-	//   "sparks-yarn":    "/usr/local/share/.cache/yarn" (yarn)
-	//   "sparks-bundle":  "/usr/local/bundle" (ruby/bundler)
-	//   "sparks-gomod":   "/go/pkg/mod"       (go)
-	//   "sparks-pip":     "/root/.cache/pip"  (python/pip)
-	//
-	// Content-addressed caches (npm, go modules) are safe to share
-	// across consumers. Build caches that embed site-specific paths
-	// (Next.js `.next/cache`, Webpack) should use a per-site volume
-	// name to avoid pollution.
-	//
-	// Ignored when BuildImage is empty.
+	// BuildCacheVolumes maps docker volume names to container mount paths,
+	// persisting across builds on the same daemon. Content-addressed caches
+	// (npm, go modules) are safe to share; caches embedding site-specific
+	// paths (`.next/cache`, Webpack) need a per-site volume name. Ignored
+	// when BuildImage is empty.
 	BuildCacheVolumes map[string]string
 
 	// Bucket is the target S3 bucket.
 	Bucket string
 
-	// OutDir is the build output directory. Defaults to "out".
+	// OutDir is the build output directory, defaulting to "out".
 	OutDir string
 
-	// AWSProfile is the profile passed to the aws CLI. Empty passes no
-	// --profile, which is what an assumed role in CI needs, because
-	// there is no profile to name when credentials arrive as
-	// environment variables. Name one to pin which credentials get
-	// selected on a machine that has several.
+	// AWSProfile is empty for an assumed role in CI, where credentials
+	// arrive as environment variables and there is no profile to name.
 	AWSProfile string
 
 	// ExpectedAccountID, when set, is checked against the account the
-	// credentials resolve to before anything is written. Naming a
-	// profile pins which credentials get selected and not which
-	// account they belong to, so this is the statement of intent that
-	// survives both a renamed profile and federated auth.
+	// credentials resolve to before anything is written. A profile name
+	// pins which credentials are selected, not which account they belong
+	// to, so only this survives a renamed profile and federated auth.
 	ExpectedAccountID string
 
-	// CloudFrontID, when set, triggers a cache invalidation against
-	// the named distribution after sync.
+	// CloudFrontID, when set, is invalidated after sync.
 	CloudFrontID string
 
-	// URL is the deployed site URL; logged after a successful deploy
-	// so the pipeline log tells you where the change landed.
+	// URL is logged after a successful deploy.
 	URL string
 
-	// SkipBuild bypasses BuildCmd. Useful when a previous pipeline
-	// already produced OutDir and you only want to re-sync.
+	// SkipBuild bypasses BuildCmd and re-syncs an existing OutDir.
 	SkipBuild bool
 
-	// Delete passes --delete to the S3 syncs so orphaned objects in
-	// the bucket are removed when no matching file exists in OutDir.
+	// Delete passes --delete to the S3 syncs, removing orphaned objects.
 	Delete bool
 
-	// Excludes is a list of glob patterns preserved across both sync
-	// passes. Use with Delete=true to keep non-OutDir prefixes alive
-	// (e.g. release tarballs uploaded by a separate pipeline that
-	// shares the bucket).
+	// Excludes are glob patterns preserved across both sync passes, to keep
+	// non-OutDir prefixes alive under Delete.
 	Excludes []string
 }
 
-// Plan returns the one-node DAG that runs build + sync as a single
-// step. Consumers that want per-phase DAG nodes (build cached
-// separately, sync as its own node) can implement Plan() on their
-// outer struct and call into StaticDeploy.Run or .BuildOnly directly
-// instead of embedding.
+// Plan returns the one-node DAG that runs build and sync as a single step.
 func (s *StaticDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
 	sparkwing.Job(plan, run.Pipeline, s.Run)
 	return nil
 }
 
-// Run executes build (optional) + S3 sync (+ CloudFront invalidation
-// when configured).
+// Run executes the build, the S3 sync, and any CloudFront invalidation.
 func (s *StaticDeploy) Run(ctx context.Context) error {
 	if s.OutDir == "" {
 		s.OutDir = "out"
@@ -202,13 +142,8 @@ func (s *StaticDeploy) Run(ctx context.Context) error {
 	return nil
 }
 
-// BuildOnly runs just the build phase (docker-containerized when
-// BuildImage is set, otherwise a plain shell exec of BuildCmd). Used
-// by "check"-style pipelines that want to validate the build without
-// pushing to S3 or kicking a CloudFront invalidation.
-//
-// Defaults are applied here so callers that only invoke BuildOnly
-// (never Run) still get a sane OutDir.
+// BuildOnly runs just the build phase, for pipelines that validate a build
+// without deploying it.
 func (s *StaticDeploy) BuildOnly(ctx context.Context) error {
 	if s.OutDir == "" {
 		s.OutDir = "out"
@@ -222,9 +157,8 @@ func (s *StaticDeploy) BuildOnly(ctx context.Context) error {
 	return step.Run(ctx, "build", runBuild)
 }
 
-// hostBuild runs BuildCmd as a plain shell exec on the host, with
-// BuildExtraEnv merged into the subprocess env. BuildEnvPrefixes are
-// already covered by inheriting the parent process env.
+// hostBuild ignores BuildEnvPrefixes because inheriting the parent process
+// env already covers them.
 func (s *StaticDeploy) hostBuild(ctx context.Context) error {
 	if len(s.BuildExtraEnv) == 0 {
 		return step.Sh(ctx, s.BuildCmd)
@@ -233,11 +167,8 @@ func (s *StaticDeploy) hostBuild(ctx context.Context) error {
 	return err
 }
 
-// dockerBuild runs BuildCmd inside BuildImage, copying the work dir
-// in via `docker cp` and copying OutDir back out after a successful
-// build. The cp-based path (vs bind mount) is chosen so this works
-// under DinD where the host filesystem isn't shared with the build
-// container.
+// dockerBuild copies files in and out rather than bind-mounting so it works
+// under DinD, where the host filesystem is not shared with the container.
 func (s *StaticDeploy) dockerBuild(ctx context.Context) error {
 	workDir := sparkwing.WorkDir()
 

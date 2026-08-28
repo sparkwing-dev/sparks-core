@@ -6,14 +6,12 @@ import (
 	"strings"
 )
 
-// IsECR returns true if the registry URL is an AWS ECR endpoint.
 func IsECR(registry string) bool {
 	return strings.Contains(registry, ".dkr.ecr.") && strings.Contains(registry, ".amazonaws.com")
 }
 
-// ECRRegion extracts the AWS region from an ECR registry URL. Defaults
-// to us-west-2 for unrecognized shapes so callers get a deterministic
-// fallback rather than an empty string.
+// ECRRegion extracts the AWS region from an ECR registry URL, falling back
+// to us-west-2 for an unrecognized shape.
 func ECRRegion(registry string) string {
 	parts := strings.Split(registry, ".")
 	if len(parts) > 3 {
@@ -22,17 +20,13 @@ func ECRRegion(registry string) string {
 	return "us-west-2"
 }
 
-// ECRLogin authenticates docker with an ECR registry. It is a thin
-// wrapper over RegistryLogin retained for existing callers; new code can
-// call RegistryLogin directly with RegistryECR. Honors SPARKWING_DRY_RUN.
+// ECRLogin is RegistryLogin with RegistryECR, retained for existing callers.
 func ECRLogin(ctx context.Context, registry, awsProfile string) error {
 	return RegistryLogin(ctx, LoginConfig{Kind: RegistryECR, Registry: registry, AWSProfile: awsProfile})
 }
 
-// Registries returns the registries to push to: the one the caller
-// named, or ecrRegistry when the caller named none. Passing both means
-// registry wins, so a pipeline can redirect a push without editing the
-// ECR endpoint it also matches on in the gitops repo.
+// Registries returns registry when named, else ecrRegistry, so a pipeline
+// can redirect a push without editing the ECR endpoint gitops matches on.
 func Registries(registry, ecrRegistry string) ([]string, error) {
 	if registry != "" {
 		return []string{registry}, nil
@@ -43,10 +37,8 @@ func Registries(registry, ecrRegistry string) ([]string, error) {
 	return []string{ecrRegistry}, nil
 }
 
-// LocalRegistries returns registry as a one-element list when it names a
-// local (non-ECR) registry, and nil otherwise. A local registry is
-// optional, so naming none is not an error; use [RequireLocalRegistry]
-// when it is.
+// LocalRegistries returns registry when it names a local (non-ECR) one, and
+// nil otherwise. See [RequireLocalRegistry] when one is mandatory.
 func LocalRegistries(registry string) []string {
 	if registry != "" && !IsECR(registry) {
 		return []string{registry}
@@ -54,9 +46,8 @@ func LocalRegistries(registry string) []string {
 	return nil
 }
 
-// RequireLocalRegistry is [LocalRegistries] for a caller that cannot
-// proceed without one: it errors when registry is empty or names an ECR
-// endpoint.
+// RequireLocalRegistry is [LocalRegistries] that errors instead of
+// returning nil.
 func RequireLocalRegistry(registry string) ([]string, error) {
 	if local := LocalRegistries(registry); local != nil {
 		return local, nil

@@ -1,17 +1,6 @@
-// Package templates exposes a curated pipeline template registry as
-// an embed.FS plus typed accessors over the manifests. Templates are
-// the durable artifact -- the sparkwing CLI's `pipeline new --template`
-// flag is one consumer; agents are another.
-//
-// Each template is a directory with three files:
-//   - template.yaml   -- manifest (Manifest type below)
-//   - pipeline.go.tmpl -- Go text/template body to render
-//   - README.md       -- prose description for humans + agents
-//
-// The registry is intentionally small. Adding a template: drop the
-// directory, append the name to templateNames below, write a
-// CHANGELOG entry. Each template should be the simplified canonical
-// version of a real production pattern.
+// Package templates exposes a curated pipeline template registry as an
+// embed.FS plus typed accessors over the manifests. Each template is a
+// directory holding template.yaml, pipeline.go.tmpl, and README.md.
 package templates
 
 import (
@@ -24,17 +13,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// FS is the embedded template registry. Walking it yields every
-// template directory and its files. Consumers that just want the
-// raw bytes (for rendering or diffing) reach for FS directly.
+// FS is the embedded template registry.
 //
 //go:embed all:static-deploy-s3-cloudfront all:static-deploy-gcs-cloudcdn all:docker-deploy-ecr-eks all:docker-deploy-gar-gke all:approval-gated-deploy all:next-build-and-push all:build-publish-binary all:docker-build-smoketest all:lint-test-go all:test-shards all:integration-test-with-service all:scheduled-cleanup all:go-test-migrate-deploy-argo all:container-deploy-ecs-fargate all:docker-deploy-gar-cloudrun all:cloudrun-deploy-source all:gke-deploy-gar-kubectl all:lambda-deploy all:cloud-functions-deploy all:next-preview-deploy-cloudrun all:github-release-go all:npm-publish-package all:pypi-publish-wheel all:container-publish-multiarch all:lint-test-node all:lint-test-python all:test-matrix all:coverage-gated-test all:cached-test-suite all:skip-if-paths-unchanged all:go-affected-tests all:docker-build-layer-cache all:terraform-plan-pr all:terraform-apply-gated all:db-migrate-updown all:db-backup-restore-drill all:scheduled-db-backup
 var FS embed.FS
 
-// templateNames is the canonical list of templates in this registry.
-// Order matters: List() returns them in this order, which is the
-// human-friendly grouping (cloud parity pairs together, build-only
-// next, ci-hygiene last).
+// templateNames is ordered for human reading -- cloud parity pairs
+// together, build-only next, ci-hygiene last -- and List preserves it.
 var templateNames = []string{
 	"static-deploy-s3-cloudfront",
 	"static-deploy-gcs-cloudcdn",
@@ -75,9 +60,7 @@ var templateNames = []string{
 	"scheduled-db-backup",
 }
 
-// Parameter declares one substitution variable for a template. Authors
-// pass values via `--param name=value` on the CLI; agents pass them
-// however they like as long as required parameters are present.
+// Parameter declares one substitution variable for a template.
 type Parameter struct {
 	Name        string `yaml:"name" json:"name"`
 	Type        string `yaml:"type,omitempty" json:"type,omitempty"`
@@ -86,102 +69,72 @@ type Parameter struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
-// Applicability records the template's intended scope. Empty values
-// mean "no constraint" (the template works anywhere). The cloud /
-// category fields are advisory -- the CLI doesn't refuse to render
-// a template against a "wrong" repo, it just surfaces them in
-// `templates show` so authors pick the right starter.
+// Applicability records the template's intended scope. It is advisory:
+// empty means no constraint, and nothing refuses a mismatched render.
 type Applicability struct {
 	Cloud    []string `yaml:"cloud,omitempty" json:"cloud,omitempty"`
 	Category string   `yaml:"category,omitempty" json:"category,omitempty"`
 }
 
-// Verification tiers. A manifest's Verify field records how far the
-// registry verification harness can exercise a scaffold of the
-// template without cloud credentials or live infrastructure.
+// Verification tiers for Manifest.Verify: how far the registry harness can
+// exercise a scaffold of the template without cloud credentials.
 const (
-	// VerifyRunnable means the scaffolded pipeline runs green on a
-	// laptop with no cloud credentials (a Docker daemon is permitted).
+	// VerifyRunnable runs green locally; a Docker daemon is permitted.
 	VerifyRunnable = "runnable"
-	// VerifyDryRunnable means a side-effect-free run path exists --
-	// e.g. a preview/plan parameter -- that runs green locally.
+	// VerifyDryRunnable has a side-effect-free path that runs green locally.
 	VerifyDryRunnable = "dry-runnable"
-	// VerifyCompileOnly means the template touches real cloud services,
-	// so the harness can only render, compile, lint, and explain it.
+	// VerifyCompileOnly can only be rendered, compiled, linted, and explained.
 	VerifyCompileOnly = "compile-only"
 )
 
-// Verification fixtures. A manifest's VerifyFixture field names the
-// scratch-repo scaffolding the harness synthesizes before a run.
+// Verification fixtures for Manifest.VerifyFixture: the scratch-repo
+// scaffolding the harness synthesizes before a run.
 const (
-	// FixtureNone is an empty scratch repo (just the scaffolded pipeline).
+	// FixtureNone is an empty scratch repo.
 	FixtureNone = "none"
-	// FixtureGoModule is a go.mod plus a trivial buildable package and a
-	// passing test at the scratch repo root, for templates whose steps
-	// run go build / vet / test there.
+	// FixtureGoModule is a go.mod plus a buildable package and a passing test.
 	FixtureGoModule = "go-module"
-	// FixtureDocker is the go-module contents plus a Dockerfile, for
-	// templates whose steps build or run a container image.
+	// FixtureDocker is FixtureGoModule plus a Dockerfile.
 	FixtureDocker = "docker"
-	// FixtureNodeModule is a package.json with a passing test script,
-	// for templates whose steps run npm / node tooling at the scratch
-	// repo root.
+	// FixtureNodeModule is a package.json with a passing test script.
 	FixtureNodeModule = "node-module"
-	// FixturePythonModule is a pyproject.toml plus a trivial package and
-	// a passing test, for templates whose steps run python tooling at
-	// the scratch repo root.
+	// FixturePythonModule is a pyproject.toml plus a package and a passing test.
 	FixturePythonModule = "python-module"
-	// FixturePostgres is the go-module contents plus an ephemeral
-	// Postgres the harness provisions, its DSN injected as the
-	// DATABASE_URL secret, for templates that migrate or query a live
-	// database.
+	// FixturePostgres is FixtureGoModule plus an ephemeral Postgres whose DSN
+	// is injected as the DATABASE_URL secret.
 	FixturePostgres = "postgres"
 )
 
-// Manifest is the parsed template.yaml shape. Name + Description are
-// the only required fields; everything else is opt-in metadata that
-// templates use to communicate constraints.
+// Manifest is the parsed template.yaml shape. Only Name and Description
+// are required.
 type Manifest struct {
 	Name        string `yaml:"name" json:"name"`
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	// WhenToUse is the catalog signal: a one-or-two-line answer to
-	// "which template do I pick?", written for an agent choosing among
-	// starters. Distinct from Description (what it does) -- this is when
-	// to reach for it versus a sibling.
+	// WhenToUse says when to reach for this template over a sibling, where
+	// Description says what it does.
 	WhenToUse string `yaml:"whenToUse,omitempty" json:"whenToUse,omitempty"`
-	// Prerequisite is what must already exist in the repo for a scaffold
-	// of this template to `sparkwing run` successfully -- e.g. "a Go
-	// module at the repo root". Surfaced by `pipeline templates` and
-	// printed after `pipeline new` so the first run isn't a surprise.
+	// Prerequisite is what must already exist in the repo for a scaffold to
+	// run, e.g. "a Go module at the repo root".
 	Prerequisite  string        `yaml:"prerequisite,omitempty" json:"prerequisite,omitempty"`
 	Parameters    []Parameter   `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	Applicability Applicability `yaml:"applicability,omitempty" json:"applicability,omitempty"`
-	// Verify is the verification tier (VerifyRunnable / VerifyDryRunnable
-	// / VerifyCompileOnly) the registry harness applies to a scaffold of
-	// this template. Defaults to VerifyCompileOnly when absent; read it
-	// through Tier() to get the resolved value.
+	// Verify is the verification tier; read it through Tier, which supplies
+	// the VerifyCompileOnly default.
 	Verify string `yaml:"verify,omitempty" json:"verify,omitempty"`
-	// VerifyParams supplies a sample value for each parameter the harness
-	// scaffolds with. Every required parameter must have an entry; values
-	// are safe placeholders (fake bucket names, example.com URLs) chosen
-	// so a render/compile/lint/explain never reaches real infrastructure.
+	// VerifyParams holds a sample value per parameter, required for every
+	// required parameter. Values are placeholders that never reach real
+	// infrastructure.
 	VerifyParams map[string]string `yaml:"verify_params,omitempty" json:"verify_params,omitempty"`
-	// VerifyFixture names the scratch-repo scaffolding the harness
-	// synthesizes before a runnable/dry-runnable run (FixtureNone /
-	// FixtureGoModule / FixtureDocker / FixtureNodeModule /
-	// FixturePythonModule / FixturePostgres). Ignored for the
-	// compile-only tier. Defaults to FixtureNone; read it through
-	// Fixture().
+	// VerifyFixture is ignored for the compile-only tier; read it through
+	// Fixture, which supplies the FixtureNone default.
 	VerifyFixture string `yaml:"verify_fixture,omitempty" json:"verify_fixture,omitempty"`
-	// VerifyTools lists host commands a runnable/dry-runnable run needs
-	// beyond the fixture's own toolchain (e.g. migrate, pg_dump). The
-	// harness skips the run step, staying green, when one is missing;
+	// VerifyTools lists host commands a run needs beyond the fixture's own
+	// toolchain. A missing one skips the run step rather than failing it;
 	// "docker" means a reachable daemon, not just the binary.
 	VerifyTools []string `yaml:"verify_tools,omitempty" json:"verify_tools,omitempty"`
 }
 
-// Tier returns the manifest's verification tier, defaulting to
-// VerifyCompileOnly when the manifest leaves Verify unset.
+// Tier returns Verify, defaulting to VerifyCompileOnly.
 func (m Manifest) Tier() string {
 	if m.Verify == "" {
 		return VerifyCompileOnly
@@ -189,8 +142,7 @@ func (m Manifest) Tier() string {
 	return m.Verify
 }
 
-// Fixture returns the manifest's verification fixture, defaulting to
-// FixtureNone when the manifest leaves VerifyFixture unset.
+// Fixture returns VerifyFixture, defaulting to FixtureNone.
 func (m Manifest) Fixture() string {
 	if m.VerifyFixture == "" {
 		return FixtureNone
@@ -198,18 +150,15 @@ func (m Manifest) Fixture() string {
 	return m.VerifyFixture
 }
 
-// Template bundles a manifest with its on-disk artifacts. ReadMe is
-// the contents of README.md; Body is the contents of pipeline.go.tmpl
-// pre-rendering. Consumers that want the rendered body call Render.
+// Template bundles a manifest with its README and its unrendered
+// pipeline.go.tmpl body.
 type Template struct {
 	Manifest Manifest `json:"manifest"`
 	ReadMe   string   `json:"readme,omitempty"`
 	Body     string   `json:"body,omitempty"`
 }
 
-// List returns every registered template in canonical order. Used by
-// `sparkwing pipeline templates` (with --json producing this exact
-// shape) and by agents enumerating starters.
+// List returns every registered template in canonical order.
 func List() ([]Template, error) {
 	out := make([]Template, 0, len(templateNames))
 	for _, name := range templateNames {
@@ -222,16 +171,14 @@ func List() ([]Template, error) {
 	return out, nil
 }
 
-// ListNames returns just the template names. Cheaper than List when
-// the caller is only doing existence checks.
+// ListNames returns just the template names, without reading their files.
 func ListNames() []string {
 	out := make([]string, len(templateNames))
 	copy(out, templateNames)
 	return out
 }
 
-// Get loads one template by name. Returns an error wrapping
-// fs.ErrNotExist when the name doesn't match any registered template.
+// Get loads one template by name, wrapping fs.ErrNotExist for an unknown one.
 func Get(name string) (Template, error) {
 	if !known(name) {
 		return Template{}, fmt.Errorf("unknown template %q (known: %v): %w", name, templateNames, fs.ErrNotExist)
@@ -255,7 +202,6 @@ func Get(name string) (Template, error) {
 	}, nil
 }
 
-// readManifest parses template.yaml for one template name.
 func readManifest(name string) (Manifest, error) {
 	raw, err := fs.ReadFile(FS, path.Join(name, "template.yaml"))
 	if err != nil {
@@ -277,10 +223,6 @@ func readManifest(name string) (Manifest, error) {
 	return m, nil
 }
 
-// validateVerification enforces the verification-metadata contract:
-// the tier must be a known value, the fixture (when set) must be a
-// known value, every required parameter must have a verify_params
-// sample, and verify_params may only reference declared parameters.
 func validateVerification(m Manifest) error {
 	switch m.Tier() {
 	case VerifyRunnable, VerifyDryRunnable, VerifyCompileOnly:
@@ -323,8 +265,6 @@ func known(name string) bool {
 	return i < len(sn) && sn[i] == name
 }
 
-// sortedNames returns templateNames sorted -- used by known() for
-// O(log n) membership check. Cached on first call.
 var sortedNamesCache []string
 
 func sortedNames() []string {

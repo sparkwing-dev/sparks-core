@@ -1,13 +1,5 @@
 // Scaffolded from the docker-deploy-gar-gke template. Edit freely --
 // nothing here re-runs.
-//
-// A raw-composition DAG: each node calls a sparks-core block directly,
-// so the orchestration (what runs when) is visible and editable. The
-// blocks do the heavy lifting. This is the GCP twin of
-// docker-deploy-ecr-eks: it authenticates the push to Google Artifact
-// Registry, builds and pushes a content-addressed image, then bumps
-// the gitops repo's kustomize image tag and waits for ArgoCD to sync
-// the new revision to Synced + Healthy on GKE.
 package jobs
 
 import (
@@ -22,10 +14,9 @@ import (
 	"github.com/sparkwing-dev/sparks-core/gcp"
 )
 
-// {{pascal .pipeline_name}} tests, builds {{.image}} to GAR ({{.registry}}),
-// and deploys it to GKE through the gitops repo. The deploy node bumps the
-// kustomize image tag, pushes, and waits for ArgoCD to report the new
-// revision Synced + Healthy.
+// {{pascal .pipeline_name}} builds {{.image}} to GAR ({{.registry}}) and
+// deploys it to GKE through the gitops repo, waiting for ArgoCD to report
+// Synced and Healthy.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
@@ -39,10 +30,8 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// build authenticates docker against the GAR host, then builds and pushes
-// the image tagged with the content-addressed DeployTag. GAR auth is the
-// GCP analog of the ECR login docker.BuildAndPush runs itself for ECR
-// registries, so it is done explicitly here first.
+// build authenticates against GAR explicitly first, because
+// docker.BuildAndPush only runs the equivalent login for ECR registries.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	if err := gcp.ConfigureDockerAuth(ctx, garHost()); err != nil {
 		return err
@@ -59,11 +48,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	})
 }
 
-// deploy hands the freshly pushed tag to the deploy dispatcher: for a
-// remote target it bumps the kustomize image tag in the gitops repo
-// (retrying on concurrent pushes) and kicks ArgoCD, waiting until the app
-// reports Synced + Healthy; against a local kind cluster it applies the
-// repo's own manifests instead.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	tags, err := sparkwingDocker.ComputeTags(ctx)
 	if err != nil {
@@ -80,9 +64,7 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	})
 }
 
-// garHost is the Artifact Registry host that docker authenticates against,
-// the first path segment of the registry URL (e.g. "us-west1-docker.pkg.dev"
-// from "us-west1-docker.pkg.dev/proj/repo").
+// garHost is the first path segment of the registry URL.
 func garHost() string {
 	return strings.SplitN({{quote .registry}}, "/", 2)[0]
 }

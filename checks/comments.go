@@ -19,9 +19,6 @@ import (
 
 var commentTagRE = regexp.MustCompile(`(?i)^// ?(hack|safety|bug|perf):`)
 
-// commentOutputRE matches the Go testable-example output markers
-// recognized by the testing package: "// Output:" and "// Unordered
-// output:".
 var commentOutputRE = regexp.MustCompile(`(?i)^// (Unordered output|Output):`)
 
 var commentSkipDirs = map[string]bool{
@@ -38,22 +35,12 @@ type commentViolation struct {
 	text string
 }
 
-// Comments enforces the repo comment policy on every .go file under the
-// given paths (default: the repo root). Two kinds of comment are
-// allowed: godoc attached to a top-level declaration (package, func,
-// type, const, var, import) or to a struct field / interface method;
-// and a small allowlist of tagged implementation comments -- // hack:,
-// // safety:, // bug:, // perf: -- each one short line that justifies
-// its own existence. Compiler directives (//go:build, //go:embed,
-// //nolint:...) are always allowed. Everything else -- free-floating
-// comments, body narration, section dividers, and "what" comments that
-// restate the code -- fails the check.
-//
-// Paths are resolved relative to sparkwing.WorkDir() so the check works
-// from a compiled pipeline binary whose cwd is not the repo root. Pass
-// specific subdirectories to scope the gate -- for example, to exclude a
-// directory that is mid-rewrite -- and drop the argument to cover the
-// whole tree.
+// Comments enforces the repo comment policy on every .go file under paths,
+// defaulting to the whole tree. It allows godoc on a top-level declaration,
+// struct field, or interface method; the tagged implementation comments
+// // hack:, // safety:, // bug:, and // perf:; and compiler directives.
+// Everything else fails. Paths resolve relative to sparkwing.WorkDir(),
+// whose cwd a compiled pipeline binary does not share.
 func Comments(ctx context.Context, paths ...string) error {
 	if len(paths) == 0 {
 		paths = []string{"."}
@@ -156,11 +143,8 @@ func checkCommentsFile(path string) ([]commentViolation, error) {
 	return out, nil
 }
 
-// collectCommentSpec marks godoc attached to a top-level spec and, for
-// type specs, recurses into struct fields and interface methods so their
-// godoc survives. It never descends into function bodies -- comments
-// there are implementation comments and must earn their place through
-// the tag allowlist.
+// collectCommentSpec never descends into function bodies, where comments
+// must earn their place through the tag allowlist instead.
 func collectCommentSpec(allowed map[*ast.CommentGroup]bool, spec ast.Spec) {
 	switch s := spec.(type) {
 	case *ast.TypeSpec:
@@ -205,11 +189,9 @@ func markComment(allowed map[*ast.CommentGroup]bool, cg *ast.CommentGroup) {
 	}
 }
 
-// isCommentDirective reports whether a //-comment is a compiler
-// directive such as //go:build, //go:embed, or //nolint:all -- the form
-// is //word:rest with no space after the slashes. The required leading
-// space in "// hack:" is what keeps human tags from being mistaken for
-// directives, and vice versa.
+// isCommentDirective matches the //word:rest form, with no space after the
+// slashes. The required leading space in "// hack:" is what keeps human tags
+// and directives from being mistaken for each other.
 func isCommentDirective(text string) bool {
 	s, ok := strings.CutPrefix(text, "//")
 	if !ok || s == "" || s[0] == ' ' {

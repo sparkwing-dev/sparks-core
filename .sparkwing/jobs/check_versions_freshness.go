@@ -12,19 +12,10 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// CheckVersionsFreshness verifies every sparkwing-ecosystem dependency
-// in every go.mod under repoRoot is current:
-//
-//   - Direct require (no replace): the pinned version must be >= the
-//     latest released tag.
-//   - Replace -> local path: the local checkout must not be behind its
-//     origin/main.
-//
-// Returns nil when everything is current. Returns a non-nil error
-// listing every problem when anything is behind.
-//
-// Watched module prefixes are listed in watchedModulePrefixes. Add
-// more there as the ecosystem grows.
+// CheckVersionsFreshness verifies every watched dependency in every go.mod
+// under repoRoot is current: a direct require must be at or above the latest
+// released tag, and a local replace target must not be behind origin/main.
+// The error lists every problem, not just the first.
 func CheckVersionsFreshness(ctx context.Context, repoRoot string) error {
 	mods, err := findGoModFiles(repoRoot)
 	if err != nil {
@@ -81,22 +72,16 @@ func CheckVersionsFreshness(ctx context.Context, repoRoot string) error {
 	return nil
 }
 
-// watchedModulePrefixes lists every module path whose freshness we
-// track. Anything not matching is skipped (third-party deps are out
-// of scope; this check only enforces the sparkwing ecosystem stays
-// current against itself).
+// watchedModulePrefixes scopes the check to the sparkwing ecosystem;
+// third-party dependencies are skipped.
 var watchedModulePrefixes = []string{
 	"github.com/sparkwing-dev/sparkwing",
 	"github.com/sparkwing-dev/sparks-core",
 }
 
-// maxAllowedMajor is the highest semver major allowed for a watched
-// module. The SDK is intentionally pinned below v1.0.0 (the README
-// states this explicitly). The proxy carries v1.0.0+ tags that were
-// pushed by mistake and the cache can't be undone; the linter rejects
-// any consumer pinned at those versions and refuses to treat them as
-// "latest" when picking a target to bump to. Modules absent from this
-// map have no major-version cap.
+// maxAllowedMajor caps a module's semver major because the proxy carries
+// v1.0.0+ tags pushed by mistake, and a proxy cache cannot be undone.
+// Modules absent from the map have no cap.
 var maxAllowedMajor = map[string]int{
 	"github.com/sparkwing-dev/sparkwing": 0,
 }
@@ -110,8 +95,6 @@ func isWatchedModule(path string) bool {
 	return false
 }
 
-// majorCapFor returns the highest allowed semver major for modulePath,
-// or -1 when there is no cap.
 func majorCapFor(modulePath string) int {
 	if cap, ok := maxAllowedMajor[modulePath]; ok {
 		return cap
@@ -119,8 +102,6 @@ func majorCapFor(modulePath string) int {
 	return -1
 }
 
-// findGoModFiles returns every go.mod under root, skipping vendored
-// trees and the .git tree.
 func findGoModFiles(root string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -142,8 +123,6 @@ func findGoModFiles(root string) ([]string, error) {
 	return out, err
 }
 
-// findReplaceFor returns the replace directive matching modulePath if
-// any, else nil.
 func findReplaceFor(f *modfile.File, modulePath string) *modfile.Replace {
 	for _, r := range f.Replace {
 		if r.Old.Path == modulePath {
@@ -153,15 +132,11 @@ func findReplaceFor(f *modfile.File, modulePath string) *modfile.Replace {
 	return nil
 }
 
-// isLocalReplace reports whether the replace target is a filesystem
-// path (./... or ../... or absolute) rather than another module.
 func isLocalReplace(r *modfile.Replace) bool {
 	p := r.New.Path
 	return strings.HasPrefix(p, ".") || strings.HasPrefix(p, "/")
 }
 
-// resolveLocalReplacePath resolves a replace's filesystem target
-// against the directory containing the go.mod that declares it.
 func resolveLocalReplacePath(target, modPath string) (string, error) {
 	dir := filepath.Dir(modPath)
 	abs, err := filepath.Abs(filepath.Join(dir, target))
@@ -174,13 +149,9 @@ func resolveLocalReplacePath(target, modPath string) (string, error) {
 	return abs, nil
 }
 
-// localBehindRemote checks whether the git repo at localPath is
-// behind its origin/main. Returns (behind, count, error). If there
-// is no `origin` remote or no `main` branch, returns (false, 0, nil)
-// rather than failing -- the local clone may be a personal fork with
-// a different default branch, and the freshness check should not
-// blow up on that. fetches origin/main first so the comparison is
-// against current remote state.
+// localBehindRemote reports not-behind rather than failing when there is no
+// origin remote or main branch, since the clone may be a fork with a
+// different default branch. It fetches first so the comparison is current.
 func localBehindRemote(ctx context.Context, localPath string) (bool, int, error) {
 	if _, err := os.Stat(filepath.Join(localPath, ".git")); err != nil {
 		return false, 0, nil
@@ -200,10 +171,6 @@ func localBehindRemote(ctx context.Context, localPath string) (bool, int, error)
 	return n > 0, n, nil
 }
 
-// checkAgainstLatest compares pinned against the module's latest
-// released tag (respecting the per-module major-version cap). Returns
-// an empty string when pinned is current or ahead, or a problem
-// description otherwise.
 func checkAgainstLatest(ctx context.Context, modulePath, pinned, fromModFile string) string {
 	if pinned == "" {
 		return ""
@@ -228,9 +195,6 @@ func checkAgainstLatest(ctx context.Context, modulePath, pinned, fromModFile str
 		modulePath, pinned, latest, modulePath, latest)
 }
 
-// semverMajor returns the major-version integer of a v-prefixed
-// semver string ("v1.2.3" -> 1). Returns (0, false) when the input
-// isn't a valid semver.
 func semverMajor(v string) (int, bool) {
 	if !semver.IsValid(v) {
 		return 0, false
@@ -246,19 +210,10 @@ func semverMajor(v string) (int, bool) {
 	return n, true
 }
 
-// latestReleasedVersion uses `go list -m -versions` to discover the
-// highest released semver tag for modulePath. The command runs from
-// the directory of the consuming go.mod so module-resolution config
-// (GOPROXY, GOPRIVATE, replace directives) is respected. When the
-// module has a configured major-version cap (see maxAllowedMajor),
-// versions above the cap are filtered out so the returned "latest"
-// is the highest tag the consumer should actually pin to, not the
-// highest tag the proxy happens to know about.
-//
-// GOWORK=off forces the proxy lookup. Inside a Go workspace, sibling
-// modules are local-replaced and `go list -m -versions` returns no
-// tags for them; we want the proxy's authoritative version list so
-// the freshness check works in monorepo + workspace layouts.
+// latestReleasedVersion runs from the consuming go.mod's directory so
+// GOPROXY, GOPRIVATE, and replace directives are respected, and with
+// GOWORK=off because a workspace local-replaces siblings and reports no
+// tags for them.
 func latestReleasedVersion(ctx context.Context, modulePath, fromModFile string) (string, error) {
 	dir := filepath.Dir(fromModFile)
 	out, err := captureCmdEnv(ctx, dir, []string{"GOWORK=off"}, "go", "list", "-m", "-versions", modulePath)
@@ -306,9 +261,6 @@ func captureCmd(ctx context.Context, dir, name string, args ...string) (string, 
 	return captureCmdEnv(ctx, dir, nil, name, args...)
 }
 
-// captureCmdEnv runs cmd with the parent env plus extraEnv appended.
-// Use it when the command needs an env override (e.g. GOWORK=off
-// to bypass workspace mode for proxy queries).
 func captureCmdEnv(ctx context.Context, dir string, extraEnv []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir

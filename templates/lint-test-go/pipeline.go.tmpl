@@ -1,8 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // lint-test-go`. Edit freely -- nothing here re-runs.
-//
-// Smallest useful template: gofmt + go vet + go test in parallel.
-// No external concerns, useful as a first read for the SDK shape.
 package jobs
 
 import (
@@ -11,10 +8,8 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} runs gofmt -l (failing on diffs), go vet, and
-// go test in a parallel three-node DAG. Each step is independent --
-// failures don't stop peers, so a CI run surfaces every problem in
-// one pass.
+// {{pascal .pipeline_name}} runs gofmt, go vet, and go test as independent
+// parallel nodes.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -38,9 +33,7 @@ func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Pl
 	return nil
 }
 
-// gofmt fails when any tracked .go file isn't already formatted. The
-// `[ -z "$(gofmt -l .)" ]` guard makes the failure obvious -- gofmt -l
-// itself exits 0 even on diffs.
+// gofmt needs the `[ -z ... ]` guard because gofmt -l exits 0 even on diffs.
 func ({{pascal .pipeline_name}}) gofmt(ctx context.Context) error {
 	_, err := sparkwing.Bash(ctx, `[ -z "$(gofmt -l .)" ] || (gofmt -l . && exit 1)`).Run()
 	return err
@@ -51,9 +44,8 @@ func ({{pascal .pipeline_name}}) vet(ctx context.Context) error {
 	return err
 }
 
-// test runs `go test` with the caller's args through Bash so a
-// multi-token test-args value (e.g. `-race ./...`) word-splits the way
-// a shell would. vet takes fixed argv, so it uses Exec instead.
+// test goes through Bash so a multi-token test-args value word-splits the
+// way a shell would; vet takes fixed argv and uses Exec.
 func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
 	_, err := sparkwing.Bash(ctx, {{quote (printf "go test %s" .test_args)}}).Run()
 	return err

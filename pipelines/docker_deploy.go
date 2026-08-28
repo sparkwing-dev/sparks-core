@@ -1,23 +1,5 @@
-// Package sparks exposes opinionated pipeline types that chain the
-// build / push / deploy building blocks from sparks-core's other
-// packages into a single consumer-facing shape.
-//
-// Typical use:
-//
-//	func init() {
-//	    sparkwing.Register("build-test-deploy", func() any {
-//	        return &sparks.DockerDeploy{
-//	            Image:      "myapp",
-//	            Dockerfile: "Dockerfile",
-//	            ECR:        "633280902600.dkr.ecr.us-west-2.amazonaws.com",
-//	            GitopsRepo: "git@github.com:org/gitops.git",
-//	            GitopsPath: "myapp",
-//	            AppName:    "myapp",
-//	            Namespace:  "myapp",
-//	            TestCmd:    "go test ./...",
-//	        }
-//	    })
-//	}
+// Package pipelines chains the build, push, and deploy building blocks from
+// sparks-core's other packages into single consumer-facing pipeline types.
 package pipelines
 
 import (
@@ -33,75 +15,50 @@ import (
 	"github.com/sparkwing-dev/sparks-core/gitops"
 )
 
-// DockerDeploy is a one-node pipeline that builds a Docker image,
-// pushes to the configured registries, and deploys via gitops
-// (remote) or kubectl / kind-kustomize (local). Each phase (test,
-// build+push, deploy) logs a step banner so failures show up cleanly
-// in the pipeline log.
-//
-// Register via sparkwing.Register with your preferred pipeline name;
-// this struct holds every knob the old sparks.DockerDeploy helper
-// accepted plus a SkipTests toggle consumers can flip from CLI args.
+// DockerDeploy is a one-node pipeline that builds a Docker image, pushes it
+// to the configured registries, and deploys via gitops or kubectl.
 type DockerDeploy struct {
 	sparkwing.Base
 
-	// Image is the image name (e.g. "myapp").
 	Image string
-	// Dockerfile is the path to the Dockerfile. Defaults to "Dockerfile".
+	// Dockerfile defaults to "Dockerfile".
 	Dockerfile string
-	// Context is the build context. Defaults to ".".
+	// Context defaults to ".".
 	Context string
-	// ECR is the AWS ECR registry URL used for prod pushes + gitops
-	// image matching.
+	// ECR is the registry URL used for prod pushes and gitops image matching.
 	ECR string
-	// Registry redirects the push to a registry other than ECR (a
-	// runner-local registry, GAR, GHCR). Empty pushes to ECR. It does
-	// not change the ECR endpoint gitops matches images on.
+	// Registry redirects the push elsewhere without changing the ECR
+	// endpoint gitops matches images on.
 	Registry string
 	// GitopsRepo is the SSH URL for the gitops repo.
 	GitopsRepo string
-	// GitopsPath is the path within the gitops repo (e.g.
-	// "myorg/myapp").
 	GitopsPath string
 	// AppName is the ArgoCD application name.
 	AppName string
-	// ArgoCD names the server the deploy syncs against and the token it
-	// authenticates with. An empty Server probes the in-cluster
-	// service.
+	// ArgoCD with an empty Server probes the in-cluster service.
 	ArgoCD gitops.ArgoCDConfig
-	// Namespace is the K8s namespace. For local/kind deploys this is
-	// also the kubectl -n target.
+	// Namespace is also the kubectl -n target for local deploys.
 	Namespace string
-	// DeployMap maps image name -> k8s deployment (e.g. "myapp" ->
-	// "deploy/myapp"). Defaults to image -> "deploy/<image>".
+	// DeployMap maps image name to k8s deployment, defaulting to
+	// "deploy/<image>".
 	DeployMap map[string]string
-	// TestCmd is an optional shell command run before build. When
-	// empty the test step is skipped entirely.
+	// TestCmd empty skips the test step.
 	TestCmd string
-	// Platform targets a specific Docker build platform (e.g.
-	// "linux/arm64"). Empty uses the host default.
+	// Platform empty uses the host default.
 	Platform string
-	// SkipTests bypasses TestCmd even if it is set. Useful when the
-	// consumer pipeline fans out tests into a separate node that
-	// runs earlier in the DAG.
+	// SkipTests bypasses TestCmd even when it is set, for pipelines that fan
+	// tests out to an earlier node.
 	SkipTests bool
 }
 
-// Plan returns the one-node DAG that runs build/push/deploy as a
-// single step. Consumers that want per-phase DAG nodes (parallel
-// build + test, gated deploy, etc.) can implement Plan() on their
-// outer struct and call into DockerDeploy.Run / its sub-helpers
-// directly instead of embedding.
+// Plan returns the one-node DAG that runs build, push, and deploy as a
+// single step.
 func (d *DockerDeploy) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
 	sparkwing.Job(plan, run.Pipeline, d.Run)
 	return nil
 }
 
-// Run executes the full build/push/deploy sequence as one pipeline
-// step. This matches the pre-rewrite sparks.DockerDeploy shape so
-// consumers upgrading from v0.26 sparks-core don't have to reshape
-// their DAG. Consumers that want per-phase DAG nodes can copy this
-// body into their own Plan() implementation.
+// Run executes the full build, push, and deploy sequence as one step.
 func (d *DockerDeploy) Run(ctx context.Context) error {
 	d.applyDefaults()
 

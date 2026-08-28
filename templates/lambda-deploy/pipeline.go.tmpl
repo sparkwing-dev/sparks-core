@@ -2,10 +2,6 @@
 {{- $hasBuild := or $isImage (ne .build_cmd "") -}}
 // Scaffolded from the lambda-deploy template. Edit freely -- nothing
 // here re-runs.
-//
-// A raw-composition DAG: each node calls a sparks-core block directly,
-// so the orchestration (what runs when, what verifies, what rolls back)
-// is visible and editable. The blocks do the heavy lifting.
 package jobs
 
 import (
@@ -27,8 +23,7 @@ import (
 // alias back to the version it pointed at before.{{end}}
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
-	// prevVersion is the version the alias pointed at before this
-	// deploy, captured for rollback.
+	// prevVersion is captured for rollback.
 	prevVersion string
 }
 
@@ -56,8 +51,6 @@ func (p *{{pascal .pipeline_name}}) test(ctx context.Context) error {
 }
 {{end}}
 {{- if $isImage}}
-// build builds {{.image}} and pushes it to the registry. The pushed
-// reference is the image the function is pointed at in deploy.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	tags, err := sparkwingDocker.ComputeTags(ctx)
 	if err != nil {
@@ -74,9 +67,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	})
 }
 
-// deploy points the function at the freshly pushed image, publishes a
-// version, and shifts the alias to it, recording the prior version for
-// rollback.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	tags, err := sparkwingDocker.ComputeTags(ctx)
 	if err != nil {
@@ -98,17 +88,11 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 }
 {{- else}}
 {{- if .build_cmd}}
-// build runs the packager that produces the deployment archive at
-// {{.zip_path}}.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	_, err := sparkwing.Bash(ctx, {{quote .build_cmd}}).Run()
 	return err
 }
 {{end}}
-// deploy uploads the archive, publishes a version, and shifts the alias
-// to it, recording the prior version for rollback. When artifact-bucket
-// is set the archive is staged through S3 first; otherwise it is
-// uploaded inline.
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	prev, err := lambda.DeployZip(ctx, lambda.ZipDeployConfig{
 		FunctionName:   {{quote .function}},
@@ -127,15 +111,10 @@ func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 {{- end}}
 {{- if .health_url}}
 
-// rollback shifts the alias back to the version it pointed at before
-// this deploy. It acts only on a Verify (health-probe) failure: there
-// the code update and alias shift both succeeded, so the prior version
-// is a clean rollback target. An action-stage failure never reached the
-// alias shift (it is the last step), so there is nothing to undo and the
-// original error is surfaced. A probe result that could not determine
-// health (unreachable, timeout, auth -- probe.Indeterminate) is not
-// evidence the new version is bad, so the alias is left in place and the
-// error escalated.
+// rollback acts only on a Verify failure, where the code update and alias
+// shift both succeeded and the prior version is a clean target. An
+// action-stage failure never reached the alias shift, and an indeterminate
+// probe is no evidence the new version is bad.
 func (p *{{pascal .pipeline_name}}) rollback(ctx context.Context, f sparkwing.Failure) error {
 	if f.Stage != sparkwing.StageVerify {
 		return f.Err

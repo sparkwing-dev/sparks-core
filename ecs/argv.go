@@ -12,18 +12,12 @@ import (
 	"github.com/sparkwing-dev/sparks-core/aws"
 )
 
-// dryRunInputRef and dryRunTaskDefRef are stand-in tokens for the two
-// values a real run derives from live state (the generated task-def file
-// and the freshly registered ARN), so the echoed dry-run argv reads
-// clearly without contacting AWS.
+// Stand-in tokens for the two values a real run derives from live state.
 const (
 	dryRunInputRef   = "file://<generated-task-def.json>"
 	dryRunTaskDefRef = "<new-task-def-arn>"
 )
 
-// regionProfileArgs returns the trailing --region/--profile flags common
-// to every aws call: --region when Region is set, then the profile args
-// (which collapse to nothing under IRSA). See aws.ProfileArgs.
 func regionProfileArgs(region, awsProfile string) []string {
 	var a []string
 	if region != "" {
@@ -32,8 +26,6 @@ func regionProfileArgs(region, awsProfile string) []string {
 	return append(a, aws.ProfileArgs(awsProfile)...)
 }
 
-// describeArgs builds the argv for reading a family's current task
-// definition as JSON.
 func describeArgs(taskFamily string, rp []string) []string {
 	args := []string{
 		"ecs", "describe-task-definition",
@@ -44,10 +36,6 @@ func describeArgs(taskFamily string, rp []string) []string {
 	return append(args, rp...)
 }
 
-// registerArgs builds the argv for registering a new revision from a
-// cli-input-json reference (a file://... path, or a placeholder under
-// dry-run), returning the new revision's ARN as plain text. extra is
-// appended verbatim as an escape hatch for the CLI's long tail.
 func registerArgs(inputRef string, extra, rp []string) []string {
 	args := []string{
 		"ecs", "register-task-definition",
@@ -59,10 +47,6 @@ func registerArgs(inputRef string, extra, rp []string) []string {
 	return append(args, rp...)
 }
 
-// updateServiceArgs builds the argv for pointing a service at a task
-// definition (an ARN or family:revision). extra is appended verbatim as
-// an escape hatch for the CLI's long tail (--force-new-deployment,
-// --health-check-grace-period-seconds, ...).
 func updateServiceArgs(cluster, service, taskDef string, extra, rp []string) []string {
 	args := []string{
 		"ecs", "update-service",
@@ -74,8 +58,6 @@ func updateServiceArgs(cluster, service, taskDef string, extra, rp []string) []s
 	return append(args, rp...)
 }
 
-// waitStableArgs builds the argv for blocking until a service reaches a
-// steady state via the aws CLI's built-in waiter (fixed ~10-minute cap).
 func waitStableArgs(cluster, service string, rp []string) []string {
 	args := []string{
 		"ecs", "wait", "services-stable",
@@ -85,8 +67,6 @@ func waitStableArgs(cluster, service string, rp []string) []string {
 	return append(args, rp...)
 }
 
-// describeServicesArgs builds the argv for reading a service's live
-// state as JSON, used by the timeout-bounded stability poll.
 func describeServicesArgs(cluster, service string, rp []string) []string {
 	args := []string{
 		"ecs", "describe-services",
@@ -98,15 +78,10 @@ func describeServicesArgs(cluster, service string, rp []string) []string {
 	return append(args, rp...)
 }
 
-// echoArgv logs the aws command a dry run would have executed.
 func echoArgv(ctx context.Context, args []string) {
 	sparkwing.Info(ctx, "[dry-run] aws %s", strings.Join(args, " "))
 }
 
-// buildRegisterInput turns a describe-task-definition JSON object into a
-// register-task-definition input: it swaps the named container's image,
-// strips the fields register rejects, and returns the re-marshaled input
-// plus the prior task-definition ARN read off the source.
 func buildRegisterInput(describeJSON []byte, containerName, image string) (input []byte, prevTaskDef string, err error) {
 	var def map[string]any
 	if err := json.Unmarshal(describeJSON, &def); err != nil {
@@ -143,12 +118,9 @@ func buildRegisterInput(describeJSON []byte, containerName, image string) (input
 	return input, prevTaskDef, nil
 }
 
-// serviceStable reports whether a describe-services `services[0]` object
-// has reached a steady state, mirroring the aws `wait services-stable`
-// success condition: exactly one deployment, that deployment COMPLETED
-// (or with no rolloutState, for services without the deployment circuit
-// breaker), and runningCount equal to desiredCount. A deployment in
-// rolloutState FAILED returns an error so the poll can stop early.
+// serviceStable mirrors the aws `wait services-stable` success condition:
+// one deployment, COMPLETED or with no rolloutState, and runningCount equal
+// to desiredCount. A FAILED rollout errors so the poll stops early.
 func serviceStable(servicesJSON []byte) (bool, error) {
 	var svc struct {
 		RunningCount int `json:"runningCount"`
@@ -176,8 +148,7 @@ func serviceStable(servicesJSON []byte) (bool, error) {
 	return svc.RunningCount == svc.DesiredCount, nil
 }
 
-// writeTaskDefFile writes the register input to a temp file and returns
-// its path; the caller is responsible for removing it.
+// writeTaskDefFile returns a path the caller must remove.
 func writeTaskDefFile(input []byte) (string, error) {
 	f, err := os.CreateTemp("", "ecs-taskdef-*.json")
 	if err != nil {

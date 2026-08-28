@@ -1,7 +1,5 @@
-// Package checks is a small collection of canned pre-commit / pre-push
-// checks for Go repositories. Each function is shaped as "take a ctx,
-// run the check, return an error" so they slot into any sparkwing
-// pipeline Step or Plan node.
+// Package checks holds canned pre-commit and pre-push checks for Go
+// repositories, each shaped to slot into a sparkwing Step or Plan node.
 package checks
 
 import (
@@ -18,7 +16,6 @@ import (
 )
 
 // GoFmt checks that every tracked Go file is formatted canonically.
-// Fails with a list of offending files when any need formatting.
 func GoFmt(ctx context.Context) error {
 	return step.Run(ctx, "go fmt", func(ctx context.Context) error {
 		out, err := sparkwing.Bash(ctx, "git ls-files '*.go' | xargs gofmt -l 2>/dev/null").String()
@@ -37,10 +34,8 @@ func GoFmt(ctx context.Context) error {
 	})
 }
 
-// GoVet runs go vet on the given packages (default: ./...). For multi-
-// module repos, patterns like "./subdir/..." are automatically
-// rewritten into "go -C subdir vet ./..." when subdir contains its
-// own go.mod.
+// GoVet runs go vet on pkgs, defaulting to ./..., rewriting a pattern that
+// points into a nested module as `go -C <dir>`.
 func GoVet(ctx context.Context, pkgs ...string) error {
 	if len(pkgs) == 0 {
 		pkgs = []string{"./..."}
@@ -55,14 +50,12 @@ func GoVet(ctx context.Context, pkgs ...string) error {
 	})
 }
 
-// GoTestShort runs go test -short on the given packages (default:
-// ./...). Multi-module handling matches GoVet.
+// GoTestShort runs go test -short on pkgs, defaulting to ./....
 func GoTestShort(ctx context.Context, pkgs ...string) error {
 	return runGoTest(ctx, "tests (short)", []string{"-short"}, pkgs)
 }
 
-// GoTest runs go test (without -short) on the given packages (default:
-// ./...). Multi-module handling matches GoVet.
+// GoTest runs go test on pkgs, defaulting to ./....
 func GoTest(ctx context.Context, pkgs ...string) error {
 	return runGoTest(ctx, "tests", nil, pkgs)
 }
@@ -85,17 +78,10 @@ func runGoTest(ctx context.Context, label string, flags, pkgs []string) error {
 	})
 }
 
-// resolveModuleDir checks if all package patterns share a common
-// directory prefix that contains its own go.mod (i.e., a separate Go
-// module). If so, returns (dir, rewrittenPkgs) where each pattern has
-// its dir prefix stripped. For example:
-// ["./myapp/..."] -> ("myapp", ["./..."]).
-// If the patterns don't share a single module-root prefix, returns
-// ("", pkgs) unchanged.
-//
-// Stat is done relative to sparkwing.WorkDir() rather than the
-// process cwd, because the compiled pipeline binary runs out of
-// sparkwing's build cache -- its cwd is not the repo root.
+// resolveModuleDir rewrites ["./myapp/..."] to ("myapp", ["./..."]) when
+// myapp holds its own go.mod. It stats relative to sparkwing.WorkDir()
+// because the compiled pipeline binary runs out of the build cache, whose
+// cwd is not the repo root.
 func resolveModuleDir(pkgs []string) (string, []string) {
 	if len(pkgs) != 1 {
 		return "", pkgs
@@ -122,8 +108,7 @@ func resolveModuleDir(pkgs []string) (string, []string) {
 	return dir, []string{"./" + strings.TrimPrefix(suffix, "/")}
 }
 
-// TrailingNewlines checks that all tracked text files end with a
-// newline. Returns error listing files that don't.
+// TrailingNewlines checks that every tracked text file ends with a newline.
 func TrailingNewlines(ctx context.Context) error {
 	return step.Run(ctx, "trailing newlines", func(ctx context.Context) error {
 		root := sparkwing.WorkDir()

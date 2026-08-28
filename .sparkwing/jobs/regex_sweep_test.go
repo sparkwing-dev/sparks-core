@@ -19,8 +19,6 @@ const (
 	sweepTrackerID = "TOD" + "-42"
 )
 
-// sweepGit runs git in dir with signing and identity forced, so the fixture
-// does not depend on the machine's git config.
 func sweepGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	full := append([]string{
@@ -35,7 +33,6 @@ func sweepGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// sweepWrite writes content at path, creating parent directories.
 func sweepWrite(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -46,9 +43,8 @@ func sweepWrite(t *testing.T, path, content string) {
 	}
 }
 
-// sweepFixtureRepo builds a git repo whose history holds history, commits it,
-// and points the gate at the repo for the duration of the test. A real commit
-// is what gives the staged diff a HEAD to compare against.
+// sweepFixtureRepo makes a real commit, which is what gives the staged diff
+// a HEAD to compare against.
 func sweepFixtureRepo(t *testing.T, history string) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {

@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv is the ISS-033
-// regression test: a host-mode build (BuildImage="") must inject
-// BuildExtraEnv into the build subprocess so values like NEXT_EXPORT=1
-// reach next.config.* via process.env.
 func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 	work := t.TempDir()
 	t.Setenv("SPARKWING_WORK_DIR", work)
@@ -38,11 +34,6 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 	}
 }
 
-// TestVerifyHTMLChunkRefs_FailsOnMissingChunk is the ISS-034
-// regression test: when out/*.html references a chunk file that
-// the build did not emit (the export-mode-not-engaged scenario),
-// the chunk-ref check must surface a clear error so the deploy
-// fails before S3 sync `--delete`s the live chunks.
 func TestVerifyHTMLChunkRefs_FailsOnMissingChunk(t *testing.T) {
 	out := t.TempDir()
 	html := `<!doctype html><html><body>` +
@@ -68,8 +59,6 @@ func TestVerifyHTMLChunkRefs_FailsOnMissingChunk(t *testing.T) {
 	}
 }
 
-// TestVerifyHTMLChunkRefs_PassesWhenChunksExist confirms the check
-// is silent on a healthy build where every HTML reference resolves.
 func TestVerifyHTMLChunkRefs_PassesWhenChunksExist(t *testing.T) {
 	out := t.TempDir()
 	chunksDir := filepath.Join(out, "_next", "static", "chunks")
@@ -97,8 +86,6 @@ func TestVerifyHTMLChunkRefs_PassesWhenChunksExist(t *testing.T) {
 	}
 }
 
-// TestVerifyHTMLChunkRefs_NoOpWhenNoHTML guards against false
-// positives on non-static deploys (e.g. a config-only sync).
 func TestVerifyHTMLChunkRefs_NoOpWhenNoHTML(t *testing.T) {
 	out := t.TempDir()
 	if err := verifyHTMLChunkRefs(out); err != nil {
@@ -106,8 +93,6 @@ func TestVerifyHTMLChunkRefs_NoOpWhenNoHTML(t *testing.T) {
 	}
 }
 
-// TestVerifyHTMLChunkRefs_ScansNestedRouteHTML covers the Next-style
-// out/<route>/index.html layout.
 func TestVerifyHTMLChunkRefs_ScansNestedRouteHTML(t *testing.T) {
 	out := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(out, "about"), 0o755); err != nil {

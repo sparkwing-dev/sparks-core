@@ -1,12 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // go-affected-tests`. Edit freely -- nothing here re-runs.
-//
-// Run each listed Go package as its own content-cached test job, gated
-// by a node that passes only when every package job passes. Each job's
-// cache key is the content hash of that package's files plus its
-// same-module dependency closure (resolved with `go list`), so editing
-// one package re-runs only that package's tests and the tests of
-// packages that depend on it, while the rest replay their stored pass.
 package jobs
 
 import (
@@ -26,8 +19,7 @@ const (
 )
 
 // {{pascal .pipeline_name}} fans one content-cached test job out per
-// package listed in Packages, then a gate node depends on the whole
-// group so the run succeeds only when every package job passed.
+// package, behind a gate that passes only when every package job passed.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -64,9 +56,8 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// testPackage runs {{.test_cmd}} for one package, exporting PACKAGE so
-// the command can target it. On a cache hit this body never executes --
-// the orchestrator replays the stored pass.
+// testPackage exports PACKAGE so the command can target one package. On a
+// cache hit this body never executes.
 func testPackage(spec string) func(context.Context) error {
 	return func(ctx context.Context) error {
 		_, err := sparkwing.Bash(ctx, {{pascal .pipeline_name}}TestCmd).Env("PACKAGE", spec).Run()
@@ -79,9 +70,6 @@ func (p *{{pascal .pipeline_name}}) gate(ctx context.Context) error {
 	return nil
 }
 
-// splitList turns a comma-separated parameter into a trimmed,
-// blank-dropped slice. Shared by the package list and the extra-key
-// globs.
 func splitList(csv string) []string {
 	var out []string
 	for _, s := range strings.Split(csv, ",") {
@@ -92,9 +80,8 @@ func splitList(csv string) []string {
 	return out
 }
 
-// shortName derives a stable, DAG-safe job suffix from a `go list`
-// package spec: `.` becomes "root", `./integration` becomes
-// "integration", `./cmd/api` becomes "cmd-api".
+// shortName derives a DAG-safe job suffix: `.` becomes "root",
+// `./cmd/api` becomes "cmd-api".
 func shortName(spec string) string {
 	s := strings.TrimPrefix(spec, "./")
 	s = strings.TrimSuffix(s, "/...")
@@ -117,9 +104,8 @@ func shortName(spec string) string {
 	return out
 }
 
-// uniqueID returns base, or base-2, base-3, ... when a prior spec already
-// claimed it, so two specs that sanitize to the same short name still get
-// distinct node IDs.
+// uniqueID suffixes a collision so two specs sanitizing to the same short
+// name still get distinct node IDs.
 func uniqueID(base string, seen map[string]bool) string {
 	id := base
 	for n := 2; seen[id]; n++ {

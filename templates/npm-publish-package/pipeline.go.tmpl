@@ -1,10 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // npm-publish-package`. Edit freely -- nothing here re-runs.
-//
-// Guard the declared package version, optionally build, then publish
-// the npm package with `npm publish`. The publish step echoes its argv
-// under SPARKWING_DRY_RUN (and while dry-run is set) so a scaffold runs
-// green before a token and reaches no registry.
 package jobs
 
 import (
@@ -16,12 +11,10 @@ import (
 	"github.com/sparkwing-dev/sparks-core/release"
 )
 
-// {{pascal .pipeline_name}} publishes the npm package under {{.package_dir}}
-// to {{.registry}}. It first refuses to re-publish a version whose git
-// tag already exists,{{if .build_cmd}} then runs the build command,{{end}} then invokes
-// `npm publish`. The publish step honors the dry-run convention: with
-// dry-run set (the default) or SPARKWING_DRY_RUN in the environment it
-// logs the command it would run instead of executing it.
+// {{pascal .pipeline_name}} publishes the npm package under
+// {{.package_dir}} to {{.registry}}, refusing a version whose git tag
+// already exists. dry-run defaults to set, so a first run echoes rather
+// than publishes.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -65,9 +58,8 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// guardVersion refuses to publish when the git tag for the version
-// declared in package.json already exists, so a forgotten version bump
-// fails fast instead of clobbering a published release.
+// guardVersion makes a forgotten version bump fail fast instead of
+// clobbering a published release.
 func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
 	_, err := release.GuardVersionFile(ctx, release.VersionFileConfig{
 		Path:      filepath.Join(packageDir, "package.json"),
@@ -78,9 +70,6 @@ func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
 }
 {{- if .build_cmd}}
 
-// build installs dependencies (unless the install command is empty) and
-// runs the configured build command in the package directory before the
-// artifact is published.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 {{- if .install_cmd}}
 	if _, err := sparkwing.Bash(ctx, installCmd).Dir(packageDir).Run(); err != nil {
@@ -92,9 +81,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 }
 {{- end}}
 
-// publish runs `npm publish` for the package. The dry-run flag routes
-// through the release block's echo path, so no registry is reached
-// unless dry-run is cleared.
 func (p *{{pascal .pipeline_name}}) publish(ctx context.Context) error {
 	return release.NpmPublish(ctx, release.NpmPublishConfig{
 		Dir:         packageDir,

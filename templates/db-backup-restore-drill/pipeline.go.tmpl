@@ -1,12 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // db-backup-restore-drill`. Edit freely -- nothing here re-runs.
-//
-// Disaster-recovery drill for a Postgres database: dump the source,
-// restore the dump into a throwaway ephemeral instance, and run a
-// verification query against the restore to prove the backup is usable.
-// Intended to run on a schedule ("{{.schedule}}") -- add the trigger to
-// .sparkwing/sparkwing.yaml (see the template README). Needs a Docker
-// daemon plus pg_dump and psql on PATH.
 package jobs
 
 import (
@@ -32,18 +25,15 @@ const (
 	{{pascal .pipeline_name}}WebhookSecret = {{quote .notify_webhook_secret}}
 )
 
-// drillSmokeTable and drillSmokeRows describe the fixture the ephemeral
-// fallback seeds, so the no-setup drill proves seeded rows survive a
-// dump/restore round trip rather than only that psql can connect.
+// The seeded fixture is what makes the no-setup drill prove rows survive the
+// round trip, rather than only that psql can connect.
 const (
 	drillSmokeTable = "drill_smoke"
 	drillSmokeRows  = 3
 )
 
-// {{pascal .pipeline_name}} dumps a Postgres source, restores the dump
-// into a throwaway instance, and verifies the restore -- a repeatable
-// proof that the backup path actually works, not just that a dump file
-// exists.
+// {{pascal .pipeline_name}} dumps a Postgres source, restores it into a
+// throwaway instance, and verifies the restore.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -59,17 +49,14 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// drill runs the dump/restore/verify round trip and reports the result,
-// so an infrastructure failure (no Docker, unreachable source) annotates
-// and notifies the same as a dump/restore/verify failure.
+// drill reports through the same path either way, so an infrastructure
+// failure annotates and notifies like a round-trip failure.
 func (p *{{pascal .pipeline_name}}) drill(ctx context.Context) error {
 	return p.report(ctx, p.roundTrip(ctx))
 }
 
-// roundTrip resolves the source DSN -- the configured secret when set,
-// otherwise an ephemeral seeded Postgres so the drill runs with no setup
-// -- then dumps it, restores into a throwaway instance, and asserts the
-// verify query against the restore.
+// roundTrip falls back to an ephemeral seeded Postgres so the drill runs
+// with no setup.
 func (p *{{pascal .pipeline_name}}) roundTrip(ctx context.Context) error {
 	if src, err := sparkwing.Secret(ctx, {{pascal .pipeline_name}}Secret); err == nil && src != "" {
 		return p.dumpRestoreVerify(ctx, src, {{pascal .pipeline_name}}Query, {{pascal .pipeline_name}}MinRows)
@@ -84,9 +71,8 @@ func (p *{{pascal .pipeline_name}}) roundTrip(ctx context.Context) error {
 	})
 }
 
-// dumpRestoreVerify dumps srcDSN into a throwaway ephemeral Postgres and
-// asserts query (with minRows) against the restore. The restore target
-// is always ephemeral, so the drill never writes to a real database.
+// dumpRestoreVerify always restores into an ephemeral target, so the drill
+// never writes to a real database.
 func (p *{{pascal .pipeline_name}}) dumpRestoreVerify(ctx context.Context, srcDSN, query string, minRows int) error {
 	return services.WithPostgres(ctx, services.Postgres{DB: "drill_restore"}, func(ctx context.Context, targetDSN string) error {
 		dest := {{pascal .pipeline_name}}Dest
@@ -129,9 +115,6 @@ func (p *{{pascal .pipeline_name}}) dumpRestoreVerify(ctx context.Context, srcDS
 	})
 }
 
-// seedSource creates and populates drillSmokeTable in the ephemeral
-// fallback source and returns the row count it seeded, so the verify
-// step asserts those rows survive the dump/restore.
 func seedSource(ctx context.Context, dsn string) (int, error) {
 	stmt := fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY); INSERT INTO %s (id) VALUES (1), (2), (3);", drillSmokeTable, drillSmokeTable)
 	if _, err := sparkwing.Exec(ctx, "psql", "--dbname="+dsn, "-v", "ON_ERROR_STOP=1", "-c", stmt).Run(); err != nil {
@@ -140,9 +123,7 @@ func seedSource(ctx context.Context, dsn string) (int, error) {
 	return drillSmokeRows, nil
 }
 
-// report annotates the run with the drill result and posts it to the
-// webhook secret (a no-op when unset), then returns cause so a failed
-// drill still fails the Job.
+// report returns cause so a failed drill still fails the Job.
 func (p *{{pascal .pipeline_name}}) report(ctx context.Context, cause error) error {
 	status, text := "passed", "backup restore drill passed"
 	if cause != nil {

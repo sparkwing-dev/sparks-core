@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template test-matrix`.
 // Edit freely -- nothing here re-runs.
-//
-// Run the whole test suite across a matrix of toolchain versions{{if .os_labels}} and
-// OS runner labels{{end}}, one parallel job per combination, gated by an
-// all-pass node.
 package jobs
 
 import (
@@ -16,11 +12,9 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} fans the test suite out across every
-// version{{if .os_labels}} x OS{{end}} combination as one parallel job per cell, then a
-// gate node that Needs the whole group so the run passes only when
-// every cell passed. Each cell exports MATRIX_VERSION into the test
-// command's environment.
+// {{pascal .pipeline_name}} fans the test suite out one parallel job per
+// matrix cell, behind a gate that passes only when every cell passed. Each
+// cell exports MATRIX_VERSION into the test command's environment.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -44,19 +38,14 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// {{pascal .pipeline_name}}Cell is one matrix combination: a toolchain
-// version and an optional OS runner label. The OS label is applied as
-// a soft Prefers so the default single-dimension matrix still
-// dispatches every cell on a single-runner laptop.
+// {{pascal .pipeline_name}}Cell is one toolchain version and optional OS
+// runner label.
 type {{pascal .pipeline_name}}Cell struct {
 	sparkwing.Base
 	version string
 	osLabel string
 }
 
-// {{pascal .pipeline_name}}Cells builds the Cartesian product of the
-// configured versions and OS labels. With no OS labels it is one cell
-// per version.
 func {{pascal .pipeline_name}}Cells() []{{pascal .pipeline_name}}Cell {
 	versions := {{pascal .pipeline_name}}SplitList({{quote .versions}})
 	osLabels := {{pascal .pipeline_name}}SplitList({{quote .os_labels}})
@@ -80,8 +69,7 @@ func (c {{pascal .pipeline_name}}Cell) id() string {
 	return "cell-" + c.version + "-" + c.osLabel
 }
 
-// Prefers biases this cell onto a runner advertising its OS label. It
-// is a soft preference, not a hard Requires, so a single-runner setup
+// Prefers is soft rather than a hard Requires, so a single-runner setup
 // still dispatches the cell.
 func (c {{pascal .pipeline_name}}Cell) Prefers() []string {
 	if c.osLabel == "" {
@@ -114,8 +102,6 @@ func (c *{{pascal .pipeline_name}}Cell) Work(w *sparkwing.Work) (*sparkwing.Work
 	return nil, nil
 }
 
-// {{pascal .pipeline_name}}SplitList splits a comma-separated parameter
-// into its non-empty, space-trimmed elements.
 func {{pascal .pipeline_name}}SplitList(csv string) []string {
 	var out []string
 	for _, part := range strings.Split(csv, ",") {

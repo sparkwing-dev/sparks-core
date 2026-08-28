@@ -1,9 +1,5 @@
 // Code scaffolded by `sparkwing pipeline new --template
 // coverage-gated-test`. Edit freely -- nothing here re-runs.
-//
-// Run a test suite that emits a coverage report, then gate the node on
-// a total-coverage floor: a Verify postcondition parses the report and
-// fails the run when coverage drops below the threshold.
 package jobs
 
 import (
@@ -14,11 +10,8 @@ import (
 	"github.com/sparkwing-dev/sparks-core/coverage"
 )
 
-// {{pascal .pipeline_name}} runs the test command, which writes a
-// coverage report, then a Verify postcondition parses the report's
-// total line coverage and fails the node when it falls below the floor.
-// The parser understands Go coverprofiles, lcov, and Cobertura XML, so
-// the same gate covers a Go, Node, Python, or Rust suite.
+// {{pascal .pipeline_name}} runs the test command and fails the node when
+// the coverage report it writes falls below the floor.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
@@ -44,8 +37,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	return nil
 }
 
-// test runs the coverage-producing test command. It must emit the report
-// the Verify gate reads afterward; the gate resolves a relative path
+// test must emit the report the Verify gate reads; a relative path resolves
 // against the repo root.
 func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
 	_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()

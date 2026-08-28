@@ -1,29 +1,6 @@
-// Package coverage parses code-coverage reports and gates a pipeline on
-// a total-coverage floor.
-//
-// Three report formats are understood, each reduced to a single
-// total-line/statement-coverage percentage:
-//
-//   - Go coverprofile (the file `go test -coverprofile=cover.out`
-//     writes): the statement-weighted total, matching the `total:`
-//     figure `go tool cover -func` prints.
-//   - lcov tracefiles (`.info`): the sum of hit lines (LH) over found
-//     lines (LF) across every record.
-//   - Cobertura XML: the ratio of the root <coverage> element's exact
-//     lines-covered to lines-valid, or its rounded line-rate fraction
-//     when those counts are absent, scaled to a percentage.
-//
-// Parsing is pure: no host tools are shelled out to and no network is
-// touched, so the same report drives a gate for a Go, Node, Python, or
-// Rust suite that emitted one of these formats.
-//
-// The unit of work is Verify-shaped. GateAtLeast returns a
-// func(context.Context) error that reads the report, logs the total,
-// and fails with a rich error when it falls below the floor, so it
-// plugs directly into a sparkwing Job.Verify:
-//
-//	sw.Job(plan, "test", runTests).
-//	    Verify(coverage.GateAtLeast(80, coverage.Report{Format: "go", Path: "cover.out"}))
+// Package coverage parses Go coverprofile, lcov, and Cobertura XML reports
+// into a single total-coverage percentage, and gates a pipeline on a floor.
+// Parsing is pure: no host tools and no network.
 package coverage
 
 import (
@@ -38,16 +15,11 @@ import (
 	"github.com/sparkwing-dev/sparks-core/step"
 )
 
-// Report identifies a coverage report to parse: its on-disk location
-// and which format's parser to apply.
 type Report struct {
-	// Format selects the parser: "go" (Go coverprofile), "lcov", or
-	// "cobertura". An empty value defaults to "go".
+	// Format is "go", "lcov", or "cobertura", defaulting to "go".
 	Format string
-	// Path is the report file, absolute or relative to the sparkwing
-	// work directory (the repo root). A relative path is resolved
-	// against sparkwing.WorkDir() because a compiled pipeline binary
-	// does not run with the repo root as its cwd.
+	// Path is absolute, or relative to sparkwing.WorkDir() -- a compiled
+	// pipeline binary does not run with the repo root as its cwd.
 	Path string
 }
 
@@ -58,8 +30,6 @@ const (
 	FormatCobertura = "cobertura"
 )
 
-// format returns the normalized, lower-cased format, defaulting an
-// empty value to FormatGo.
 func (r Report) format() string {
 	f := strings.ToLower(strings.TrimSpace(r.Format))
 	if f == "" {
@@ -68,9 +38,7 @@ func (r Report) format() string {
 	return f
 }
 
-// Total reads the report and returns its total coverage as a percentage
-// in [0, 100]. It errors on an unknown format, an unreadable file, or a
-// report that does not parse into a coverage figure.
+// Total returns the report's total coverage as a percentage in [0, 100].
 func Total(_ context.Context, r Report) (float64, error) {
 	data, err := os.ReadFile(resolvePath(r.Path))
 	if err != nil {
@@ -90,9 +58,7 @@ func Total(_ context.Context, r Report) (float64, error) {
 }
 
 // GateAtLeast returns a Verify-shaped check that fails when the report's
-// total coverage is below floor percent. On success it logs the measured
-// total; on a shortfall it returns an error naming the total, the floor,
-// and the report.
+// total coverage is below floor percent.
 func GateAtLeast(floor float64, r Report) func(context.Context) error {
 	return func(ctx context.Context) error {
 		return step.Run(ctx, "coverage gate", func(ctx context.Context) error {
@@ -110,8 +76,6 @@ func GateAtLeast(floor float64, r Report) func(context.Context) error {
 	}
 }
 
-// resolvePath makes a relative report path absolute against the
-// sparkwing work directory; an absolute path is returned unchanged.
 func resolvePath(p string) string {
 	if p == "" || filepath.IsAbs(p) {
 		return p
