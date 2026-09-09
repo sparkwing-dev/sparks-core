@@ -119,3 +119,39 @@ func TestModuleRelativePathRejectsUnresolvedSources(t *testing.T) {
 		t.Fatalf("source path = %q, %v; want module-relative source", path, err)
 	}
 }
+
+func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
+	repository := newRepo(t)
+	repository.write("go.work", "go 1.26.0\n\nuse ./nested\n")
+	repository.write("nested/go.mod", "module example.com/nested\n\ngo 1.26.0\n")
+	repository.write("nested/app/app.go", "package app\n\nconst Value = 1\n")
+	repository.write("settings.txt", "first\n")
+	repository.commitAll("workspace")
+	t.Setenv("GOWORK", filepath.Join(repository.directory, "go.work"))
+	setTestWorkDir(t, repository.directory)
+	files, err := GoDeps(t.Context(), repository.directory, "./nested/app")
+	if err != nil || len(files) != 1 || files[0] != "app/app.go" {
+		t.Fatalf("module-relative dependencies = %v, %v; want app/app.go", files, err)
+	}
+	resolver := SaltedGoPackage("example", "./nested/app", "settings.txt")
+	first, err := resolver(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository.write("nested/app/app.go", "package app\n\nconst Value = 2\n")
+	afterSource, err := resolver(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == afterSource {
+		t.Errorf("nested source edit retained key %q", first)
+	}
+	repository.write("settings.txt", "second\n")
+	afterExtra, err := resolver(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterSource == afterExtra {
+		t.Errorf("project-relative extra input edit retained key %q", afterSource)
+	}
+}
