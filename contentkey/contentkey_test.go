@@ -15,72 +15,72 @@ import (
 )
 
 type repo struct {
-	t   *testing.T
-	dir string
+	t         *testing.T
+	directory string
 }
 
 func newRepo(t *testing.T) *repo {
 	t.Helper()
-	dir := t.TempDir()
-	r := &repo{t: t, dir: dir}
-	r.git("init", "-q")
-	r.git("config", "user.email", "test@example.com")
-	r.git("config", "user.name", "Test")
-	r.git("config", "commit.gpgsign", "false")
-	return r
+	directory := t.TempDir()
+	repository := &repo{t: t, directory: directory}
+	repository.git("init", "-q")
+	repository.git("config", "user.email", "test@example.com")
+	repository.git("config", "user.name", "Test")
+	repository.git("config", "commit.gpgsign", "false")
+	return repository
 }
 
-func (r *repo) git(args ...string) string {
-	r.t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", args...)
-	cmd.Dir = r.dir
-	cmd.Env = append(os.Environ(),
+func (repository *repo) git(args ...string) string {
+	repository.t.Helper()
+	command := exec.CommandContext(repository.t.Context(), "git", args...)
+	command.Dir = repository.directory
+	command.Env = append(os.Environ(),
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_SYSTEM=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",
 	)
-	out, err := cmd.CombinedOutput()
+	output, err := command.CombinedOutput()
 	if err != nil {
-		r.t.Fatalf("git %v: %v\n%s", args, err, out)
+		repository.t.Fatalf("git %v: %v\n%s", args, err, output)
 	}
-	return string(out)
+	return string(output)
 }
 
-func (r *repo) write(rel, content string) {
-	r.t.Helper()
-	path := filepath.Join(r.dir, rel)
+func (repository *repo) write(relativePath, content string) {
+	repository.t.Helper()
+	path := filepath.Join(repository.directory, relativePath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		r.t.Fatal(err)
+		repository.t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		r.t.Fatal(err)
+		repository.t.Fatal(err)
 	}
 }
 
-func (r *repo) commitAll(msg string) {
-	r.t.Helper()
-	r.git("add", "-A")
-	r.git("commit", "-q", "-m", msg)
+func (repository *repo) commitAll(message string) {
+	repository.t.Helper()
+	repository.git("add", "-A")
+	repository.git("commit", "-q", "-m", message)
 }
 
-func mustKey(t *testing.T, dir, salt string, globs []string) sparkwing.CacheKey {
+func mustKey(t *testing.T, directory, salt string, globs []string) sparkwing.CacheKey {
 	t.Helper()
-	k, err := contentKey(context.Background(), dir, salt, globs)
+	key, err := contentKey(context.Background(), directory, salt, globs)
 	if err != nil {
 		t.Fatalf("contentKey: %v", err)
 	}
-	return k
+	return key
 }
 
 func TestContentKey_StableForIdenticalContent(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.write("go.mod", "module x\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.write("go.mod", "module x\n")
+	repository.commitAll("init")
 
 	globs := []string{"*.go", "go.mod"}
-	first := mustKey(t, r.dir, "", globs)
-	second := mustKey(t, r.dir, "", globs)
+	first := mustKey(t, repository.directory, "", globs)
+	second := mustKey(t, repository.directory, "", globs)
 	if first != second {
 		t.Fatalf("key not stable: %q != %q", first, second)
 	}
@@ -90,112 +90,112 @@ func TestContentKey_StableForIdenticalContent(t *testing.T) {
 }
 
 func TestContentKey_ChangesWhenFileContentChanges(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	r.write("main.go", "package main // changed\n")
-	after := mustKey(t, r.dir, "", globs)
+	repository.write("main.go", "package main // changed\n")
+	after := mustKey(t, repository.directory, "", globs)
 	if before == after {
 		t.Fatalf("key did not change after edit: %q", before)
 	}
 }
 
 func TestContentKey_HashesUncommittedWorkingTree(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
-	committed := mustKey(t, r.dir, "", globs)
+	committed := mustKey(t, repository.directory, "", globs)
 
-	r.write("main.go", "package main // dirty\n")
-	dirty := mustKey(t, r.dir, "", globs)
+	repository.write("main.go", "package main // dirty\n")
+	dirty := mustKey(t, repository.directory, "", globs)
 	if committed == dirty {
 		t.Fatalf("uncommitted edit not reflected in key: %q", committed)
 	}
 }
 
 func TestContentKey_SaltChangesKey(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
 
-	base := mustKey(t, r.dir, "", globs)
-	v1 := mustKey(t, r.dir, "v1", globs)
-	v2 := mustKey(t, r.dir, "v2", globs)
+	base := mustKey(t, repository.directory, "", globs)
+	v1 := mustKey(t, repository.directory, "v1", globs)
+	v2 := mustKey(t, repository.directory, "v2", globs)
 	if v1 == base || v2 == base || v1 == v2 {
 		t.Fatalf("salt not distinguishing keys: base=%q v1=%q v2=%q", base, v1, v2)
 	}
-	if again := mustKey(t, r.dir, "v1", globs); again != v1 {
+	if again := mustKey(t, repository.directory, "v1", globs); again != v1 {
 		t.Fatalf("salted key not stable: %q != %q", again, v1)
 	}
 }
 
 func TestContentKey_IgnoresUntrackedAndGitignored(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.write(".gitignore", "*.log\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.write(".gitignore", "*.log\n")
+	repository.commitAll("init")
 	globs := []string{"*.go", "*.log"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	r.write("debug.log", "noise\n")
-	r.write("scratch.go", "package scratch\n")
-	after := mustKey(t, r.dir, "", globs)
+	repository.write("debug.log", "noise\n")
+	repository.write("scratch.go", "package scratch\n")
+	after := mustKey(t, repository.directory, "", globs)
 	if before != after {
 		t.Fatalf("untracked/ignored files changed key: %q != %q", before, after)
 	}
 }
 
 func TestContentKey_ScopedByGlobs(t *testing.T) {
-	r := newRepo(t)
-	r.write("app/main.go", "package main\n")
-	r.write("docs/readme.md", "hi\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("app/main.go", "package main\n")
+	repository.write("docs/readme.md", "hi\n")
+	repository.commitAll("init")
 	globs := []string{"app/*.go"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	r.write("docs/readme.md", "changed\n")
-	r.commitAll("docs")
-	after := mustKey(t, r.dir, "", globs)
+	repository.write("docs/readme.md", "changed\n")
+	repository.commitAll("docs")
+	after := mustKey(t, repository.directory, "", globs)
 	if before != after {
 		t.Fatalf("change outside globs changed the key: %q != %q", before, after)
 	}
 
-	r.write("app/main.go", "package main // v2\n")
-	r.commitAll("app")
-	scoped := mustKey(t, r.dir, "", globs)
+	repository.write("app/main.go", "package main // v2\n")
+	repository.commitAll("app")
+	scoped := mustKey(t, repository.directory, "", globs)
 	if scoped == before {
 		t.Fatalf("change inside globs did not change the key: %q", scoped)
 	}
 }
 
 func TestContentKey_RenameChangesKey(t *testing.T) {
-	r := newRepo(t)
-	r.write("a.go", "package p\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("a.go", "package p\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	r.git("mv", "a.go", "b.go")
-	r.commitAll("rename")
-	after := mustKey(t, r.dir, "", globs)
+	repository.git("mv", "a.go", "b.go")
+	repository.commitAll("rename")
+	after := mustKey(t, repository.directory, "", globs)
 	if before == after {
 		t.Fatalf("rename (same content, new path) did not change key: %q", before)
 	}
 }
 
 func TestContentKey_EmptyMatchIsStableNotError(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 	globs := []string{"*.rs"}
 
-	first := mustKey(t, r.dir, "", globs)
-	second := mustKey(t, r.dir, "", globs)
+	first := mustKey(t, repository.directory, "", globs)
+	second := mustKey(t, repository.directory, "", globs)
 	if first != second {
 		t.Fatalf("empty-match key not stable: %q != %q", first, second)
 	}
@@ -204,19 +204,17 @@ func TestContentKey_EmptyMatchIsStableNotError(t *testing.T) {
 	}
 }
 
-// The file names are long enough that a single argv would blow past the
-// per-exec byte budget, forcing hashObjects to batch.
 func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
-	r := newRepo(t)
-	const n = 4000
-	for i := 0; i < n; i++ {
-		r.write(filepath.Join("pkg", padName(i)+".go"), "package p\n")
+	repository := newRepo(t)
+	const fileCount = 4000
+	for i := 0; i < fileCount; i++ {
+		repository.write(filepath.Join("pkg", padName(i)+".go"), "package p\n")
 	}
-	r.commitAll("init")
+	repository.commitAll("init")
 	globs := []string{"pkg/*.go"}
 
-	first := mustKey(t, r.dir, "", globs)
-	second := mustKey(t, r.dir, "", globs)
+	first := mustKey(t, repository.directory, "", globs)
+	second := mustKey(t, repository.directory, "", globs)
 	if first != second {
 		t.Fatalf("large-set key not stable: %q != %q", first, second)
 	}
@@ -224,37 +222,35 @@ func TestContentKey_LargeFileSetChunksArgv(t *testing.T) {
 		t.Fatalf("large set should hash to a real key, got %q", first)
 	}
 
-	r.write(filepath.Join("pkg", padName(n/2)+".go"), "package p // changed\n")
-	after := mustKey(t, r.dir, "", globs)
+	repository.write(filepath.Join("pkg", padName(fileCount/2)+".go"), "package p // changed\n")
+	after := mustKey(t, repository.directory, "", globs)
 	if after == first {
 		t.Fatalf("editing one file in a chunked set did not change the key: %q", first)
 	}
 }
 
-// The removal is left unstaged, so `git ls-files` still lists the file.
 func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
-	r := newRepo(t)
-	r.write("a.go", "package p\n")
-	r.write("b.go", "package p\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("a.go", "package p\n")
+	repository.write("b.go", "package p\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	if err := os.Remove(filepath.Join(r.dir, "b.go")); err != nil {
+	if err := os.Remove(filepath.Join(repository.directory, "b.go")); err != nil {
 		t.Fatal(err)
 	}
-	after := mustKey(t, r.dir, "", globs)
+	after := mustKey(t, repository.directory, "", globs)
 	if after == "" || after.IsNoCache() {
-		t.Fatalf("deleted-but-tracked file should not bust the key to NoCache, got %q", after)
+		t.Fatalf("unstaged deletion returned an unusable key %q", after)
 	}
 	if after == before {
 		t.Fatalf("deleting a tracked file did not change the key: %q", before)
 	}
 }
 
-// lockDir makes Lstat fail with EACCES, the same shape as a transient
-// EMFILE or EAGAIN under load.
-func lockDir(t *testing.T, dir string) {
+// lockDir makes child inspection fail with a permission error.
+func lockDir(t *testing.T, directory string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("permission-based Lstat failure not constructible on windows")
@@ -262,23 +258,27 @@ func lockDir(t *testing.T, dir string) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory permissions")
 	}
-	if err := os.Chmod(dir, 0o000); err != nil {
+	if err := os.Chmod(directory, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(directory, 0o755); err != nil {
+			t.Errorf("restore directory permissions: %v", err)
+		}
+	})
 }
 
 func TestContentKey_StatFailureErrorsInsteadOfChangingKey(t *testing.T) {
-	r := newRepo(t)
-	r.write("locked/a.go", "package p\n")
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("locked/a.go", "package p\n")
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 	globs := []string{"*.go"}
-	before := mustKey(t, r.dir, "", globs)
+	before := mustKey(t, repository.directory, "", globs)
 
-	locked := filepath.Join(r.dir, "locked")
+	locked := filepath.Join(repository.directory, "locked")
 	lockDir(t, locked)
-	_, err := contentKey(context.Background(), r.dir, "", globs)
+	_, err := contentKey(context.Background(), repository.directory, "", globs)
 	if err == nil {
 		t.Fatal("a stat failure that is not a deletion must error, not shrink the key")
 	}
@@ -289,29 +289,32 @@ func TestContentKey_StatFailureErrorsInsteadOfChangingKey(t *testing.T) {
 	if err := os.Chmod(locked, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	after := mustKey(t, r.dir, "", globs)
+	after := mustKey(t, repository.directory, "", globs)
 	if after != before {
 		t.Fatalf("key changed across a transient stat failure: %q != %q", before, after)
 	}
 }
 
-func TestOfPaths_StatFailureRunsUncachedNotDifferentKey(t *testing.T) {
-	r := newRepo(t)
-	r.write("locked/a.go", "package p\n")
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	sparkwing.SetWorkDir(r.dir)
+func TestOfPaths_StatFailurePreservesCause(t *testing.T) {
+	repository := newRepo(t)
+	repository.write("locked/a.go", "package p\n")
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	setTestWorkDir(t, repository.directory)
 	ctx := context.Background()
 
-	before := OfPaths("*.go")(ctx)
+	before, err := OfPaths("*.go")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if before.IsNoCache() {
 		t.Fatalf("expected a real key before the fault, got %q", before)
 	}
 
-	lockDir(t, filepath.Join(r.dir, "locked"))
-	during := OfPaths("*.go")(ctx)
-	if !during.IsNoCache() {
-		t.Fatalf("stat failure must run uncached, not mint a key: got %q (healthy key %q)", during, before)
+	lockDir(t, filepath.Join(repository.directory, "locked"))
+	during, err := OfPaths("*.go")(ctx)
+	if during != "" || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("stat failure = %q, %v; want empty key and permission cause", during, err)
 	}
 }
 
@@ -320,11 +323,11 @@ func padName(i int) string {
 }
 
 func TestChangedVsBase_CleanTreeIsUnchanged(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 
-	changed, known, err := changedVsBase(context.Background(), r.dir, "HEAD", []string{"*.go"})
+	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"*.go"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,12 +340,12 @@ func TestChangedVsBase_CleanTreeIsUnchanged(t *testing.T) {
 }
 
 func TestChangedVsBase_WorkingTreeEditIsChanged(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	r.write("main.go", "package main // edit\n")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	repository.write("main.go", "package main // edit\n")
 
-	changed, known, err := changedVsBase(context.Background(), r.dir, "HEAD", []string{"*.go"})
+	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"*.go"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,13 +355,13 @@ func TestChangedVsBase_WorkingTreeEditIsChanged(t *testing.T) {
 }
 
 func TestChangedVsBase_ScopedToGlobs(t *testing.T) {
-	r := newRepo(t)
-	r.write("app/main.go", "package main\n")
-	r.write("docs/readme.md", "hi\n")
-	r.commitAll("init")
-	r.write("docs/readme.md", "changed\n")
+	repository := newRepo(t)
+	repository.write("app/main.go", "package main\n")
+	repository.write("docs/readme.md", "hi\n")
+	repository.commitAll("init")
+	repository.write("docs/readme.md", "changed\n")
 
-	changed, known, err := changedVsBase(context.Background(), r.dir, "HEAD", []string{"app"})
+	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"app"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,11 +374,11 @@ func TestChangedVsBase_ScopedToGlobs(t *testing.T) {
 }
 
 func TestChangedVsBase_MissingBaseIsUnknown(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
 
-	changed, known, err := changedVsBase(context.Background(), r.dir, "origin/does-not-exist", []string{"*.go"})
+	changed, known, err := changedVsBase(context.Background(), repository.directory, "origin/does-not-exist", []string{"*.go"})
 	if err != nil {
 		t.Fatalf("missing base should not error, got %v", err)
 	}
@@ -388,64 +391,62 @@ func TestChangedVsBase_MissingBaseIsUnknown(t *testing.T) {
 }
 
 func TestUnchanged_Predicate(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	sparkwing.SetWorkDir(r.dir)
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	setTestWorkDir(t, repository.directory)
 
 	if !Unchanged("HEAD", "*.go")(context.Background()) {
 		t.Fatal("clean tree vs HEAD should skip (unchanged=true)")
 	}
-	r.write("main.go", "package main // edit\n")
+	repository.write("main.go", "package main // edit\n")
 	if Unchanged("HEAD", "*.go")(context.Background()) {
 		t.Fatal("edited tree should not skip")
 	}
 }
 
-func TestUnchanged_MissingBaseFailsSafe(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	sparkwing.SetWorkDir(r.dir)
+func TestUnchanged_MissingBaseDoesNotSkip(t *testing.T) {
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	setTestWorkDir(t, repository.directory)
 
 	if Unchanged("origin/nope", "*.go")(context.Background()) {
-		t.Fatal("missing base must fail safe to run (unchanged=false)")
+		t.Fatal("missing base must return unchanged=false")
 	}
 }
 
 func TestChanged_IsInverseOfUnchanged(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	sparkwing.SetWorkDir(r.dir)
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	setTestWorkDir(t, repository.directory)
 
 	ctx := context.Background()
 	if Changed("HEAD", "*.go")(ctx) {
 		t.Fatal("clean tree should report not-changed")
 	}
-	r.write("main.go", "package main // edit\n")
+	repository.write("main.go", "package main // edit\n")
 	if !Changed("HEAD", "*.go")(ctx) {
 		t.Fatal("edited tree should report changed")
 	}
 }
 
-// goModuleRepo is the minimal shape GoDeps must reason about: a target
-// package, a same-module dependency, and test files.
 func goModuleRepo(t *testing.T) *repo {
 	t.Helper()
 	t.Setenv("GOWORK", "off")
-	r := newRepo(t)
-	r.write("go.mod", "module testmod\n\ngo 1.26\n")
-	r.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"hi\" }\n")
-	r.write("app/app.go", "package app\n\nimport \"testmod/lib\"\n\nfunc Greet() string { return lib.Hello() }\n")
-	r.write("app/app_test.go", "package app\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tif Greet() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
-	r.commitAll("init")
-	return r
+	repository := newRepo(t)
+	repository.write("go.mod", "module testmod\n\ngo 1.26\n")
+	repository.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"hi\" }\n")
+	repository.write("app/app.go", "package app\n\nimport \"testmod/lib\"\n\nfunc Greet() string { return lib.Hello() }\n")
+	repository.write("app/app_test.go", "package app\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {\n\tif Greet() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
+	repository.commitAll("init")
+	return repository
 }
 
 func hasPath(paths []string, want string) bool {
-	for _, p := range paths {
-		if p == want {
+	for _, path := range paths {
+		if path == want {
 			return true
 		}
 	}
@@ -453,8 +454,8 @@ func hasPath(paths []string, want string) bool {
 }
 
 func TestGoDeps_IncludesTargetSourceTestsAndSameModuleDeps(t *testing.T) {
-	r := goModuleRepo(t)
-	files, err := GoDeps(context.Background(), r.dir, "./app")
+	repository := goModuleRepo(t)
+	files, err := GoDeps(context.Background(), repository.directory, "./app")
 	if err != nil {
 		t.Fatalf("GoDeps: %v", err)
 	}
@@ -469,11 +470,11 @@ func TestGoDeps_IncludesTargetSourceTestsAndSameModuleDeps(t *testing.T) {
 }
 
 func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
-	r := goModuleRepo(t)
-	r.write("lib/lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) {\n\tif Hello() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
-	r.commitAll("lib test")
+	repository := goModuleRepo(t)
+	repository.write("lib/lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) {\n\tif Hello() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
+	repository.commitAll("lib test")
 
-	appDeps, err := GoDeps(context.Background(), r.dir, "./app")
+	appDeps, err := GoDeps(context.Background(), repository.directory, "./app")
 	if err != nil {
 		t.Fatalf("GoDeps(./app): %v", err)
 	}
@@ -481,7 +482,7 @@ func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
 		t.Errorf("a dependency's test file must not enter the target's closure; got %v", appDeps)
 	}
 
-	libDeps, err := GoDeps(context.Background(), r.dir, "./lib")
+	libDeps, err := GoDeps(context.Background(), repository.directory, "./lib")
 	if err != nil {
 		t.Fatalf("GoDeps(./lib): %v", err)
 	}
@@ -490,79 +491,107 @@ func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
 	}
 }
 
-func TestSaltedGoPackage_BustsWhenDependencyChanges(t *testing.T) {
-	r := goModuleRepo(t)
-	sparkwing.SetWorkDir(r.dir)
+func TestSaltedGoPackage_ChangesWhenDependencyChanges(t *testing.T) {
+	repository := goModuleRepo(t)
+	setTestWorkDir(t, repository.directory)
 	ctx := context.Background()
 
-	before := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	before, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if before.IsNoCache() {
 		t.Fatalf("expected a real key, got NoCache")
 	}
 
-	r.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"changed\" }\n")
-	afterDep := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	repository.write("lib/lib.go", "package lib\n\nfunc Hello() string { return \"changed\" }\n")
+	afterDep, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if afterDep == before {
-		t.Fatalf("editing a same-module dependency must bust the package key")
+		t.Fatalf("editing a same-module dependency must change the package key")
 	}
 }
 
 func TestSaltedGoPackage_UnaffectedByUnrelatedPackage(t *testing.T) {
-	r := goModuleRepo(t)
-	r.write("other/other.go", "package other\n\nfunc Noop() {}\n")
-	r.commitAll("other")
-	sparkwing.SetWorkDir(r.dir)
+	repository := goModuleRepo(t)
+	repository.write("other/other.go", "package other\n\nfunc Noop() {}\n")
+	repository.commitAll("other")
+	setTestWorkDir(t, repository.directory)
 	ctx := context.Background()
 
-	before := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
-	r.write("other/other.go", "package other\n\nfunc Noop() { _ = 1 }\n")
-	after := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	before, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository.write("other/other.go", "package other\n\nfunc Noop() { _ = 1 }\n")
+	after, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if after != before {
 		t.Fatalf("editing a package outside the closure must not change the key")
 	}
 }
 
 func TestSaltedGoPackage_DistinctPerSpec(t *testing.T) {
-	r := goModuleRepo(t)
-	sparkwing.SetWorkDir(r.dir)
+	repository := goModuleRepo(t)
+	setTestWorkDir(t, repository.directory)
 	ctx := context.Background()
 
-	app := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
-	lib := SaltedGoPackage("v1", "./lib", "go.mod")(ctx)
+	app, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := SaltedGoPackage("v1", "./lib", "go.mod")(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if app == lib {
 		t.Fatalf("distinct package specs must yield distinct keys: %q", app)
 	}
 }
 
-func TestOfGoPackage_NoCacheOutsideModule(t *testing.T) {
+func TestOfGoPackage_ErrorsOutsideModule(t *testing.T) {
 	t.Setenv("GOWORK", "off")
-	dir := t.TempDir()
-	sparkwing.SetWorkDir(dir)
-	key := OfGoPackage("./app")(context.Background())
-	if !key.IsNoCache() {
-		t.Fatalf("outside a Go module OfGoPackage should yield NoCache, got %q", key)
+	directory := t.TempDir()
+	setTestWorkDir(t, directory)
+	key, err := OfGoPackage("./app")(context.Background())
+	if key != "" || err == nil {
+		t.Fatalf("outside-module resolution = %q, %v; want empty key and error", key, err)
 	}
 }
 
-func TestOfPaths_NoCacheOutsideRepo(t *testing.T) {
-	dir := t.TempDir()
-	sparkwing.SetWorkDir(dir)
+func TestOfPaths_ErrorsOutsideRepo(t *testing.T) {
+	directory := t.TempDir()
+	setTestWorkDir(t, directory)
 
-	key := OfPaths("*.go")(context.Background())
-	if !key.IsNoCache() {
-		t.Fatalf("outside a git repo OfPaths should yield NoCache, got %q", key)
+	key, err := OfPaths("*.go")(context.Background())
+	if key != "" || err == nil {
+		t.Fatalf("outside-repository resolution = %q, %v; want empty key and error", key, err)
 	}
 }
 
 func TestOfPaths_WiresThroughWorkDir(t *testing.T) {
-	r := newRepo(t)
-	r.write("main.go", "package main\n")
-	r.commitAll("init")
-	sparkwing.SetWorkDir(r.dir)
+	repository := newRepo(t)
+	repository.write("main.go", "package main\n")
+	repository.commitAll("init")
+	setTestWorkDir(t, repository.directory)
 
-	viaExport := OfPaths("*.go")(context.Background())
-	viaCore := mustKey(t, r.dir, "", []string{"*.go"})
+	viaExport, err := OfPaths("*.go")(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaCore := mustKey(t, repository.directory, "", []string{"*.go"})
 	if viaExport != viaCore {
 		t.Fatalf("exported OfPaths disagrees with core: %q != %q", viaExport, viaCore)
 	}
+}
+
+func setTestWorkDir(t *testing.T, directory string) {
+	t.Helper()
+	previous := sparkwing.WorkDir()
+	sparkwing.SetWorkDir(directory)
+	t.Cleanup(func() { sparkwing.SetWorkDir(previous) })
 }

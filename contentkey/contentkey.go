@@ -1,8 +1,5 @@
-// Package contentkey turns a set of tracked files into a
-// content-addressed [sparkwing.CacheKey] for a node's .Memoize, or into a
-// changed/unchanged predicate for its .SkipIf. Globs are git pathspecs
-// resolved with `git ls-files` against [sparkwing.WorkDir], so only
-// tracked files count and an empty glob list means all of them.
+// Package contentkey provides cache keys and skip predicates over tracked files.
+// Globs are Git pathspecs relative to [sparkwing.WorkDir]; an empty list selects all tracked files.
 package contentkey
 
 import (
@@ -20,40 +17,43 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// keySchema versions the key layout: bumping it invalidates every key this
-// package has ever produced, independent of caller salt.
+// keySchema changes invalidate stored results independently of caller salt.
 const keySchema = "contentkey/v1"
 
 // OfPaths returns a cache-key function over the tracked files matching
-// globs, for a node's .Memoize. It returns [sparkwing.NoCache] when the
-// content cannot be hashed.
-func OfPaths(globs ...string) func(ctx context.Context) sparkwing.CacheKey {
+// globs. [sparkwing.WorkDir] must identify the project. Resolution errors fail
+// the node before cache lookup or execution.
+func OfPaths(globs ...string) sparkwing.CacheKeyFn {
 	return Salted("", globs...)
 }
 
 // Salted is [OfPaths] with a caller-supplied salt folded into the key, to
 // invalidate stored results when the content hash cannot see what changed.
-func Salted(salt string, globs ...string) func(ctx context.Context) sparkwing.CacheKey {
-	return func(ctx context.Context) sparkwing.CacheKey {
-		dir := workDir()
-		key, err := contentKey(ctx, dir, salt, globs)
-		if err != nil {
-			sparkwing.Warn(ctx, "contentkey: hashing %v failed, running uncached: %v", globs, err)
-			return sparkwing.NoCache
+func Salted(salt string, globs ...string) sparkwing.CacheKeyFn {
+	return func(runContext context.Context) (sparkwing.CacheKey, error) {
+		if err := runContext.Err(); err != nil {
+			return "", err
 		}
-		return key
+		directory := sparkwing.WorkDir()
+		if directory == "" {
+			return "", errors.New("cache resolution requires an SDK working directory")
+		}
+		key, err := contentKey(runContext, directory, salt, globs)
+		if err != nil {
+			return "", fmt.Errorf("hash paths %v: %w", globs, err)
+		}
+		return key, nil
 	}
 }
 
-// Unchanged returns a skip predicate that reports true when no tracked file
-// matching globs differs from baseRef. It fails safe: a missing baseRef or
-// any git error reports changed, so a broken base never skips work.
-func Unchanged(baseRef string, globs ...string) func(ctx context.Context) bool {
-	return func(ctx context.Context) bool {
-		dir := workDir()
-		changed, known, err := changedVsBase(ctx, dir, baseRef, globs)
+// Unchanged reports whether matching tracked files equal baseRef.
+// Missing references and Git failures return false.
+func Unchanged(baseRef string, globs ...string) func(runContext context.Context) bool {
+	return func(runContext context.Context) bool {
+		directory := workDir()
+		changed, known, err := changedVsBase(runContext, directory, baseRef, globs)
 		if err != nil {
-			sparkwing.Warn(ctx, "contentkey: diff against %q failed, not skipping: %v", baseRef, err)
+			sparkwing.Warn(runContext, "contentkey: diff against %q failed, not skipping: %v", baseRef, err)
 			return false
 		}
 		if !known {
@@ -63,100 +63,153 @@ func Unchanged(baseRef string, globs ...string) func(ctx context.Context) bool {
 	}
 }
 
-// Changed is the inverse of [Unchanged], sharing its fail-safe bias.
-func Changed(baseRef string, globs ...string) func(ctx context.Context) bool {
+// Changed is the inverse of [Unchanged].
+func Changed(baseRef string, globs ...string) func(runContext context.Context) bool {
 	unchanged := Unchanged(baseRef, globs...)
-	return func(ctx context.Context) bool {
-		return !unchanged(ctx)
+	return func(runContext context.Context) bool {
+		return !unchanged(runContext)
 	}
 }
 
 // OfGoPackage is [OfPaths] over the same-module dependency closure of the
-// Go package matching the `go list` pattern spec, plus extraGlobs. It
-// returns [sparkwing.NoCache] when the closure cannot be resolved.
-func OfGoPackage(spec string, extraGlobs ...string) func(ctx context.Context) sparkwing.CacheKey {
+// Go package matching spec, plus extraGlobs. Dependency and hashing failures
+// propagate through the returned resolver.
+func OfGoPackage(spec string, extraGlobs ...string) sparkwing.CacheKeyFn {
 	return SaltedGoPackage("", spec, extraGlobs...)
 }
 
 // SaltedGoPackage is [OfGoPackage] with a caller salt folded in. spec is
 // folded in too, so two packages sharing a salt never replay one another's
-// result even if their file closures coincide.
-func SaltedGoPackage(salt, spec string, extraGlobs ...string) func(ctx context.Context) sparkwing.CacheKey {
-	return func(ctx context.Context) sparkwing.CacheKey {
-		dir := workDir()
-		files, err := GoDeps(ctx, dir, spec)
+// result even if their file closures coincide. extraGlobs are project-relative.
+func SaltedGoPackage(salt, spec string, extraGlobs ...string) sparkwing.CacheKeyFn {
+	return func(runContext context.Context) (sparkwing.CacheKey, error) {
+		if err := runContext.Err(); err != nil {
+			return "", err
+		}
+		directory := sparkwing.WorkDir()
+		if directory == "" {
+			return "", errors.New("cache resolution requires an SDK working directory")
+		}
+		moduleRoot, files, err := goModuleSources(runContext, directory, spec)
 		if err != nil {
-			sparkwing.Warn(ctx, "contentkey: resolving go deps of %q failed, running uncached: %v", spec, err)
-			return sparkwing.NoCache
+			return "", fmt.Errorf("resolve Go dependencies for %q: %w", spec, err)
+		}
+		projectRoot, err := filepath.Abs(directory)
+		if err != nil {
+			return "", fmt.Errorf("resolve project directory %q: %w", directory, err)
+		}
+		projectRoot, err = filepath.EvalSymlinks(projectRoot)
+		if err != nil {
+			return "", fmt.Errorf("resolve project directory %q: %w", directory, err)
+		}
+		moduleRoot, err = filepath.EvalSymlinks(moduleRoot)
+		if err != nil {
+			return "", fmt.Errorf("resolve main module directory: %w", err)
 		}
 		paths := make([]string, 0, len(files)+len(extraGlobs))
-		paths = append(paths, files...)
-		paths = append(paths, extraGlobs...)
-		key, err := contentKey(ctx, dir, salt+"\x00gopkg="+spec, paths)
-		if err != nil {
-			sparkwing.Warn(ctx, "contentkey: hashing go deps of %q failed, running uncached: %v", spec, err)
-			return sparkwing.NoCache
+		for _, file := range files {
+			path, err := sourceRelativePath(projectRoot, moduleRoot, file)
+			if err != nil {
+				return "", err
+			}
+			paths = append(paths, filepath.ToSlash(path))
 		}
-		return key
+		paths = append(paths, extraGlobs...)
+		key, err := contentKey(runContext, directory, salt+"\x00gopkg="+spec, paths)
+		if err != nil {
+			return "", fmt.Errorf("hash Go dependencies for %q: %w", spec, err)
+		}
+		return key, nil
 	}
 }
 
 // GoDeps returns the module-relative Go source, test, and embedded files in
 // the same-module dependency closure of the package matching spec, as git
-// pathspecs for [OfPaths]. It requires the `go` tool and a module in dir.
-func GoDeps(ctx context.Context, dir, spec string) ([]string, error) {
-	pkgs, err := goListDeps(ctx, dir, spec)
-	if err != nil {
-		return nil, err
-	}
-	root := mainModuleDir(pkgs)
-	if root == "" {
-		return nil, nil
-	}
-	set := map[string]struct{}{}
-	for _, p := range pkgs {
-		if p.Standard || p.Dir == "" || p.Module == nil || !p.Module.Main {
-			continue
-		}
-		files := make([]string, 0, len(p.GoFiles)+len(p.CgoFiles)+len(p.EmbedFiles))
-		files = append(files, p.GoFiles...)
-		files = append(files, p.CgoFiles...)
-		files = append(files, p.EmbedFiles...)
-		if !p.DepOnly {
-			files = append(files, p.TestGoFiles...)
-			files = append(files, p.XTestGoFiles...)
-			files = append(files, p.TestEmbedFiles...)
-			files = append(files, p.XTestEmbedFiles...)
-		}
-		for _, f := range files {
-			if filepath.IsAbs(f) {
-				continue
-			}
-			rel, err := filepath.Rel(root, filepath.Join(p.Dir, f))
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				continue
-			}
-			set[filepath.ToSlash(rel)] = struct{}{}
-		}
-	}
-	out := make([]string, 0, len(set))
-	for f := range set {
-		out = append(out, f)
-	}
-	sort.Strings(out)
-	return out, nil
+// pathspecs relative to that module root. It requires the `go` tool.
+// [SaltedGoPackage] anchors these paths to [sparkwing.WorkDir] for hashing.
+func GoDeps(runContext context.Context, directory, spec string) ([]string, error) {
+	_, paths, err := goModuleSources(runContext, directory, spec)
+	return paths, err
 }
 
-// mainModuleDir takes the base for relative paths from the same `go list`
-// run as every package Dir, so filepath.Rel stays stable however the OS
-// resolves symlinks in the checkout path.
-func mainModuleDir(pkgs []goListPackage) string {
-	for _, p := range pkgs {
-		if p.Module != nil && p.Module.Main && p.Module.Dir != "" {
-			return p.Module.Dir
+func goModuleSources(runContext context.Context, directory, spec string) (string, []string, error) {
+	packages, err := goListDeps(runContext, directory, spec)
+	if err != nil {
+		return "", nil, err
+	}
+	root, err := mainModuleDir(packages)
+	if err != nil {
+		return "", nil, fmt.Errorf("resolve main module for %q: %w", spec, err)
+	}
+	set := map[string]struct{}{}
+	for _, listedPackage := range packages {
+		if listedPackage.Standard || listedPackage.Module == nil || !listedPackage.Module.Main || listedPackage.Module.Dir != root {
+			continue
+		}
+		if listedPackage.Dir == "" {
+			return "", nil, errors.New("main-module package has no source directory")
+		}
+		files := make([]string, 0, len(listedPackage.GoFiles)+len(listedPackage.CgoFiles)+len(listedPackage.EmbedFiles))
+		files = append(files, listedPackage.GoFiles...)
+		files = append(files, listedPackage.CgoFiles...)
+		files = append(files, listedPackage.EmbedFiles...)
+		if !listedPackage.DepOnly {
+			files = append(files, listedPackage.TestGoFiles...)
+			files = append(files, listedPackage.XTestGoFiles...)
+			files = append(files, listedPackage.TestEmbedFiles...)
+			files = append(files, listedPackage.XTestEmbedFiles...)
+		}
+		for _, file := range files {
+			if filepath.IsAbs(file) {
+				// SAFETY: Go's synthetic test driver names generated files in its build cache.
+				continue
+			}
+			relativePath, err := sourceRelativePath(root, listedPackage.Dir, file)
+			if err != nil {
+				return "", nil, err
+			}
+			set[filepath.ToSlash(relativePath)] = struct{}{}
 		}
 	}
-	return ""
+	paths := make([]string, 0, len(set))
+	for file := range set {
+		paths = append(paths, file)
+	}
+	sort.Strings(paths)
+	return root, paths, nil
+}
+
+// mainModuleDir uses the package listing's root so symlink resolution agrees with package paths.
+func mainModuleDir(packages []goListPackage) (string, error) {
+	root := ""
+	for _, listedPackage := range packages {
+		if listedPackage.DepOnly || listedPackage.Module == nil || !listedPackage.Module.Main {
+			continue
+		}
+		if listedPackage.Module.Dir == "" {
+			return "", errors.New("target package has no main module directory")
+		}
+		if root != "" && root != listedPackage.Module.Dir {
+			return "", errors.New("target packages belong to different main modules")
+		}
+		root = listedPackage.Module.Dir
+	}
+	if root == "" {
+		return "", errors.New("target package has no main module")
+	}
+	return root, nil
+}
+
+func sourceRelativePath(root, packageDirectory, file string) (string, error) {
+	path := filepath.Join(packageDirectory, file)
+	relativePath, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", fmt.Errorf("resolve source path %q relative to source root %q: %w", path, root, err)
+	}
+	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("source path %q is outside source root %q", path, root)
+	}
+	return relativePath, nil
 }
 
 type goListPackage struct {
@@ -178,39 +231,39 @@ type goListModule struct {
 	Dir  string
 }
 
-func goListDeps(ctx context.Context, dir, spec string) ([]goListPackage, error) {
-	res, err := sparkwing.Exec(ctx, "go", "list", "-deps", "-test", "-json", spec).Dir(dir).Capture()
+func goListDeps(runContext context.Context, directory, spec string) ([]goListPackage, error) {
+	result, err := sparkwing.Exec(runContext, "go", "list", "-deps", "-test", "-json", spec).Dir(directory).Capture()
 	if err != nil {
 		return nil, err
 	}
-	dec := json.NewDecoder(strings.NewReader(res.Stdout))
-	var pkgs []goListPackage
+	decoder := json.NewDecoder(strings.NewReader(result.Stdout))
+	var packages []goListPackage
 	for {
-		var p goListPackage
-		if err := dec.Decode(&p); err != nil {
+		var listedPackage goListPackage
+		if err := decoder.Decode(&listedPackage); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("decode go list output: %w", err)
 		}
-		pkgs = append(pkgs, p)
+		packages = append(packages, listedPackage)
 	}
-	return pkgs, nil
+	return packages, nil
 }
 
 func workDir() string {
-	if d := sparkwing.WorkDir(); d != "" {
-		return d
+	if directory := sparkwing.WorkDir(); directory != "" {
+		return directory
 	}
 	return "."
 }
 
-func contentKey(ctx context.Context, dir, salt string, globs []string) (sparkwing.CacheKey, error) {
-	paths, err := trackedFiles(ctx, dir, globs)
+func contentKey(runContext context.Context, directory, salt string, globs []string) (sparkwing.CacheKey, error) {
+	paths, err := trackedFiles(runContext, directory, globs)
 	if err != nil {
 		return "", err
 	}
-	paths, err = onDisk(dir, paths)
+	paths, err = onDisk(directory, paths)
 	if err != nil {
 		return "", err
 	}
@@ -220,38 +273,35 @@ func contentKey(ctx context.Context, dir, salt string, globs []string) (sparkwin
 		parts = append(parts, "salt="+salt)
 	}
 	if len(paths) > 0 {
-		hashes, err := hashObjects(ctx, dir, paths)
+		hashes, err := hashObjects(runContext, directory, paths)
 		if err != nil {
 			return "", err
 		}
 		if len(hashes) != len(paths) {
 			return "", fmt.Errorf("git hash-object returned %d hashes for %d paths", len(hashes), len(paths))
 		}
-		for i, p := range paths {
-			parts = append(parts, p+"="+hashes[i])
+		for i, path := range paths {
+			parts = append(parts, path+"="+hashes[i])
 		}
 	}
 	return sparkwing.Key(parts...), nil
 }
 
-func trackedFiles(ctx context.Context, dir string, globs []string) ([]string, error) {
-	args := append([]string{"ls-files", "--"}, globs...)
-	return sparkwing.Exec(ctx, "git", args...).Dir(dir).Lines()
+func trackedFiles(runContext context.Context, directory string, globs []string) ([]string, error) {
+	arguments := append([]string{"ls-files", "--"}, globs...)
+	return sparkwing.Exec(runContext, "git", arguments...).Dir(directory).Lines()
 }
 
-// onDisk drops tracked paths absent from the working tree, which `git
-// ls-files` still lists before the deletion is staged. Only a confirmed
-// absence drops a path: dropping on a transient Lstat fault would mint a
-// different key for identical content and replay the wrong result.
-func onDisk(dir string, paths []string) ([]string, error) {
+// onDisk excludes unstaged deletions. Other inspection failures preserve the error.
+func onDisk(directory string, paths []string) ([]string, error) {
 	kept := paths[:0:0]
-	for _, p := range paths {
-		_, err := os.Lstat(filepath.Join(dir, p))
+	for _, path := range paths {
+		_, err := os.Lstat(filepath.Join(directory, path))
 		switch {
 		case err == nil:
-			kept = append(kept, p)
+			kept = append(kept, path)
 		case errors.Is(err, fs.ErrNotExist):
-			// safety: deleted but still tracked, so absence folds into the key
+			// SAFETY: An unstaged deletion changes the key by removing its path.
 		default:
 			return nil, fmt.Errorf("stat tracked file: %w", err)
 		}
@@ -259,8 +309,8 @@ func onDisk(dir string, paths []string) ([]string, error) {
 	return kept, nil
 }
 
-func hashObjects(ctx context.Context, dir string, paths []string) ([]string, error) {
-	// hack: batch argv under ARG_MAX; sparkwing.Cmd has no stdin for --stdin-paths.
+func hashObjects(runContext context.Context, directory string, paths []string) ([]string, error) {
+	// SAFETY: Bound each argument list to fit the operating system execution limit.
 	const maxArgvBytes = 100_000
 	hashes := make([]string, 0, len(paths))
 	for start := 0; start < len(paths); {
@@ -273,8 +323,8 @@ func hashObjects(ctx context.Context, dir string, paths []string) ([]string, err
 			budget += cost
 			end++
 		}
-		args := append([]string{"hash-object", "--"}, paths[start:end]...)
-		batch, err := sparkwing.Exec(ctx, "git", args...).Dir(dir).Lines()
+		arguments := append([]string{"hash-object", "--"}, paths[start:end]...)
+		batch, err := sparkwing.Exec(runContext, "git", arguments...).Dir(directory).Lines()
 		if err != nil {
 			return nil, err
 		}
@@ -284,20 +334,19 @@ func hashObjects(ctx context.Context, dir string, paths []string) ([]string, err
 	return hashes, nil
 }
 
-// changedVsBase reports known=false when baseRef does not resolve, so a
-// missing base is never treated as "unchanged".
-func changedVsBase(ctx context.Context, dir, baseRef string, globs []string) (changed, known bool, err error) {
-	if _, rerr := sparkwing.Exec(ctx, "git", "rev-parse", "--verify", "--quiet", baseRef+"^{commit}").Dir(dir).String(); rerr != nil {
+// changedVsBase reports known=false when baseRef cannot be resolved.
+func changedVsBase(runContext context.Context, directory, baseRef string, globs []string) (changed, known bool, err error) {
+	if _, resolveError := sparkwing.Exec(runContext, "git", "rev-parse", "--verify", "--quiet", baseRef+"^{commit}").Dir(directory).String(); resolveError != nil {
 		return false, false, nil
 	}
-	args := append([]string{"diff", "--quiet", baseRef, "--"}, globs...)
-	_, derr := sparkwing.Exec(ctx, "git", args...).Dir(dir).Capture()
-	if derr == nil {
+	arguments := append([]string{"diff", "--quiet", baseRef, "--"}, globs...)
+	_, diffError := sparkwing.Exec(runContext, "git", arguments...).Dir(directory).Capture()
+	if diffError == nil {
 		return false, true, nil
 	}
 	var exitErr *sparkwing.ExecError
-	if errors.As(derr, &exitErr) && exitErr.ExitCode == 1 {
+	if errors.As(diffError, &exitErr) && exitErr.ExitCode == 1 {
 		return true, true, nil
 	}
-	return false, false, derr
+	return false, false, diffError
 }
