@@ -104,23 +104,25 @@ func tidyAllModules(ctx context.Context) error {
 }
 
 func lintAllModules(ctx context.Context) error {
-	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run ./...")
+	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run ./...", map[string]string{
+		"GOLANGCI_LINT_CACHE": sparkwing.ToolCacheDir("golangci-lint"),
+	})
 }
 
 func testRaceAllModules(ctx context.Context) error {
-	return forEachModuleDir(ctx, "go test -race", "go test -race ./...")
+	return forEachModuleDir(ctx, "go test -race", "go test -race ./...", nil)
 }
 
 // govulncheckAllModules compiles govulncheck against the current toolchain,
 // because a standalone binary on PATH is frozen to the Go version that
 // installed it and false-positives after a system Go upgrade.
 func govulncheckAllModules(ctx context.Context) error {
-	return forEachModuleDir(ctx, "govulncheck", "go run golang.org/x/vuln/cmd/govulncheck@latest ./...")
+	return forEachModuleDir(ctx, "govulncheck", "go run golang.org/x/vuln/cmd/govulncheck@latest ./...", nil)
 }
 
 // forEachModuleDir aggregates failures so every offending module shows in
 // one report, and skips modules with no Go packages.
-func forEachModuleDir(ctx context.Context, label, cmd string) error {
+func forEachModuleDir(ctx context.Context, label, cmd string, env map[string]string) error {
 	dirs, err := allModuleDirs()
 	if err != nil {
 		return err
@@ -134,7 +136,11 @@ func forEachModuleDir(ctx context.Context, label, cmd string) error {
 		if empty, err := moduleHasNoPackages(ctx, rel); err == nil && empty {
 			continue
 		}
-		if _, err := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && %s`, rel, cmd)).Run(); err != nil {
+		command := sparkwing.Bash(ctx, fmt.Sprintf(`cd %q && %s`, rel, cmd))
+		for key, value := range env {
+			command = command.Env(key, value)
+		}
+		if _, err := command.Run(); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", rel, err))
 		}
 	}
