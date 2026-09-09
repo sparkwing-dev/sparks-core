@@ -5,6 +5,8 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [v0.32.0] - 2026-09-09
+
 ### Changed
 
 - **Breaking:** `OfPaths`, `Salted`, `OfGoPackage`, and `SaltedGoPackage`
