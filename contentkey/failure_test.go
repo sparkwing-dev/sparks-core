@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -42,5 +43,38 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestCacheResolversRequireWorkingDirectory(t *testing.T) {
+	repository := goModuleRepo(t)
+	t.Chdir(repository.directory)
+	setTestWorkDir(t, "")
+	resolvers := map[string]sparkwing.CacheKeyFn{
+		"paths":          OfPaths("*.go"),
+		"salted paths":   Salted("example", "*.go"),
+		"package":        OfGoPackage("./app"),
+		"salted package": SaltedGoPackage("example", "./app"),
+	}
+	for name, resolver := range resolvers {
+		t.Run(name, func(t *testing.T) {
+			key, err := resolver(t.Context())
+			if key != "" || err == nil || !strings.Contains(err.Error(), "working directory") {
+				t.Fatalf("resolution without SDK working directory = %q, %v; want explicit directory error", key, err)
+			}
+		})
+	}
+}
+
+func TestGoPackageRequiresMainModule(t *testing.T) {
+	repository := goModuleRepo(t)
+	setTestWorkDir(t, repository.directory)
+	files, err := GoDeps(t.Context(), repository.directory, "fmt")
+	if files != nil || err == nil || !strings.Contains(err.Error(), "main module") {
+		t.Errorf("standard-library dependencies = %v, %v; want main module error", files, err)
+	}
+	key, err := SaltedGoPackage("example", "fmt")(t.Context())
+	if key != "" || err == nil || !strings.Contains(err.Error(), "main module") {
+		t.Errorf("standard-library key = %q, %v; want main module error", key, err)
 	}
 }
