@@ -1,79 +1,52 @@
 # Changelog: contentkey
 
-All notable changes to the **`github.com/sparkwing-dev/sparks-core/contentkey`** module
-are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
-versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-Tagging convention: `contentkey/vMAJOR.MINOR.PATCH` (per Go module
-multi-module repo conventions).
+Versions use [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
+
+### Changed
+
+- **Breaking:** `OfPaths`, `Salted`, `OfGoPackage`, and `SaltedGoPackage`
+  return `sparkwing.CacheKeyFn` with `(sparkwing.CacheKey, error)` results.
+  Direct callers must check the error. `Memoize` callers receive resolution
+  failures through the SDK and must use its error-returning cache API.
+- Hashing and Go dependency failures retain their causes and fail resolution.
+  Successful keys, including keys for unstaged deletions, retain their format.
 
 ## [v0.3.1] - 2026-08-12
 
 ### Fixed
-- **docs:** the godoc examples on `OfPaths`, `Salted`, `OfGoPackage` and
-  `SaltedGoPackage` showed `job.Cache(...)`, which sparkwing v0.32.1
-  renamed to `.Memoize(...)` with no alias, so copying one produced code
-  that did not compile. They show `job.Memoize(...)` now, as does the
-  package doc.
+
+- Updated cache modifier examples to `.Memoize(...)`.
 
 ### Changed
-- **deps:** raise the sparkwing SDK floor to v0.32.1, the first version
-  with the `.Memoize` modifier the examples demonstrate.
+
+- Raised the Sparkwing dependency to v0.32.1.
 
 ## [v0.3.0] - 2026-08-12
 
 ### Changed
-- **deps:** bump the sparkwing SDK to v0.31.0, which fixes silent
-  truncation of large command output in `Exec(...).Lines()`.
+
+- Raised the Sparkwing dependency to v0.31.0 for complete command output.
 
 ### Fixed
-- Cache keys no longer silently drop a tracked path when `Lstat` fails
-  for a reason other than the file being gone (e.g. transient
-  `EMFILE`/`EAGAIN` under load), which produced different keys for
-  identical inputs. Only a confirmed absence (deleted but not yet
-  staged) is dropped; any other stat failure surfaces as an error, so
-  `OfPaths`/`Salted`/`SaltedGoPackage` warn and run uncached instead of
-  replaying the wrong cached result.
+
+- Distinguished unstaged deletions from other file inspection failures.
+  Other failures produced an uncached result in this version.
 
 ## [v0.2.0] - 2026-07-18
 
 ### Added
-- `OfGoPackage` / `SaltedGoPackage` fold the content hash of a Go
-  package's same-module dependency closure into a `sparkwing.CacheKey`
-  for a node's `.Cache` modifier, so editing the package or any
-  same-module package it imports busts the key while an unrelated edit
-  does not. `SaltedGoPackage` adds a caller salt and always folds the
-  package spec in, so two packages never replay one another's result.
-- `GoDeps` returns the repo-relative Go source files in a package's
-  same-module dependency closure (its own source, test, and embedded
-  files, plus the non-test source of every same-module package it
-  transitively imports), resolved with `go list -deps -test`. Paths are
-  git pathspecs suitable for `OfPaths` / `Salted`. Files are made
-  relative to the module root `go list` reports, so resolution is stable
-  regardless of how the OS resolves symlinks in the checkout path.
+
+- Package cache keys include same-module source dependencies and target tests.
+- `SaltedGoPackage` includes the package specification in the key.
+- `GoDeps` returns module-relative source, test, and embedded file paths.
 
 ## [v0.1.0] - 2026-07-18
 
 ### Added
-- Initial release. Content-addressed cache keys and path-scoped skip
-  predicates over tracked files.
-  - `OfPaths` / `Salted` fold the content hash of the tracked files
-    under a set of git pathspecs into a `sparkwing.CacheKey` for a
-    node's `.Cache` modifier; an unchanged tree replays the recorded
-    result. `Salted` adds a caller version component to bust every key
-    at once.
-  - `Unchanged` / `Changed` compare the working tree against a base ref
-    with `git diff` and return a skip predicate for a node's `.SkipIf`
-    modifier. Both fail safe: a missing base ref or git error runs the
-    work rather than skipping it.
-  - File sets come from `git ls-files`, so only tracked files are
-    hashed and `.gitignore` is honored. Every function reads git state
-    only and never mutates the repository.
-  - Cache keys hash paths in argv-size-bounded batches, so covering
-    every tracked file on a large monorepo no longer risks exceeding the
-    OS argument-length limit.
-  - A tracked file that has been deleted from the working tree but not
-    yet staged is dropped from the key (registering as an ordinary
-    change) instead of forcing an uncached run.
+
+- Tracked-file cache keys, caller salts, and path-scoped change predicates.
+- Batched hashing within the operating system argument limit.
+- Unstaged deletions change the key by removing the deleted path.
