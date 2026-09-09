@@ -21,7 +21,8 @@ import (
 const keySchema = "contentkey/v1"
 
 // OfPaths returns a cache-key function over the tracked files matching
-// globs. Resolution errors fail the node before cache lookup or execution.
+// globs. [sparkwing.WorkDir] must identify the project. Resolution errors fail
+// the node before cache lookup or execution.
 func OfPaths(globs ...string) sparkwing.CacheKeyFn {
 	return Salted("", globs...)
 }
@@ -33,7 +34,10 @@ func Salted(salt string, globs ...string) sparkwing.CacheKeyFn {
 		if err := runContext.Err(); err != nil {
 			return "", err
 		}
-		directory := workDir()
+		directory := sparkwing.WorkDir()
+		if directory == "" {
+			return "", errors.New("cache resolution requires an SDK working directory")
+		}
 		key, err := contentKey(runContext, directory, salt, globs)
 		if err != nil {
 			return "", fmt.Errorf("hash paths %v: %w", globs, err)
@@ -82,7 +86,10 @@ func SaltedGoPackage(salt, spec string, extraGlobs ...string) sparkwing.CacheKey
 		if err := runContext.Err(); err != nil {
 			return "", err
 		}
-		directory := workDir()
+		directory := sparkwing.WorkDir()
+		if directory == "" {
+			return "", errors.New("cache resolution requires an SDK working directory")
+		}
 		files, err := GoDeps(runContext, directory, spec)
 		if err != nil {
 			return "", fmt.Errorf("resolve Go dependencies for %q: %w", spec, err)
@@ -106,14 +113,17 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	root := mainModuleDir(packages)
-	if root == "" {
-		return nil, nil
+	root, err := mainModuleDir(packages)
+	if err != nil {
+		return nil, fmt.Errorf("resolve main module for %q: %w", spec, err)
 	}
 	set := map[string]struct{}{}
 	for _, listedPackage := range packages {
-		if listedPackage.Standard || listedPackage.Dir == "" || listedPackage.Module == nil || !listedPackage.Module.Main {
+		if listedPackage.Standard || listedPackage.Module == nil || !listedPackage.Module.Main || listedPackage.Module.Dir != root {
 			continue
+		}
+		if listedPackage.Dir == "" {
+			return nil, errors.New("main-module package has no source directory")
 		}
 		files := make([]string, 0, len(listedPackage.GoFiles)+len(listedPackage.CgoFiles)+len(listedPackage.EmbedFiles))
 		files = append(files, listedPackage.GoFiles...)
@@ -127,11 +137,12 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 		}
 		for _, file := range files {
 			if filepath.IsAbs(file) {
+				// SAFETY: Go's synthetic test driver names generated files in its build cache.
 				continue
 			}
-			relativePath, err := filepath.Rel(root, filepath.Join(listedPackage.Dir, file))
-			if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
-				continue
+			relativePath, err := moduleRelativePath(root, listedPackage.Dir, file)
+			if err != nil {
+				return nil, err
 			}
 			set[filepath.ToSlash(relativePath)] = struct{}{}
 		}
@@ -145,13 +156,36 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 }
 
 // mainModuleDir uses the package listing's root so symlink resolution agrees with package paths.
-func mainModuleDir(packages []goListPackage) string {
+func mainModuleDir(packages []goListPackage) (string, error) {
+	root := ""
 	for _, listedPackage := range packages {
-		if listedPackage.Module != nil && listedPackage.Module.Main && listedPackage.Module.Dir != "" {
-			return listedPackage.Module.Dir
+		if listedPackage.DepOnly || listedPackage.Module == nil || !listedPackage.Module.Main {
+			continue
 		}
+		if listedPackage.Module.Dir == "" {
+			return "", errors.New("target package has no main module directory")
+		}
+		if root != "" && root != listedPackage.Module.Dir {
+			return "", errors.New("target packages belong to different main modules")
+		}
+		root = listedPackage.Module.Dir
 	}
-	return ""
+	if root == "" {
+		return "", errors.New("target package has no main module")
+	}
+	return root, nil
+}
+
+func moduleRelativePath(root, packageDirectory, file string) (string, error) {
+	path := filepath.Join(packageDirectory, file)
+	relativePath, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", fmt.Errorf("resolve source path %q relative to main module %q: %w", path, root, err)
+	}
+	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("source path %q is outside main module %q", path, root)
+	}
+	return relativePath, nil
 }
 
 type goListPackage struct {

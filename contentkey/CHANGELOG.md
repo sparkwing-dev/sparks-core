@@ -13,6 +13,9 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
   failures through the SDK and must use its error-returning cache API.
 - Hashing and Go dependency failures retain their causes and fail resolution.
   Successful keys, including keys for unstaged deletions, retain their format.
+- Cache resolution requires `sparkwing.WorkDir()` to identify the project.
+  Standalone callers and test fixtures must bind it with `sparkwing.SetWorkDir`.
+  Go package keys require one target main module and resolvable source paths.
 
 ## [v0.3.1] - 2026-08-12
 

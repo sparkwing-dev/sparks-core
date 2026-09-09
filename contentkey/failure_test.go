@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -76,5 +77,45 @@ func TestGoPackageRequiresMainModule(t *testing.T) {
 	key, err := SaltedGoPackage("example", "fmt")(t.Context())
 	if key != "" || err == nil || !strings.Contains(err.Error(), "main module") {
 		t.Errorf("standard-library key = %q, %v; want main module error", key, err)
+	}
+}
+
+func TestMainModuleUsesTargetOwnership(t *testing.T) {
+	dependencyRoot := filepath.Join(t.TempDir(), "dependency")
+	targetRoot := filepath.Join(t.TempDir(), "target")
+	packages := []goListPackage{
+		{DepOnly: true, Module: &goListModule{Main: true, Dir: dependencyRoot}},
+		{Module: &goListModule{Main: true, Dir: targetRoot}},
+	}
+	root, err := mainModuleDir(packages)
+	if err != nil || root != targetRoot {
+		t.Fatalf("main module = %q, %v; want target root %q", root, err, targetRoot)
+	}
+	packages = append(packages, goListPackage{Module: &goListModule{Main: true, Dir: dependencyRoot}})
+	if root, err := mainModuleDir(packages); root != "" || err == nil {
+		t.Fatalf("multiple target roots = %q, %v; want error", root, err)
+	}
+	if root, err := mainModuleDir([]goListPackage{{Module: &goListModule{Main: true}}}); root != "" || err == nil {
+		t.Fatalf("missing main module directory = %q, %v; want error", root, err)
+	}
+}
+
+func TestModuleRelativePathRejectsUnresolvedSources(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "module")
+	cases := map[string]string{
+		"outside module":     filepath.Join(t.TempDir(), "outside"),
+		"relative directory": "relative-package",
+	}
+	for name, directory := range cases {
+		t.Run(name, func(t *testing.T) {
+			path, err := moduleRelativePath(root, directory, "source.go")
+			if path != "" || err == nil {
+				t.Fatalf("source path = %q, %v; want empty path and error", path, err)
+			}
+		})
+	}
+	path, err := moduleRelativePath(root, filepath.Join(root, "package"), "source.go")
+	if err != nil || path != filepath.Join("package", "source.go") {
+		t.Fatalf("source path = %q, %v; want module-relative source", path, err)
 	}
 }
