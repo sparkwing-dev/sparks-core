@@ -104,7 +104,7 @@ func tidyAllModules(ctx context.Context) error {
 }
 
 func lintAllModules(ctx context.Context) error {
-	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run ./...", map[string]string{
+	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run --allow-serial-runners ./...", map[string]string{
 		"GOLANGCI_LINT_CACHE": sparkwing.ToolCacheDir("golangci-lint"),
 	})
 }
