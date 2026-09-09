@@ -5,20 +5,31 @@ parameterized starting point for a sparkwing pipeline -- the simplified
 canonical version of patterns that already work in production consumer
 repos.
 
-Pull a template via the sparkwing CLI:
+## Rendering
 
-```sh
-sparkwing pipeline templates                               # list available
-sparkwing pipeline templates --name static-deploy-s3-cloudfront
-sparkwing pipeline new --name deploy \
-    --template static-deploy-s3-cloudfront \
-    --param bucket=mysite \
-    --param distribution=ABCD1234
+Read each template's `template.yaml` for parameters and its README for
+prerequisites. Render through this module's Go API:
+
+```go
+package example
+
+import "github.com/sparkwing-dev/sparks-core/templates"
+
+func renderPipeline() (string, error) {
+    return templates.Render("lint-test-python", map[string]string{
+        "pipeline-name": "checks",
+        "typecheck-cmd": "",
+    })
+}
 ```
 
-Or read them directly here: each template is a directory containing a
-`template.yaml` manifest, a `pipeline.go.tmpl` Go-template body, and a
-`README.md` explaining when to use it.
+Save the returned source under `.sparkwing/jobs/` in a Sparkwing pipeline
+module. Add its imported dependencies to that module's `go.mod`, then compile
+and inspect the plan before running it. An omitted parameter uses its manifest
+default; an explicit empty string removes an optional command.
+
+Sparkwing's `pipeline new --template` selects built-in DAG shapes. It does not
+render this registry's named templates or accept their parameters.
 
 ## Templates
 

@@ -9,6 +9,17 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Fixed
+
+- **lint-test-python:** generated help describes configured checks and optional
+  installation without promising the default tools when commands are omitted
+  or replaced.
+- **template guidance:** show registry rendering through the Go API and make
+  the optional golangci-lint invocation wait for a competing runner.
+- **static-deploy-s3-cloudfront:** remove memoization advice that hashes build
+  output before the job builds it. Describe the existing build-only seam and
+  artifact requirements for separate jobs.
+
 ## [v0.31.0] - 2026-08-12
 
 ### Removed

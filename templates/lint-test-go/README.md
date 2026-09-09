@@ -38,11 +38,10 @@ can, Bash when you must.
 `vet` and `gofmt` always cover the whole module (`./...` and `.`); only
 `test` is scoped via `test-args`.
 
-## Scaffold
+## Render
 
-```sh
-sparkwing pipeline new --name lint-test --template lint-test-go
-```
+Use `templates.Render("lint-test-go", params)` as described in the
+[registry README](../README.md#rendering).
 
 ## After rendering
 
@@ -50,7 +49,13 @@ Add a wider Go-lint set by copying one of the check methods and wiring
 another `sparkwing.Job(...)` in `Plan`:
 
 - staticcheck: `sparkwing.Exec(ctx, "staticcheck", "./...")`.
-- golangci-lint: `sparkwing.Exec(ctx, "golangci-lint", "run")`.
+- golangci-lint: `sparkwing.Exec(ctx, "golangci-lint", "run", "--allow-serial-runners")`.
 
 Each is an independent node, so it reports alongside the others in a
 single run.
+
+`--allow-serial-runners` waits for another lint process to release its lock.
+Set a timeout on the lint job to bound that wait.
+For separate worktrees, also set `GOLANGCI_LINT_CACHE` on the command to
+`sparkwing.ToolCacheDir("golangci-lint")` so cached diagnostics stay scoped
+to the checkout.

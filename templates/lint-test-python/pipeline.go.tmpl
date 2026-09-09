@@ -1,5 +1,4 @@
-// Code scaffolded by `sparkwing pipeline new --template
-// lint-test-python`. Edit freely -- nothing here re-runs.
+// Rendered from sparks-core/templates/lint-test-python. Edit freely.
 package jobs
 
 import (
@@ -8,17 +7,17 @@ import (
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
-// {{pascal .pipeline_name}} installs the environment, then runs the format,
-// lint, typecheck, and test checks as independent parallel nodes on Python
-// {{.python_version}}. A check whose command is empty is absent from the DAG.
+// {{pascal .pipeline_name}} runs the configured Python {{.python_version}} checks in parallel.
+// When configured, environment installation precedes the checks.
+// Empty commands are absent from the DAG.
 type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
-	return "Python CI hygiene: ruff format + ruff check + mypy + pytest"
+	return "Python CI: configured checks"
 }
 
 func ({{pascal .pipeline_name}}) Help() string {
-	return "Installs the environment, then runs ruff format --check, ruff check, mypy, and pytest in parallel. Targets Python {{.python_version}}. Each check is independent so a single run surfaces every problem at once. Every command is a parameter -- swap the uv defaults for pip/poetry forms, or leave one empty to drop that node."
+	return "Runs the configured format, lint, typecheck, and test commands as independent parallel checks for Python {{.python_version}}. Empty commands are omitted. When an install command is configured, checks wait for it to finish."
 }
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {

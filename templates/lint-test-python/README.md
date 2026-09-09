@@ -51,11 +51,10 @@ errors. ruff tolerates `.` (it ships a broad default-exclude list); mypy
 does not. Point `typecheck-cmd` at your package (`uv run mypy src`) if
 that bites.
 
-## Scaffold
+## Render
 
-```sh
-sparkwing pipeline new --name lint-test-python --template lint-test-python
-```
+Use `templates.Render("lint-test-python", params)` as described in the
+[registry README](../README.md#rendering).
 
 ## After rendering
 

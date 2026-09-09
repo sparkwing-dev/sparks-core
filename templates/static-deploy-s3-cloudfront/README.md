@@ -53,17 +53,16 @@ Edit the rendered `.sparkwing/jobs/<name>.go` to:
   site reads (the default forwards `NEXT_PUBLIC_` and `NEXT_EXPORT`).
 - Add `Excludes` if a separate pipeline ships artifacts to the same
   bucket (e.g. `releases/*` for a CLI binary tarball).
-- Add a `.Memoize(...)` modifier if you want skip-on-noop behavior --
-  commits that don't change `out/` replay instead of redeploying.
-  Override `Plan` on the outer type and attach the cache to the job,
-  keying on the build output:
 
-  ```go
-  func (d *Deploy) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-  	sparkwing.Job(plan, run.Pipeline, d.Run).
-  		Memoize(func(context.Context) sparkwing.CacheKey {
-  			return sparkwing.Key("static-deploy", buildOutputHash())
-  		})
-  	return nil
-  }
-  ```
+`StaticDeploy.Run` performs build, validation and deployment in order inside
+one job. Use `StaticDeploy.BuildOnly` when a build-and-check pipeline should
+stop before deployment. If you split these into separate jobs, declare the
+dependency with `.Needs(build)` and transfer the built files as artifacts;
+ordering alone does not give jobs a shared filesystem.
+
+A memoization key is evaluated before its job runs. Avoid keying the combined
+build-and-deploy job on `out/`, because that output has not been built yet.
+Memoize a separate deployment step only after its build output is available,
+and include the output digest, destination and deployment configuration in
+the key. Consider whether replay should skip deployment when remote state
+has changed independently of the source.
