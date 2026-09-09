@@ -242,7 +242,7 @@ func TestContentKey_DeletedTrackedFileDropsFromKey(t *testing.T) {
 	}
 	after := mustKey(t, repository.directory, "", globs)
 	if after == "" || after.IsNoCache() {
-		t.Fatalf("deleted-but-tracked file should not bust the key to NoCache, got %q", after)
+		t.Fatalf("unstaged deletion returned an unusable key %q", after)
 	}
 	if after == before {
 		t.Fatalf("deleting a tracked file did not change the key: %q", before)
@@ -405,14 +405,14 @@ func TestUnchanged_Predicate(t *testing.T) {
 	}
 }
 
-func TestUnchanged_MissingBaseFailsSafe(t *testing.T) {
+func TestUnchanged_MissingBaseDoesNotSkip(t *testing.T) {
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 	setTestWorkDir(t, repository.directory)
 
 	if Unchanged("origin/nope", "*.go")(context.Background()) {
-		t.Fatal("missing base must fail safe to run (unchanged=false)")
+		t.Fatal("missing base must return unchanged=false")
 	}
 }
 
@@ -491,7 +491,7 @@ func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
 	}
 }
 
-func TestSaltedGoPackage_BustsWhenDependencyChanges(t *testing.T) {
+func TestSaltedGoPackage_ChangesWhenDependencyChanges(t *testing.T) {
 	repository := goModuleRepo(t)
 	setTestWorkDir(t, repository.directory)
 	ctx := context.Background()
@@ -510,7 +510,7 @@ func TestSaltedGoPackage_BustsWhenDependencyChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if afterDep == before {
-		t.Fatalf("editing a same-module dependency must bust the package key")
+		t.Fatalf("editing a same-module dependency must change the package key")
 	}
 }
 
