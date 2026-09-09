@@ -2,7 +2,7 @@ module github.com/sparkwing-dev/sparks-core/contentkey
 
 go 1.26.0
 
-require github.com/sparkwing-dev/sparkwing v0.46.1-0.20260909020606-64572d1878e8
+require github.com/sparkwing-dev/sparkwing v0.47.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
