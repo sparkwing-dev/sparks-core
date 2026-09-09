@@ -16,6 +16,8 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 - Cache resolution requires `sparkwing.WorkDir()` to identify the project.
   Standalone callers and test fixtures must bind it with `sparkwing.SetWorkDir`.
   Go package keys require one target main module and resolvable source paths.
+- Nested workspace package keys anchor dependency paths to the project root.
+  Extra pathspecs remain project-relative.
 
 ## [v0.3.1] - 2026-08-12
 

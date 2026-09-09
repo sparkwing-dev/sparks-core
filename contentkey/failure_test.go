@@ -108,13 +108,13 @@ func TestModuleRelativePathRejectsUnresolvedSources(t *testing.T) {
 	}
 	for name, directory := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, err := moduleRelativePath(root, directory, "source.go")
+			path, err := sourceRelativePath(root, directory, "source.go")
 			if path != "" || err == nil {
 				t.Fatalf("source path = %q, %v; want empty path and error", path, err)
 			}
 		})
 	}
-	path, err := moduleRelativePath(root, filepath.Join(root, "package"), "source.go")
+	path, err := sourceRelativePath(root, filepath.Join(root, "package"), "source.go")
 	if err != nil || path != filepath.Join("package", "source.go") {
 		t.Fatalf("source path = %q, %v; want module-relative source", path, err)
 	}

@@ -80,7 +80,7 @@ func OfGoPackage(spec string, extraGlobs ...string) sparkwing.CacheKeyFn {
 
 // SaltedGoPackage is [OfGoPackage] with a caller salt folded in. spec is
 // folded in too, so two packages sharing a salt never replay one another's
-// result even if their file closures coincide.
+// result even if their file closures coincide. extraGlobs are project-relative.
 func SaltedGoPackage(salt, spec string, extraGlobs ...string) sparkwing.CacheKeyFn {
 	return func(runContext context.Context) (sparkwing.CacheKey, error) {
 		if err := runContext.Err(); err != nil {
@@ -90,12 +90,30 @@ func SaltedGoPackage(salt, spec string, extraGlobs ...string) sparkwing.CacheKey
 		if directory == "" {
 			return "", errors.New("cache resolution requires an SDK working directory")
 		}
-		files, err := GoDeps(runContext, directory, spec)
+		moduleRoot, files, err := goModuleSources(runContext, directory, spec)
 		if err != nil {
 			return "", fmt.Errorf("resolve Go dependencies for %q: %w", spec, err)
 		}
+		projectRoot, err := filepath.Abs(directory)
+		if err != nil {
+			return "", fmt.Errorf("resolve project directory %q: %w", directory, err)
+		}
+		projectRoot, err = filepath.EvalSymlinks(projectRoot)
+		if err != nil {
+			return "", fmt.Errorf("resolve project directory %q: %w", directory, err)
+		}
+		moduleRoot, err = filepath.EvalSymlinks(moduleRoot)
+		if err != nil {
+			return "", fmt.Errorf("resolve main module directory: %w", err)
+		}
 		paths := make([]string, 0, len(files)+len(extraGlobs))
-		paths = append(paths, files...)
+		for _, file := range files {
+			path, err := sourceRelativePath(projectRoot, moduleRoot, file)
+			if err != nil {
+				return "", err
+			}
+			paths = append(paths, filepath.ToSlash(path))
+		}
 		paths = append(paths, extraGlobs...)
 		key, err := contentKey(runContext, directory, salt+"\x00gopkg="+spec, paths)
 		if err != nil {
@@ -107,15 +125,21 @@ func SaltedGoPackage(salt, spec string, extraGlobs ...string) sparkwing.CacheKey
 
 // GoDeps returns the module-relative Go source, test, and embedded files in
 // the same-module dependency closure of the package matching spec, as git
-// pathspecs for [OfPaths]. It requires the `go` tool and a module in directory.
+// pathspecs relative to that module root. It requires the `go` tool.
+// [SaltedGoPackage] anchors these paths to [sparkwing.WorkDir] for hashing.
 func GoDeps(runContext context.Context, directory, spec string) ([]string, error) {
+	_, paths, err := goModuleSources(runContext, directory, spec)
+	return paths, err
+}
+
+func goModuleSources(runContext context.Context, directory, spec string) (string, []string, error) {
 	packages, err := goListDeps(runContext, directory, spec)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	root, err := mainModuleDir(packages)
 	if err != nil {
-		return nil, fmt.Errorf("resolve main module for %q: %w", spec, err)
+		return "", nil, fmt.Errorf("resolve main module for %q: %w", spec, err)
 	}
 	set := map[string]struct{}{}
 	for _, listedPackage := range packages {
@@ -123,7 +147,7 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 			continue
 		}
 		if listedPackage.Dir == "" {
-			return nil, errors.New("main-module package has no source directory")
+			return "", nil, errors.New("main-module package has no source directory")
 		}
 		files := make([]string, 0, len(listedPackage.GoFiles)+len(listedPackage.CgoFiles)+len(listedPackage.EmbedFiles))
 		files = append(files, listedPackage.GoFiles...)
@@ -140,9 +164,9 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 				// SAFETY: Go's synthetic test driver names generated files in its build cache.
 				continue
 			}
-			relativePath, err := moduleRelativePath(root, listedPackage.Dir, file)
+			relativePath, err := sourceRelativePath(root, listedPackage.Dir, file)
 			if err != nil {
-				return nil, err
+				return "", nil, err
 			}
 			set[filepath.ToSlash(relativePath)] = struct{}{}
 		}
@@ -152,7 +176,7 @@ func GoDeps(runContext context.Context, directory, spec string) ([]string, error
 		paths = append(paths, file)
 	}
 	sort.Strings(paths)
-	return paths, nil
+	return root, paths, nil
 }
 
 // mainModuleDir uses the package listing's root so symlink resolution agrees with package paths.
@@ -176,14 +200,14 @@ func mainModuleDir(packages []goListPackage) (string, error) {
 	return root, nil
 }
 
-func moduleRelativePath(root, packageDirectory, file string) (string, error) {
+func sourceRelativePath(root, packageDirectory, file string) (string, error) {
 	path := filepath.Join(packageDirectory, file)
 	relativePath, err := filepath.Rel(root, path)
 	if err != nil {
-		return "", fmt.Errorf("resolve source path %q relative to main module %q: %w", path, root, err)
+		return "", fmt.Errorf("resolve source path %q relative to source root %q: %w", path, root, err)
 	}
 	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("source path %q is outside main module %q", path, root)
+		return "", fmt.Errorf("source path %q is outside source root %q", path, root)
 	}
 	return relativePath, nil
 }
