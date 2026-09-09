@@ -3,7 +3,7 @@
 Versions use [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
-## [Unreleased]
+## [v0.4.0]
 
 ### Changed
 
