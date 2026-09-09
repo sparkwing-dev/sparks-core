@@ -24,7 +24,7 @@ freely.
 | [checks](checks/) | `github.com/sparkwing-dev/sparks-core/checks` | Pre-commit checks: formatting, linting, trailing newlines |
 | [probe](probe/) | `github.com/sparkwing-dev/sparks-core/probe` | HTTP health probes for post-deploy verification; Check feeds sparkwing Job.Verify, with unhealthy-vs-indeterminate classification |
 | [pipelines](pipelines/) | `github.com/sparkwing-dev/sparks-core/pipelines` | High-level pipeline primitives: DockerDeploy, StaticDeploy, NextJSBuild |
-| [templates](templates/) | `github.com/sparkwing-dev/sparks-core/templates` | Curated pipeline template registry: deterministic starters consumed by sparkwing pipeline new --template |
+| [templates](templates/) | `github.com/sparkwing-dev/sparks-core/templates` | Curated pipeline template registry: deterministic starters rendered through the templates Go API |
 | [gcp](gcp/) | `github.com/sparkwing-dev/sparks-core/gcp` | GCP project/auth resolution and Workload Identity detection, twin of the aws module |
 | [cloudrun](cloudrun/) | `github.com/sparkwing-dev/sparks-core/cloudrun` | Cloud Run deploy, traffic shifting, URL discovery, and rollback via gcloud |
 | [ecs](ecs/) | `github.com/sparkwing-dev/sparks-core/ecs` | ECS/Fargate task-definition rollout, wait-for-stable, and rollback |
