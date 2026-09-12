@@ -39,8 +39,9 @@ type commentViolation struct {
 // defaulting to the whole tree. It allows godoc on a top-level declaration,
 // struct field, or interface method; the tagged implementation comments
 // // hack:, // safety:, // bug:, and // perf:; and compiler directives.
-// Everything else fails. Paths resolve relative to sparkwing.WorkDir(),
-// whose cwd a compiled pipeline binary does not share.
+// Everything else fails. It skips files carrying the generated-code marker
+// described at https://go.dev/s/generatedcode. Paths resolve relative to
+// sparkwing.WorkDir(), whose cwd a compiled pipeline binary does not share.
 func Comments(ctx context.Context, paths ...string) error {
 	if len(paths) == 0 {
 		paths = []string{"."}
@@ -103,6 +104,9 @@ func checkCommentsFile(path string) ([]commentViolation, error) {
 	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
+	}
+	if ast.IsGenerated(f) {
+		return nil, nil
 	}
 
 	allowed := map[*ast.CommentGroup]bool{}
