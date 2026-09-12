@@ -9,6 +9,11 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+- **comments:** skip files carrying the generated-code marker
+  (`// Code generated ... DO NOT EDIT.`), so a generator can emit the
+  conventional detached header instead of attaching it to the package clause.
+
 ## [v0.26.0] - 2026-08-12
 
 ### Changed
