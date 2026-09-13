@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -102,7 +103,18 @@ func tidyAllModules(ctx context.Context) error {
 	return nil
 }
 
+// lintAllModules refuses before the per-module loop when the linter is
+// missing, so a stock PATH reports the tool to install rather than the same
+// exec failure once per module. The linter stays a PATH dependency rather
+// than a pinned `go run` like its siblings here, because the pinning that
+// caches well is a tool directive in this module's go.mod, and that pulls
+// golangci-lint's whole dependency tree into a manifest the repository keeps
+// on published dependencies.
 func lintAllModules(ctx context.Context) error {
+	if _, err := exec.LookPath("golangci-lint"); err != nil {
+		return fmt.Errorf("golangci-lint is not on PATH; .golangci.yml needs v2. "+
+			"Install from https://golangci-lint.run/docs/welcome/install/, or add its directory (commonly ~/.go/bin): %w", err)
+	}
 	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run --allow-serial-runners ./...", map[string]string{
 		"GOLANGCI_LINT_CACHE": sparkwing.ToolCacheDir("golangci-lint"),
 	})
@@ -112,11 +124,16 @@ func testRaceAllModules(ctx context.Context) error {
 	return forEachModuleDir(ctx, "go test -race", "go test -race ./...", nil)
 }
 
+// govulncheckModule pins the scanner itself, so the gate stops changing tool
+// version under the repository. The advisory database is still fetched at run
+// time, and a new advisory against a dependency still reds the step.
+const govulncheckModule = "golang.org/x/vuln/cmd/govulncheck@v1.8.0"
+
 // govulncheckAllModules compiles govulncheck against the current toolchain,
 // because a standalone binary on PATH is frozen to the Go version that
 // installed it and false-positives after a system Go upgrade.
 func govulncheckAllModules(ctx context.Context) error {
-	return forEachModuleDir(ctx, "govulncheck", "go run golang.org/x/vuln/cmd/govulncheck@latest ./...", nil)
+	return forEachModuleDir(ctx, "govulncheck", "go run "+govulncheckModule+" ./...", nil)
 }
 
 // forEachModuleDir aggregates failures so every offending module shows in
