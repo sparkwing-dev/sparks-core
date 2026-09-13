@@ -12,8 +12,7 @@ import (
 // PrePush gates pushes to main. Per-module checks run against every go.mod
 // under the repo root; the rest run once at the repo level. Wire it to git
 // by declaring `pre_push:` in pipelines.yaml and running `sparkwing pipeline
-// hooks install`. It assumes golangci-lint, shellcheck, and
-// markdownlint-cli2 on PATH.
+// hooks install`. It assumes golangci-lint, shellcheck and node/npx on PATH.
 type PrePush struct{ sparkwing.Base }
 
 func (PrePush) ShortHelp() string {
@@ -173,8 +172,13 @@ func runShellcheck(ctx context.Context) error {
 	return err
 }
 
+// markdownlintCommand pins the linter's version and lets npx fetch it, so the
+// gate does not turn on whether this machine has that binary on its PATH. npx
+// itself it does need, and a cold npx cache needs the network.
+const markdownlintCommand = "npx --yes markdownlint-cli2@0.23.2"
+
 func runMarkdownlint(ctx context.Context) error {
-	_, err := sparkwing.Bash(ctx, "markdownlint-cli2").Run()
+	_, err := sparkwing.Bash(ctx, markdownlintCommand).Run()
 	return err
 }
 
