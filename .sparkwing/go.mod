@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/sparkwing-dev/sparks-core/checks v0.25.0
-	github.com/sparkwing-dev/sparkwing v0.48.0
+	github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9
 	golang.org/x/mod v0.40.0
 )
 
@@ -22,6 +22,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.61.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect

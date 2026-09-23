@@ -24,6 +24,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 h1:03xatSQO4+AM1
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23/go.mod h1:M8l3mwgx5ToK7wot2sBBce/ojzgnPzZXUV445gTSyE8=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1 h1:mxuT1xE+dI54NW3RkNjP8DUT5HXqbkiAFvfdyDFwE5c=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1/go.mod h1:L2dcoOgS2VSgbPLvpak2NyUPsO1TBN7M45Z4H7DlRc4=
+github.com/aws/aws-sdk-go-v2/service/sesv2 v1.61.0 h1:d5valptgkxExUHAnyFp4iswYAoTqDD5g32tmTwj18j8=
+github.com/aws/aws-sdk-go-v2/service/sesv2 v1.61.0/go.mod h1:l5cTwZSX9kzxDHz9IpgZC0XIJ/cc43JL6hZzCd0iTwI=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 h1:TdJ+HdzOBhU8+iVAOGUTU63VXopcumCOF1paFulHWZc=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.11/go.mod h1:R82ZRExE/nheo0N+T8zHPcLRTcH8MGsnR3BiVGX0TwI=
 github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 h1:7byT8HUWrgoRp6sXjxtZwgOKfhss5fW6SkLBtqzgRoE=
@@ -143,8 +145,8 @@ github.com/sparkwing-dev/sparks-core/checks v0.25.0 h1:r6RSo15hQEWwNZc5IeoiHX4x0
 github.com/sparkwing-dev/sparks-core/checks v0.25.0/go.mod h1:enLNLPAjYO+hVF1bLmowfRz9bDz3yefIQISkT4S05SE=
 github.com/sparkwing-dev/sparks-core/step v0.24.0 h1:77ENVVza1VRs2UIvW2wwwdfyhhZc5l6b7vkVr6sw5hM=
 github.com/sparkwing-dev/sparks-core/step v0.24.0/go.mod h1:bjoEvgv79VMf0rUkKeP9qAELA0/n2frm/49r+fKh1+A=
-github.com/sparkwing-dev/sparkwing v0.48.0 h1:eVPpMLdhf1JX3R21HUAavnphAzNLJ2S2mHAdQGxWF+Q=
-github.com/sparkwing-dev/sparkwing v0.48.0/go.mod h1:P02rZ+erBy71fo9u5Yk0WtkYa/6kHAXoE4reXvRlHtI=
+github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9 h1:y4uXSfETIJ8sczoUNeFNsy0joyvr9jKlzuUGCt2+OZ0=
+github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9/go.mod h1:SxCHTaj8/e7ELd3iMMShmlZxr4d4GI59zMBaxUoYvxo=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
