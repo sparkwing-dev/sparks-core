@@ -10,6 +10,7 @@ import (
 )
 
 func TestLintScopesCacheToWorktree(t *testing.T) {
+	t.Setenv("SPARKWING_HOME", t.TempDir())
 	root := t.TempDir()
 	t.Setenv("TMPDIR", root)
 	t.Setenv("GOLANGCI_LINT_CACHE", filepath.Join(root, "shared-cache"))
