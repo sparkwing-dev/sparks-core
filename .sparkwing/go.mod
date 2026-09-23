@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/sparkwing-dev/sparks-core/checks v0.25.0
-	github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9
+	github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923230807-0e38d5ae405a
 	golang.org/x/mod v0.40.0
 )
 

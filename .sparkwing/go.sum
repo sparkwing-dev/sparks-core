@@ -145,8 +145,8 @@ github.com/sparkwing-dev/sparks-core/checks v0.25.0 h1:r6RSo15hQEWwNZc5IeoiHX4x0
 github.com/sparkwing-dev/sparks-core/checks v0.25.0/go.mod h1:enLNLPAjYO+hVF1bLmowfRz9bDz3yefIQISkT4S05SE=
 github.com/sparkwing-dev/sparks-core/step v0.24.0 h1:77ENVVza1VRs2UIvW2wwwdfyhhZc5l6b7vkVr6sw5hM=
 github.com/sparkwing-dev/sparks-core/step v0.24.0/go.mod h1:bjoEvgv79VMf0rUkKeP9qAELA0/n2frm/49r+fKh1+A=
-github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9 h1:y4uXSfETIJ8sczoUNeFNsy0joyvr9jKlzuUGCt2+OZ0=
-github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923180359-04651894e4c9/go.mod h1:SxCHTaj8/e7ELd3iMMShmlZxr4d4GI59zMBaxUoYvxo=
+github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923230807-0e38d5ae405a h1:SoMAOCAhpSjZPL75E4nvVRa+S+lpCfx7hs+f8yFFVSE=
+github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923230807-0e38d5ae405a/go.mod h1:SxCHTaj8/e7ELd3iMMShmlZxr4d4GI59zMBaxUoYvxo=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
