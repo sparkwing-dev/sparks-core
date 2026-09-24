@@ -86,6 +86,35 @@ func TestVerifyHTMLChunkRefs_PassesWhenChunksExist(t *testing.T) {
 	}
 }
 
+func TestVerifyHTMLChunkRefs_PassesEncodedRouteChunk(t *testing.T) {
+	out := t.TempDir()
+	chunk := filepath.Join(out, "_next", "static", "chunks", "app", "worms-rising", "[[...tab]]", "page-abc.js")
+	if err := os.MkdirAll(filepath.Dir(chunk), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(chunk, []byte("chunk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	html := `<script src="/_next/static/chunks/app/worms-rising/%5B%5B...tab%5D%5D/page-abc.js"></script>`
+	if err := os.WriteFile(filepath.Join(out, "index.html"), []byte(html), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyHTMLChunkRefs(out); err != nil {
+		t.Fatalf("verifyHTMLChunkRefs on exported route: %v", err)
+	}
+}
+
+func TestVerifyHTMLChunkRefs_RejectsEncodedTraversal(t *testing.T) {
+	out := t.TempDir()
+	html := `<script src="/_next/static/chunks/%2E%2E/%2E%2E/secret.js"></script>`
+	if err := os.WriteFile(filepath.Join(out, "index.html"), []byte(html), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyHTMLChunkRefs(out); err == nil || !strings.Contains(err.Error(), "invalid static asset path") {
+		t.Fatalf("encoded traversal must be rejected, got %v", err)
+	}
+}
+
 func TestVerifyHTMLChunkRefs_NoOpWhenNoHTML(t *testing.T) {
 	out := t.TempDir()
 	if err := verifyHTMLChunkRefs(out); err != nil {

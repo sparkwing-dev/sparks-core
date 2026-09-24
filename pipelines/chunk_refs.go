@@ -2,6 +2,7 @@ package pipelines
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,7 +35,15 @@ func verifyHTMLChunkRefs(outDir string) error {
 			return fmt.Errorf("read %s: %w", f, err)
 		}
 		for _, ref := range extractStaticRefs(string(body)) {
-			rel := strings.TrimPrefix(ref, "/")
+			rel, err := url.PathUnescape(strings.TrimPrefix(ref, "/"))
+			if err != nil {
+				return fmt.Errorf("decode static asset %q: %w", ref, err)
+			}
+			clean := filepath.ToSlash(filepath.Clean(rel))
+			if !filepath.IsLocal(rel) || clean != rel ||
+				!(strings.HasPrefix(clean, "_next/static/") || strings.HasPrefix(clean, "static/")) {
+				return fmt.Errorf("invalid static asset path %q", ref)
+			}
 			if _, err := os.Stat(filepath.Join(outDir, rel)); err != nil {
 				if os.IsNotExist(err) {
 					missing = append(missing, fmt.Sprintf("%s -> %s", f, ref))

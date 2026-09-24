@@ -9,6 +9,10 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Fixed
+- **StaticDeploy:** Resolve URL-escaped static asset paths before checking
+  exported files, so Next.js route chunks with bracketed names pass verification.
+
 ## [v0.26.0] - 2026-08-12
 
 ### Added
