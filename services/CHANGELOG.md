@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-10-01
+
 ### Fixed
 
 - **Postgres readiness:** wait for TCP so the temporary Unix-only initialization

@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-10-01
+
 ### Changed
 - **comments:** skip files carrying the generated-code marker
   (`// Code generated ... DO NOT EDIT.`), so a generator can emit the

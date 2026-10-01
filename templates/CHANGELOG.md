@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-10-01
+
 ### Fixed
 
 - **integration-test-with-service:** probe Postgres over TCP so its temporary

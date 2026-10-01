@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-10-01
+
 ## [v0.26.0] - 2026-08-12
 
 ### Added

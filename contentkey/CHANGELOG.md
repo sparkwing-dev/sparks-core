@@ -5,6 +5,12 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [v0.32.1] - 2026-10-01
+
+### Fixed
+
+- Pin published Sparkwing v0.47.0 for the existing error-returning cache API.
+
 ## [v0.32.0] - 2026-09-09
 
 ### Changed
