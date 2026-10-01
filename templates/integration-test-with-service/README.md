@@ -59,7 +59,7 @@ database in `env` and the test's connection string has to match.
 | `pipeline-name` | no | `integration-test` | pipeline registration name |
 | `service-image` | no | `postgres:16-alpine` | dependency image |
 | `service-port` | no | `5432` | port the service listens on inside the container |
-| `ready-cmd` | no | `pg_isready -U postgres` | readiness probe run inside the container |
+| `ready-cmd` | no | `pg_isready -h 127.0.0.1 -U postgres` | readiness probe run inside the container |
 | `ready-timeout` | no | `30s` | max wait for the readiness probe (Go duration) |
 | `env` | no | `POSTGRES_PASSWORD=postgres,POSTGRES_DB=app` | container env as `KEY=VAL,KEY=VAL` (postgres needs a password; clear for redis) |
 | `port-env` | no | `SERVICE_PORT` | env var the host port is injected into for the test |

@@ -165,7 +165,7 @@ func WithPostgres(ctx context.Context, cfg Postgres, fn func(ctx context.Context
 			"POSTGRES_DB":       cfg.DB,
 		},
 		ContainerPort: 5432,
-		Ready:         []string{"pg_isready", "-U", cfg.User, "-d", cfg.DB},
+		Ready:         []string{"pg_isready", "-h", "127.0.0.1", "-U", cfg.User, "-d", cfg.DB},
 		ReadyTimeout:  cfg.ReadyTimeout,
 	}
 	return With(ctx, spec, func(ctx context.Context, hostPort int) error {

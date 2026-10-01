@@ -1,6 +1,41 @@
 package services
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestWithPostgres_ReadinessTargetsTCP(t *testing.T) {
+	dir := t.TempDir()
+	probe := filepath.Join(dir, "probe")
+	docker := "#!/bin/sh\ncase \"$1\" in\nport) printf '127.0.0.1:54320\\n' ;;\nexec) printf '%s\\n' \"$*\" > \"$TEST_PROBE\" ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(docker), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TEST_PROBE", probe)
+	called := false
+	err := WithPostgres(context.Background(), Postgres{Name: "test-postgres", User: "app", DB: "appdb"}, func(_ context.Context, dsn string) error {
+		called = true
+		if dsn != PostgresDSN("app", "postgres", 54320, "appdb") {
+			t.Errorf("DSN = %q", dsn)
+		}
+		return nil
+	})
+	if err != nil || !called {
+		t.Fatalf("WithPostgres err = %v, called = %v", err, called)
+	}
+	got, err := os.ReadFile(probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "exec test-postgres pg_isready -h 127.0.0.1 -U app -d appdb"; strings.TrimSpace(string(got)) != want {
+		t.Errorf("readiness command = %q, want %q", got, want)
+	}
+}
 
 func TestParseHostPort(t *testing.T) {
 	cases := []struct {

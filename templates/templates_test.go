@@ -197,6 +197,16 @@ func TestRender_LintTestGo_DefaultsApplied(t *testing.T) {
 	}
 }
 
+func TestRender_IntegrationService_ReadinessTargetsTCP(t *testing.T) {
+	out, err := Render("integration-test-with-service", map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"pg_isready -h 127.0.0.1 -U postgres"`) {
+		t.Fatalf("default readiness must target the published TCP service:\n%s", out)
+	}
+}
+
 func TestRender_AllTemplatesProduceParseableGo(t *testing.T) {
 	cases := []struct {
 		name   string

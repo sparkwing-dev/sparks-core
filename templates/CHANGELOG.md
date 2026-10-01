@@ -11,6 +11,9 @@ multi-module repo conventions).
 
 ### Fixed
 
+- **integration-test-with-service:** probe Postgres over TCP so its temporary
+  Unix-only initialization server cannot start tests before the published port
+  is ready.
 - **lint-test-python:** generated help describes configured checks and optional
   installation without promising the default tools when commands are omitted
   or replaced.

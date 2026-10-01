@@ -33,8 +33,8 @@ parameters:
     description: |
       Readiness probe run INSIDE the container via `docker exec` (needs
       no host-side client). The service is ready when it exits 0.
-      Examples: "pg_isready -U postgres", "redis-cli ping".
-    default: pg_isready -U postgres
+      Examples: "pg_isready -h 127.0.0.1 -U postgres", "redis-cli ping".
+    default: pg_isready -h 127.0.0.1 -U postgres
   - name: ready-timeout
     type: string
     description: |

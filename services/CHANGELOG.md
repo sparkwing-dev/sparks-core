@@ -9,6 +9,11 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Postgres readiness:** wait for TCP so the temporary Unix-only initialization
+  server cannot let callers connect before the published port is ready.
+
 ## [v0.25.0] - 2026-08-12
 
 ### Changed
