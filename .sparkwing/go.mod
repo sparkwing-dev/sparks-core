@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/sparkwing-dev/sparks-core/checks v0.25.0
-	github.com/sparkwing-dev/sparkwing v0.60.1-0.20260923230807-0e38d5ae405a
+	github.com/sparkwing-dev/sparkwing v0.66.0
 	golang.org/x/mod v0.40.0
 )
 
@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.17 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign v1.11.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
