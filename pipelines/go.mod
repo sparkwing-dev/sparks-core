@@ -9,7 +9,7 @@ require (
 	github.com/sparkwing-dev/sparks-core/gitops v0.27.0
 	github.com/sparkwing-dev/sparks-core/s3 v0.25.1
 	github.com/sparkwing-dev/sparks-core/step v0.24.0
-	github.com/sparkwing-dev/sparkwing v0.66.0
+	github.com/sparkwing-dev/sparkwing v0.66.1
 )
 
 require (

@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/sparkwing-dev/sparks-core/aws v0.25.0
-	github.com/sparkwing-dev/sparkwing v0.66.0
+	github.com/sparkwing-dev/sparkwing v0.66.1
 )
 
 require (
