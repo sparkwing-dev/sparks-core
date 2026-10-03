@@ -6,13 +6,19 @@ package gitops
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,8 +103,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 				old := fmt.Sprintf("name: %s\n    newTag: ", ecr)
 				idx := strings.Index(content, old)
 				if idx == -1 {
-					sparkwing.Info(ctx, "warning: image %s not found in kustomization.yaml, skipping", img)
-					continue
+					return fmt.Errorf("image %s not found in kustomization.yaml", img)
 				}
 				after := idx + len(old)
 				eol := strings.Index(content[after:], "\n")
@@ -227,80 +232,148 @@ type ArgoCDConfig struct {
 	Token string
 }
 
-// SyncArgoCD triggers a hard sync of the named application and waits until
-// the synced revision advances past the starting point and reports Synced
-// and Healthy.
+// SyncArgoCD triggers a hard sync and waits for Synced and Healthy at a new
+// revision. The optional tag labels log output.
 func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ...string) error {
 	return step.Run(ctx, "argocd sync", func(ctx context.Context) error {
-		server, token := argocdConfig(ctx, argocd)
-		if server == "" {
-			return fmt.Errorf("argocd: no server reachable - pass ArgoCDConfig.Server or deploy from inside the cluster")
+		return syncArgoCD(ctx, argocd, appName, 4*time.Minute, nil, tag...)
+	})
+}
+
+// SyncDeployment verifies the matching Git source's repository, path,
+// selected image tags and target revision against the deployment that was pushed.
+// An already-current healthy deployment passes without requiring a new revision.
+func SyncDeployment(ctx context.Context, argocd ArgoCDConfig, appName string, deployment DeployConfig) error {
+	return step.Run(ctx, "argocd sync", func(ctx context.Context) error {
+		return syncArgoCD(ctx, argocd, appName, 4*time.Minute, &deployment, deployment.Tag)
+	})
+}
+
+func syncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, timeout time.Duration, deployment *DeployConfig, tag ...string) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	server, token := argocdConfig(ctx, argocd)
+	if server == "" {
+		return fmt.Errorf("argocd: no server reachable - pass ArgoCDConfig.Server or deploy from inside the cluster")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	app, err := argocdGetApp(ctx, client, server, token, appName)
+	if err != nil {
+		return err
+	}
+	startRev := app.Status.Sync.Revision
+	expected := ""
+	position := 0
+	var source argocdSource
+	verify := func() error {
+		selected, pos, err := app.deploymentSource(*deployment)
+		if err != nil {
+			return err
 		}
-
-		client := &http.Client{Timeout: 10 * time.Second}
-
-		app := argocdGetApp(ctx, client, server, token, appName)
-		startRev := app.Status.Sync.Revision
-		sparkwing.Info(ctx, "argocd: %s currently at %s - kicking refresh", appName, shortRev(startRev))
-
-		deadline := time.Now().Add(4 * time.Minute)
-		nextKick := time.Now()
-		kickCount := 0
-		lastStatus := ""
-
-		for time.Now().Before(deadline) {
-			if !time.Now().Before(nextKick) {
-				kickCount++
-				sparkwing.Info(ctx, "argocd: kicking hard refresh (attempt %d)", kickCount)
-				argocdGetApp(ctx, client, server, token, appName+"?refresh=hard")
-				select {
-				case <-time.After(2 * time.Second):
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-
-				err := argocdSync(ctx, client, server, token, appName)
-				if err != nil {
-					errStr := fmt.Sprintf("%v", err)
-					if !strings.Contains(errStr, "auto-sync") {
-						sparkwing.Info(ctx, "argocd: sync request failed: %v", err)
-					}
-				}
-				nextKick = time.Now().Add(15 * time.Second)
+		if source.RepoURL != "" && selected != source {
+			return fmt.Errorf("argocd: deployment source changed while waiting for sync")
+		}
+		source, position = selected, pos
+		if position > 0 {
+			app.Status.Sync.Revision = ""
+			if position <= len(app.Status.Sync.Revisions) && (len(app.Status.Sync.ComparedTo.Sources) == 0 || slices.Equal(app.Status.Sync.ComparedTo.Sources, app.Spec.Sources)) {
+				app.Status.Sync.Revision = app.Status.Sync.Revisions[position-1]
 			}
+		}
+		return nil
+	}
+	if deployment != nil {
+		if err := verify(); err != nil {
+			return err
+		}
+		expected, err = argocdExpectedRevision(ctx, source)
+		if err != nil {
+			return err
+		}
+		if app.deployed(expected, startRev) && app.hasDeploymentImages(deployment) {
+			return nil
+		}
+	}
+	sparkwing.Info(ctx, "argocd: %s waiting for sync", appName)
+	deadline, _ := ctx.Deadline()
 
-			app = argocdGetApp(ctx, client, server, token, appName)
-			sync := app.Status.Sync.Status
-			health := app.Status.Health.Status
-			phase := app.Status.OperationState.Phase
-			rev := app.Status.Sync.Revision
+	nextKick := time.Now()
+	kickCount := 0
+	lastStatus := ""
+	lastRev := startRev
 
-			status := fmt.Sprintf("sync=%s health=%s phase=%s rev=%s", sync, health, phase, shortRev(rev))
-			if status != lastStatus {
-				sparkwing.Info(ctx, "argocd: %s", status)
-				lastStatus = status
+	for time.Now().Before(deadline) {
+		if !time.Now().Before(nextKick) {
+			kickCount++
+			sparkwing.Info(ctx, "argocd: kicking hard refresh (attempt %d)", kickCount)
+			if app, err = argocdGetApp(ctx, client, server, token, appName+"?refresh=hard"); err != nil {
+				return err
 			}
-
-			advanced := startRev == "" || rev != startRev
-			if sync == "Synced" && health == "Healthy" && (phase == "Succeeded" || phase == "") && advanced {
-				if len(tag) > 0 && tag[0] != "" {
-					sparkwing.Info(ctx, "argocd: %s synced + healthy - %s", appName, tag[0])
-				} else {
-					sparkwing.Info(ctx, "argocd: %s synced + healthy at %s", appName, shortRev(rev))
+			if deployment != nil {
+				if err := verify(); err != nil {
+					return err
 				}
-				return nil
 			}
 			select {
 			case <-time.After(2 * time.Second):
 			case <-ctx.Done():
 				return ctx.Err()
 			}
+
+			revision := expected
+			if revision == "" {
+				revision = "HEAD"
+			}
+			err := argocdSync(ctx, client, server, token, appName, revision, position)
+			if err != nil {
+				errStr := fmt.Sprintf("%v", err)
+				if !strings.Contains(errStr, "auto-sync") {
+					sparkwing.Info(ctx, "argocd: sync request failed: %v", err)
+				}
+			}
+			nextKick = time.Now().Add(15 * time.Second)
 		}
 
-		sparkwing.Info(ctx, "argocd: gave up waiting for %s sync after %d attempts (still at %s)", appName, kickCount, shortRev(startRev))
-		sparkwing.Info(ctx, "argocd: last status: %s", lastStatus)
-		return nil
-	})
+		app, err = argocdGetApp(ctx, client, server, token, appName)
+		if err != nil {
+			return err
+		}
+		if deployment != nil {
+			if err := verify(); err != nil {
+				return err
+			}
+		}
+		sync := app.Status.Sync.Status
+		health := app.Status.Health.Status
+		phase := app.Status.OperationState.Phase
+		rev := app.Status.Sync.Revision
+		lastRev = rev
+
+		status := fmt.Sprintf("sync=%s health=%s phase=%s rev=%s images-verified=%t", sync, health, phase, shortRev(rev), app.hasDeploymentImages(deployment))
+		if status != lastStatus {
+			sparkwing.Info(ctx, "argocd: %s", status)
+			lastStatus = status
+		}
+
+		if app.deployed(expected, startRev) && app.hasDeploymentImages(deployment) {
+			if len(tag) > 0 && tag[0] != "" {
+				sparkwing.Info(ctx, "argocd: %s synced + healthy - %s", appName, tag[0])
+			} else {
+				sparkwing.Info(ctx, "argocd: %s synced + healthy at %s", appName, shortRev(rev))
+			}
+			return nil
+		}
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	sparkwing.Info(ctx, "argocd: gave up waiting for %s sync after %d attempts (still at %s)", appName, kickCount, shortRev(lastRev))
+	return fmt.Errorf("argocd: timed out waiting for %s: %s", appName, lastStatus)
 }
 
 func argocdConfig(ctx context.Context, argocd ArgoCDConfig) (server, token string) {
@@ -316,12 +389,15 @@ func argocdConfig(ctx context.Context, argocd ArgoCDConfig) (server, token strin
 			return server, token
 		}
 		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
+		if err != nil {
 			sparkwing.Info(ctx, "argocd: in-cluster server not reachable at %s", server)
 			server = ""
 			return server, token
 		}
 		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return "", token
+		}
 		sparkwing.Info(ctx, "argocd: using in-cluster server %s", server)
 	} else {
 		sparkwing.Info(ctx, "argocd: using server %s", server)
@@ -329,11 +405,29 @@ func argocdConfig(ctx context.Context, argocd ArgoCDConfig) (server, token strin
 	return server, token
 }
 
+type argocdSource struct {
+	RepoURL        string `json:"repoURL"`
+	Path           string `json:"path"`
+	TargetRevision string `json:"targetRevision"`
+	Chart          string `json:"chart"`
+}
+
 type argocdApp struct {
+	Spec struct {
+		Source  argocdSource   `json:"source"`
+		Sources []argocdSource `json:"sources"`
+	} `json:"spec"`
 	Status struct {
+		Summary struct {
+			Images []string `json:"images"`
+		} `json:"summary"`
 		Sync struct {
-			Status   string `json:"status"`
-			Revision string `json:"revision"`
+			Status     string   `json:"status"`
+			Revision   string   `json:"revision"`
+			Revisions  []string `json:"revisions"`
+			ComparedTo struct {
+				Sources []argocdSource `json:"sources"`
+			} `json:"comparedTo"`
 		} `json:"sync"`
 		Health struct {
 			Status string `json:"status"`
@@ -345,40 +439,187 @@ type argocdApp struct {
 	} `json:"status"`
 }
 
-func argocdGetApp(ctx context.Context, client *http.Client, server, token, appPath string) argocdApp {
+func (app argocdApp) deployed(expected, startRev string) bool {
+	revision := app.Status.Sync.Revision
+	ready := app.Status.Sync.Status == "Synced" && app.Status.Health.Status == "Healthy" &&
+		(app.Status.OperationState.Phase == "Succeeded" || app.Status.OperationState.Phase == "")
+	if expected != "" {
+		return ready && revision == expected
+	}
+	return ready && (startRev == "" || revision != startRev)
+}
+
+func (app argocdApp) deploymentSource(deployment DeployConfig) (argocdSource, int, error) {
+	sources := app.Spec.Sources
+	if len(sources) == 0 {
+		sources = []argocdSource{app.Spec.Source}
+	}
+	position := -1
+	for i, source := range sources {
+		if source.Chart != "" || source.RepoURL == "" || deployment.GitopsRepo == "" ||
+			gitRepoIdentity(source.RepoURL) != gitRepoIdentity(deployment.GitopsRepo) ||
+			path.Clean(source.Path) != path.Clean(deployment.GitopsPath) {
+			continue
+		}
+		if position != -1 {
+			return argocdSource{}, 0, fmt.Errorf("argocd: multiple Git sources match deployment repository and path")
+		}
+		position = i
+	}
+	if position == -1 {
+		return argocdSource{}, 0, fmt.Errorf("argocd: no Git source matches deployment repository and path")
+	}
+	source := sources[position]
+	if len(app.Spec.Sources) == 0 {
+		return source, 0, nil
+	}
+	return source, position + 1, nil
+}
+
+func gitRepoIdentity(repo string) string {
+	if strings.HasPrefix(repo, "git@") {
+		repo = "ssh://" + strings.Replace(repo, ":", "/", 1)
+	}
+	parsed, err := url.Parse(repo)
+	if err != nil {
+		return repo
+	}
+	identity := strings.ToLower(parsed.Host) + strings.TrimSuffix(strings.TrimSuffix(parsed.Path, "/"), ".git")
+	if strings.EqualFold(parsed.Host, "github.com") {
+		identity = strings.ToLower(identity)
+	}
+	return identity
+}
+
+func (app argocdApp) hasDeploymentImages(deployment *DeployConfig) bool {
+	if deployment == nil {
+		return true
+	}
+	for _, image := range deployment.Images {
+		wanted := strings.TrimSuffix(deployment.ECR, "/") + "/" + image + ":" + deployment.Tag
+		if !slices.ContainsFunc(app.Status.Summary.Images, func(actual string) bool {
+			if !strings.Contains(wanted, "@") {
+				actual, _, _ = strings.Cut(actual, "@")
+			}
+			return actual == wanted
+		}) {
+			return false
+		}
+	}
+	return true
+}
+
+func argocdExpectedRevision(ctx context.Context, source argocdSource) (string, error) {
+	revision := source.TargetRevision
+	if revision == "" {
+		revision = "HEAD"
+	}
+	if len(revision) == 40 || len(revision) == 64 {
+		if _, err := hex.DecodeString(revision); err == nil {
+			return strings.ToLower(revision), nil
+		}
+	}
+	lookupRepo := source.RepoURL
+	var credentialEnv []string
+	if transport := pushTransport(ctx, source.RepoURL); transport != "" {
+		parsed, err := url.Parse(transport)
+		if err != nil {
+			return "", fmt.Errorf("argocd: could not resolve repository read transport")
+		}
+		if parsed.User != nil {
+			password, _ := parsed.User.Password()
+			authorization := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(parsed.User.Username()+":"+password))
+			parsed.User = nil
+			count := 0
+			if inherited := os.Getenv("GIT_CONFIG_COUNT"); inherited != "" {
+				count, err = strconv.Atoi(inherited)
+				if err != nil || count < 0 || count+1 <= count {
+					return "", fmt.Errorf("argocd: invalid inherited Git configuration count")
+				}
+			}
+			index := strconv.Itoa(count)
+			credentialEnv = []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(count+1), "GIT_CONFIG_KEY_" + index + "=http." + parsed.String() + ".extraheader", "GIT_CONFIG_VALUE_" + index + "=" + authorization}
+		}
+		lookupRepo = parsed.String()
+	}
+	cmd := exec.CommandContext(ctx, "git", "ls-remote", "--exit-code", "--", lookupRepo, revision, "refs/heads/"+revision, "refs/tags/"+revision, "refs/tags/"+revision+"^{}", revision+"^{}")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=true", "SSH_ASKPASS=true")
+	cmd.Env = append(cmd.Env, credentialEnv...)
+	ssh := sshCommandValue()
+	if ssh == "" {
+		ssh = os.Getenv("GIT_SSH_COMMAND")
+	}
+	if ssh == "" {
+		ssh = "ssh"
+	}
+	cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+ssh+" -o BatchMode=yes")
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("argocd: resolve repository revision: %w", ctx.Err())
+	}
+	if err != nil {
+		return "", fmt.Errorf("argocd: could not resolve repository target revision (check repository read credentials)")
+	}
+	refs := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			return "", fmt.Errorf("argocd: repository returned an invalid Git revision")
+		}
+		if _, err := hex.DecodeString(fields[0]); err != nil || (len(fields[0]) != 40 && len(fields[0]) != 64) {
+			return "", fmt.Errorf("argocd: repository returned an invalid Git revision")
+		}
+		refs[fields[1]] = fields[0]
+	}
+	for _, ref := range []string{revision + "^{}", "refs/heads/" + revision, "refs/tags/" + revision + "^{}", revision, "refs/tags/" + revision} {
+		if sha := refs[ref]; sha != "" {
+			return sha, nil
+		}
+	}
+	return "", fmt.Errorf("argocd: repository target revision did not resolve exactly")
+}
+
+func argocdGetApp(ctx context.Context, client *http.Client, server, token, appPath string) (argocdApp, error) {
 	reqURL := server + "/api/v1/applications/" + appPath
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		sparkwing.Info(ctx, "argocd: failed to build request: %v", err)
-		return argocdApp{}
+		return argocdApp{}, fmt.Errorf("argocd: build GET request: %w", err)
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-
 	resp, err := client.Do(req)
 	if err != nil {
-		sparkwing.Info(ctx, "argocd: GET %s failed: %v", appPath, err)
-		return argocdApp{}
+		return argocdApp{}, fmt.Errorf("argocd: GET %s: %w", appPath, err)
 	}
 	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		sparkwing.Info(ctx, "argocd: GET %s returned %d: %s", appPath, resp.StatusCode, truncate(string(body), 200))
-		return argocdApp{}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return argocdApp{}, fmt.Errorf("argocd: read %s: %w", appPath, err)
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		return argocdApp{}, fmt.Errorf("argocd: GET %s returned %d: %s", appPath, resp.StatusCode, truncate(string(body), 200))
+	}
 	var app argocdApp
 	if err := json.Unmarshal(body, &app); err != nil {
-		sparkwing.Info(ctx, "argocd: failed to parse response: %v", err)
+		return argocdApp{}, fmt.Errorf("argocd: parse %s: %w", appPath, err)
 	}
-	return app
+	return app, nil
 }
 
-func argocdSync(ctx context.Context, client *http.Client, server, token, appName string) error {
+func argocdSync(ctx context.Context, client *http.Client, server, token, appName, revision string, position int) error {
 	reqURL := server + "/api/v1/applications/" + appName + "/sync"
-	payload := []byte(`{"revision":"HEAD","prune":true}`)
+	request := map[string]any{"prune": true}
+	if position > 0 {
+		request["revisions"] = []string{revision}
+		request["sourcePositions"] = []int{position}
+	} else {
+		request["revision"] = revision
+	}
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)

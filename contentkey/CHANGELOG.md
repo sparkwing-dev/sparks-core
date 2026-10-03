@@ -9,6 +9,8 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.
 
+## [v0.33.0] - 2026-10-02
+
 ## [v0.32.1] - 2026-10-01
 
 ### Fixed

@@ -13,6 +13,16 @@ multi-module repo conventions).
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.
 
+## [v0.33.0] - 2026-10-02
+
+### Added
+
+- `SyncDeployment` verifies the existing deployment configuration against its Argo application.
+
+### Fixed
+
+- **argocd:** fail on unreadable application status and sync timeouts. Missing selected images in a kustomization fail before a push. `SyncDeployment` verifies the matching Git source repository, path, selected image tags and Git target revision for single-source and multi-source applications. Already-current deployments pass without waiting for a new revision. `SyncArgoCD` retains generic Argo sync behavior. Target revision lookups reuse the deployment transport for private repositories.
+
 ## [v0.32.1] - 2026-10-01
 
 ## [v0.27.0] - 2026-08-12
