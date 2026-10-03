@@ -13,6 +13,16 @@ multi-module repo conventions).
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.
 
+## [v0.33.1] - 2026-10-02
+
+### Fixed
+
+- **argocd:** verify the application even when its image tags were already committed.
+
+### Changed
+
+- **deps:** require gitops v0.33.0 for deployment verification.
+
 ## [v0.33.0] - 2026-10-02
 
 ## [v0.32.1] - 2026-10-01

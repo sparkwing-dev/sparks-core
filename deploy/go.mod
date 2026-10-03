@@ -3,7 +3,7 @@ module github.com/sparkwing-dev/sparks-core/deploy
 go 1.26.0
 
 require (
-	github.com/sparkwing-dev/sparks-core/gitops v0.27.0
+	github.com/sparkwing-dev/sparks-core/gitops v0.33.0
 	github.com/sparkwing-dev/sparks-core/kube v0.24.0
 	github.com/sparkwing-dev/sparkwing v0.66.1
 )

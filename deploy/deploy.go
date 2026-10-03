@@ -37,20 +37,17 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	sparkwing.Info(ctx, "deploy: remote -> gitops + argocd (app=%s)", cfg.AppName)
-	changed, err := gitops.Deploy(ctx, gitops.DeployConfig{
+	deployment := gitops.DeployConfig{
 		GitopsRepo:  cfg.GitopsRepo,
 		GitopsPath:  cfg.GitopsPath,
 		ECR:         cfg.ECR,
 		Images:      cfg.Images,
 		Tag:         cfg.Tag,
 		FilePatches: cfg.FilePatches,
-	})
+	}
+	_, err := gitops.Deploy(ctx, deployment)
 	if err != nil {
 		return err
 	}
-	if changed {
-		return gitops.SyncArgoCD(ctx, cfg.ArgoCD, cfg.AppName, cfg.Tag)
-	}
-	sparkwing.Info(ctx, "deploy: skipping argocd sync - tags unchanged")
-	return nil
+	return gitops.SyncDeployment(ctx, cfg.ArgoCD, cfg.AppName, deployment)
 }
