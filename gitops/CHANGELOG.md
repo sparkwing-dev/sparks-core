@@ -13,6 +13,12 @@ multi-module repo conventions).
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.
 
+## [v0.33.5] - 2026-10-03
+
+### Changed
+
+- **release:** Honor the configured Git commit identity and signing settings.
+
 ## [v0.33.4] - 2026-10-03
 
 ### Fixed

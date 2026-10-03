@@ -13,10 +13,12 @@ import (
 )
 
 type Config struct {
-	GitopsRepo  string
-	GitopsPath  string
-	ECR         string
-	Images      []string
+	GitopsRepo string
+	GitopsPath string
+	ECR        string
+	Images     []string
+	// ImageRefs keeps mutable tags from selecting different published content.
+	ImageRefs   map[string]string
 	Tag         string
 	AppName     string
 	Namespace   string
@@ -42,6 +44,7 @@ func Run(ctx context.Context, cfg Config) error {
 		GitopsPath:  cfg.GitopsPath,
 		ECR:         cfg.ECR,
 		Images:      cfg.Images,
+		ImageRefs:   cfg.ImageRefs,
 		Tag:         cfg.Tag,
 		FilePatches: cfg.FilePatches,
 	}

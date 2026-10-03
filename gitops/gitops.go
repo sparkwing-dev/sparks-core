@@ -143,8 +143,6 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 			changed = true
 			if err := step.Exec(
 				ctx, "git", "-C", tmpDir,
-				"-c", "user.name=sparkwing",
-				"-c", "user.email=sparkwing@noreply",
 				"commit", "-m", cfg.CommitMsg,
 			); err != nil {
 				return err
