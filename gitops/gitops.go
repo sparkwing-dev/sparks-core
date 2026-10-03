@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,10 +18,13 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 	sparkwingGit "github.com/sparkwing-dev/sparkwing/sparkwing/git"
@@ -33,6 +37,8 @@ type DeployConfig struct {
 	GitopsPath string
 	ECR        string
 	Images     []string
+	// ImageRefs keeps mutable tags from selecting different published content.
+	ImageRefs  map[string]string
 	Tag        string
 	CommitMsg  string
 	MaxRetries int
@@ -47,6 +53,10 @@ type DeployConfig struct {
 func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 	if cfg.Tag == "" {
 		return false, fmt.Errorf("tag required for gitops deploy")
+	}
+	refs, err := cfg.imageRefs()
+	if err != nil {
+		return false, err
 	}
 	if cfg.MaxRetries <= 0 {
 		cfg.MaxRetries = 5
@@ -97,21 +107,9 @@ func Deploy(ctx context.Context, cfg DeployConfig) (changed bool, err error) {
 				return fmt.Errorf("read kustomization.yaml: %w", err)
 			}
 
-			content := string(data)
-			for _, img := range cfg.Images {
-				ecr := cfg.ECR + "/" + img
-				old := fmt.Sprintf("name: %s\n    newTag: ", ecr)
-				idx := strings.Index(content, old)
-				if idx == -1 {
-					return fmt.Errorf("image %s not found in kustomization.yaml", img)
-				}
-				after := idx + len(old)
-				eol := strings.Index(content[after:], "\n")
-				if eol == -1 {
-					eol = len(content[after:])
-				}
-				content = content[:after] + cfg.Tag + content[after+eol:]
-				sparkwing.Info(ctx, "  %s -> %s", img, cfg.Tag)
+			content, err := patchImageRefs(data, cfg.ECR, refs)
+			if err != nil {
+				return err
 			}
 
 			if err := os.WriteFile(kustomizePath, []byte(content), 0o644); err != nil {
@@ -244,6 +242,9 @@ func SyncArgoCD(ctx context.Context, argocd ArgoCDConfig, appName string, tag ..
 // selected image tags and target revision against the deployment that was pushed.
 // An already-current healthy deployment passes without requiring a new revision.
 func SyncDeployment(ctx context.Context, argocd ArgoCDConfig, appName string, deployment DeployConfig) error {
+	if _, err := deployment.imageRefs(); err != nil {
+		return err
+	}
 	return step.Run(ctx, "argocd sync", func(ctx context.Context) error {
 		return syncArgoCD(ctx, argocd, appName, 4*time.Minute, &deployment, deployment.Tag)
 	})
@@ -495,8 +496,12 @@ func (app argocdApp) hasDeploymentImages(deployment *DeployConfig) bool {
 	if deployment == nil {
 		return true
 	}
+	refs, err := deployment.imageRefs()
+	if err != nil {
+		return false
+	}
 	for _, image := range deployment.Images {
-		wanted := strings.TrimSuffix(deployment.ECR, "/") + "/" + image + ":" + deployment.Tag
+		wanted := refs[image]
 		if !slices.ContainsFunc(app.Status.Summary.Images, func(actual string) bool {
 			if !strings.Contains(wanted, "@") {
 				actual, _, _ = strings.Cut(actual, "@")
@@ -507,6 +512,24 @@ func (app argocdApp) hasDeploymentImages(deployment *DeployConfig) bool {
 		}
 	}
 	return true
+}
+
+var pinnedImageDigest = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+func (cfg DeployConfig) imageRefs() (map[string]string, error) {
+	refs := make(map[string]string, len(cfg.Images))
+	for _, image := range cfg.Images {
+		ref := strings.TrimSuffix(cfg.ECR, "/") + "/" + image + ":" + cfg.Tag
+		if cfg.ImageRefs != nil {
+			prefix := ref + "@"
+			ref = cfg.ImageRefs[image]
+			if !strings.HasPrefix(ref, prefix) || !pinnedImageDigest.MatchString(strings.TrimPrefix(ref, prefix)) {
+				return nil, fmt.Errorf("published image reference for %s must match %s and include a manifest digest", image, prefix)
+			}
+		}
+		refs[image] = ref
+	}
+	return refs, nil
 }
 
 func argocdExpectedRevision(ctx context.Context, source argocdSource) (string, error) {
@@ -769,4 +792,74 @@ func authorizeDeployWithController(ctx context.Context, cfg DeployConfig) error 
 
 	sparkwing.Info(ctx, "authorize: controller returned %d - continuing", resp.StatusCode)
 	return nil
+}
+
+func patchImageRefs(data []byte, registry string, refs map[string]string) (string, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return "", fmt.Errorf("parse kustomization: %w", err)
+	}
+	if len(doc.Content) != 1 {
+		return "", errors.New("kustomization must contain one document")
+	}
+	selected := make(map[string]*yaml.Node, len(refs))
+	root := doc.Content[0]
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "images" {
+			continue
+		}
+		for _, image := range root.Content[i+1].Content {
+			var entry struct {
+				Name    string `yaml:"name"`
+				NewName string `yaml:"newName"`
+			}
+			if err := image.Decode(&entry); err != nil {
+				return "", fmt.Errorf("decode image: %w", err)
+			}
+			prefix := strings.TrimSuffix(registry, "/") + "/"
+			name := strings.TrimPrefix(entry.Name, prefix)
+			if !strings.HasPrefix(entry.Name, prefix) {
+				continue
+			}
+			if _, ok := refs[name]; !ok {
+				continue
+			}
+			if entry.NewName != "" && entry.NewName != entry.Name {
+				return "", fmt.Errorf("image %s newName changes the selected repository", name)
+			}
+			if selected[name] != nil {
+				return "", fmt.Errorf("image %s occurs more than once in kustomization.yaml", name)
+			}
+			selected[name] = image
+		}
+	}
+	for name := range refs {
+		if selected[name] == nil {
+			return "", fmt.Errorf("image %s not found in kustomization.yaml", name)
+		}
+	}
+	for name, image := range selected {
+		tag := strings.TrimPrefix(refs[name], strings.TrimSuffix(registry, "/")+"/"+name+":")
+		found := false
+		for i := 0; i+1 < len(image.Content); i += 2 {
+			value := image.Content[i+1]
+			if image.Content[i].Value == "newTag" {
+				value.Value = tag
+				value.Tag = "!!str"
+				found = true
+			}
+			if image.Content[i].Value == "digest" {
+				value.Value = ""
+				value.Tag = "!!str"
+			}
+		}
+		if !found {
+			image.Content = append(image.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "newTag"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: tag})
+		}
+	}
+	result, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("encode kustomization: %w", err)
+	}
+	return string(result), nil
 }
