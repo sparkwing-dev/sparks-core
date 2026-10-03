@@ -13,6 +13,12 @@ multi-module repo conventions).
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.
 
+## [v0.33.4] - 2026-10-03
+
+### Added
+
+- **build:** Return pushed manifest digests without changing existing build, authentication or dry-run behavior
+
 ## [v0.33.3] - 2026-10-03
 
 ### Changed

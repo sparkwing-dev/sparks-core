@@ -3,6 +3,8 @@ package docker
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -53,6 +55,14 @@ func ensureECRLogin(ctx context.Context, registry, awsProfile string) error {
 // tag per registry, keeping push time bounded. It is safe to call
 // concurrently.
 func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
+	_, err := BuildAndPushResult(ctx, cfg)
+	return err
+}
+
+// BuildAndPushResult retains published manifest digests so mutable tags cannot select different content.
+func BuildAndPushResult(ctx context.Context, cfg BuildConfig) (sparkwingDocker.BuildResult, error) {
+	result := sparkwingDocker.BuildResult{Digests: map[string]string{}}
+
 	if cfg.Context == "" {
 		cfg.Context = "."
 	}
@@ -60,7 +70,7 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 	for _, reg := range cfg.Registries {
 		if IsECR(reg) {
 			if err := ensureECRLogin(ctx, reg, cfg.AWSProfile); err != nil {
-				return err
+				return result, err
 			}
 		}
 	}
@@ -103,7 +113,7 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 		_, err := sparkwing.Exec(ctx, "docker", args...).Env(buildKitEnv, "1").Run()
 		return err
 	}); err != nil {
-		return err
+		return result, err
 	}
 
 	for _, t := range pushTags {
@@ -114,14 +124,36 @@ func BuildAndPush(ctx context.Context, cfg BuildConfig) error {
 				return nil
 			}
 			sparkwing.Info(ctx, "pushing %s", pushTag)
-			if err := step.Exec(ctx, "docker", "push", pushTag); err != nil {
+			output, err := sparkwing.Exec(ctx, "docker", "push", pushTag).Run()
+			if err != nil {
 				return err
+			}
+			tag := pushTag[strings.LastIndex(pushTag, ":")+1:]
+			if digest := pushedManifestDigest(output.Stdout+"\n"+output.Stderr, tag); digest != "" {
+				result.Digests[pushTag] = digest
 			}
 			sparkwing.Info(ctx, "pushed %s", pushTag)
 			return nil
 		}); err != nil {
-			return err
+			return result, err
 		}
 	}
-	return nil
+	result.Image = buildTags[0]
+	if len(pushTags) > 0 {
+		result.Image = pushTags[0]
+	}
+	result.Registries = append(result.Registries, cfg.Registries...)
+	return result, nil
+}
+
+func pushedManifestDigest(output, tag string) string {
+	pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(tag) + `: digest: (sha256:[a-f0-9]{64}) size: [0-9]+\s*$`)
+	digest := ""
+	for _, match := range pattern.FindAllStringSubmatch(output, -1) {
+		if digest != "" && digest != match[1] {
+			return ""
+		}
+		digest = match[1]
+	}
+	return digest
 }

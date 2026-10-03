@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -118,5 +121,40 @@ func TestImageRefWriterRejectsDifferentRepositoryAndClearsTagOnlyDigest(t *testi
 	}
 	if strings.Contains(out, "sha256:") || !strings.Contains(out, "newTag: desired") {
 		t.Fatalf("tag-only update retained previous digest: %s", out)
+	}
+}
+
+func TestImageRefsNoOpPreservesOriginalBytes(t *testing.T) {
+	for _, tag := range []string{"desired", "desired@sha256:" + strings.Repeat("a", 64)} {
+		source := "# preserved formatting\nimages:\n  - name: registry/app\n    newTag: " + tag + " # preserved comment\n"
+		out, err := patchImageRefs([]byte(source), "registry", map[string]string{"app": "registry/app:" + tag})
+		if err != nil || out != source {
+			t.Fatalf("no-op changed bytes: %q, %v", out, err)
+		}
+		if out, err := patchImageRefs([]byte(source), "registry", map[string]string{"app": "registry/app:" + tag, "missing": "registry/missing:" + tag}); err == nil || out != "" {
+			t.Fatal("unchanged first image bypassed selected-set validation")
+		}
+	}
+}
+
+func TestDeployUnchangedImagesDoesNotAttemptPush(t *testing.T) {
+	repo, _ := gitFixture(t)
+	path := filepath.Join(repo, "kustomization.yaml")
+	source := "images:\n  - name: registry/app\n    newTag: desired\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "kustomization.yaml"}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "unchangedfixture"}} {
+		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git fixture: %v: %s", err, out)
+		}
+	}
+	changed, err := Deploy(t.Context(), DeployConfig{GitopsRepo: repo, ECR: "registry", Images: []string{"app"}, Tag: "desired"})
+	if err != nil || changed {
+		t.Fatalf("unchanged deploy: changed=%t error=%v", changed, err)
+	}
+	out, err := os.ReadFile(path)
+	if err != nil || string(out) != source {
+		t.Fatal("original repository changed")
 	}
 }

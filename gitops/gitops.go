@@ -838,24 +838,31 @@ func patchImageRefs(data []byte, registry string, refs map[string]string) (strin
 			return "", fmt.Errorf("image %s not found in kustomization.yaml", name)
 		}
 	}
+	changed := false
 	for name, image := range selected {
 		tag := strings.TrimPrefix(refs[name], strings.TrimSuffix(registry, "/")+"/"+name+":")
 		found := false
 		for i := 0; i+1 < len(image.Content); i += 2 {
 			value := image.Content[i+1]
 			if image.Content[i].Value == "newTag" {
+				changed = changed || value.Value != tag || value.Tag != "!!str"
 				value.Value = tag
 				value.Tag = "!!str"
 				found = true
 			}
 			if image.Content[i].Value == "digest" {
+				changed = changed || value.Value != ""
 				value.Value = ""
 				value.Tag = "!!str"
 			}
 		}
 		if !found {
+			changed = true
 			image.Content = append(image.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "newTag"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: tag})
 		}
+	}
+	if !changed {
+		return string(data), nil
 	}
 	result, err := yaml.Marshal(&doc)
 	if err != nil {

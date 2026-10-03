@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.33.4] - 2026-10-03
+
+### Changed
+
+- **release:** Coordinated version with gitops and docker; no runtime changes
+
 ## [v0.33.3] - 2026-10-03
 
 ### Changed
