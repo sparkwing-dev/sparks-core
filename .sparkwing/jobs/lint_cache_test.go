@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	sw "github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
 func TestLintScopesCacheToWorktree(t *testing.T) {
@@ -25,8 +23,6 @@ func TestLintScopesCacheToWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	prev := sw.WorkDir()
-	t.Cleanup(func() { sw.SetWorkDir(prev) })
 	var first string
 	for _, parent := range []string{"a", "b", "a"} {
 		dir := filepath.Join(root, parent, "same-branch")
@@ -36,7 +32,7 @@ func TestLintScopesCacheToWorktree(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/fixture\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		sw.SetWorkDir(dir)
+		t.Chdir(dir)
 		if err := lintAllModules(context.Background()); err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +40,7 @@ func TestLintScopesCacheToWorktree(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := sw.ToolCacheDir("golangci-lint")
+		want := filepath.Join(dir, ".sparkwing", "cache", "golangci-lint")
 		if string(got) != want {
 			t.Fatalf("cache = %q, want %q", got, want)
 		}

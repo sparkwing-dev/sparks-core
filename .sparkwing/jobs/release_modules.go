@@ -145,5 +145,5 @@ func (j *ReleaseModulesJob) pushTags(ctx context.Context) error {
 }
 
 func init() {
-	sw.Register[ReleaseModulesInputs]("release-modules", func() sw.Pipeline[ReleaseModulesInputs] { return &ReleaseModules{} })
+	sw.Register[ReleaseModulesInputs]("ReleaseModules", func() sw.Pipeline[ReleaseModulesInputs] { return &ReleaseModules{} })
 }

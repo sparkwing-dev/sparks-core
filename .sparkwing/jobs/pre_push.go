@@ -38,7 +38,8 @@ func (PrePush) Examples() []sparkwing.Example {
 }
 
 func (p *PrePush) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, rc sparkwing.RunContext) error {
-	sparkwing.Job(plan, rc.Pipeline, p)
+	sparkwing.Job(plan, rc.Pipeline, p).
+		Cache(sparkwing.Dir(".sparkwing/cache/golangci-lint", sparkwing.KeyFromFile(".sparkwing/go.sum")))
 	return nil
 }
 
@@ -116,7 +117,7 @@ func lintAllModules(ctx context.Context) error {
 			"Install from https://golangci-lint.run/docs/welcome/install/, or add its directory (commonly ~/.go/bin): %w", err)
 	}
 	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run --allow-serial-runners ./...", map[string]string{
-		"GOLANGCI_LINT_CACHE": sparkwing.ToolCacheDir("golangci-lint"),
+		"GOLANGCI_LINT_CACHE": sparkwing.Path(".sparkwing", "cache", "golangci-lint"),
 	})
 }
 
@@ -241,5 +242,5 @@ func checkNoCommittedGoWorkFiles(ctx context.Context) error {
 }
 
 func init() {
-	sparkwing.Register("pre-push", func() sparkwing.Pipeline[sparkwing.NoInputs] { return &PrePush{} })
+	sparkwing.Register("PrePush", func() sparkwing.Pipeline[sparkwing.NoInputs] { return &PrePush{} })
 }

@@ -7,4 +7,5 @@ go.work.sum
 
 # sparkwing: cached pipeline binary, regenerated on each pipeline run
 .sparkwing/sparkwing-pipeline
+.sparkwing/cache/
 go.work

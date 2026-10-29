@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
 // The sweeps read this file too, so the fixtures spell their patterns with an
@@ -55,9 +53,7 @@ func sweepFixtureRepo(t *testing.T, history string) string {
 	sweepWrite(t, filepath.Join(root, "NOTES.md"), history)
 	sweepGit(t, root, "add", "-A")
 	sweepGit(t, root, "commit", "-q", "-m", "history")
-	prev := sparkwing.WorkDir()
-	sparkwing.SetWorkDir(root)
-	t.Cleanup(func() { sparkwing.SetWorkDir(prev) })
+	t.Chdir(root)
 	return root
 }
 

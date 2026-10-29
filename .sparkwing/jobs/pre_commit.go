@@ -177,5 +177,5 @@ func regexCheckRoot() string {
 }
 
 func init() {
-	sparkwing.Register("pre-commit", func() sparkwing.Pipeline[sparkwing.NoInputs] { return &PreCommit{} })
+	sparkwing.Register("PreCommit", func() sparkwing.Pipeline[sparkwing.NoInputs] { return &PreCommit{} })
 }
