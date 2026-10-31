@@ -86,8 +86,8 @@ github.com/sparkwing-dev/sparks-core/checks v0.25.0 h1:r6RSo15hQEWwNZc5IeoiHX4x0
 github.com/sparkwing-dev/sparks-core/checks v0.25.0/go.mod h1:enLNLPAjYO+hVF1bLmowfRz9bDz3yefIQISkT4S05SE=
 github.com/sparkwing-dev/sparks-core/step v0.24.0 h1:77ENVVza1VRs2UIvW2wwwdfyhhZc5l6b7vkVr6sw5hM=
 github.com/sparkwing-dev/sparks-core/step v0.24.0/go.mod h1:bjoEvgv79VMf0rUkKeP9qAELA0/n2frm/49r+fKh1+A=
-github.com/sparkwing-dev/sparkwing v0.68.0-qa.16 h1:B/lsEu1JIVi/6Q46aWN+P9fCuNesVHI/A4jEztA4Q1c=
-github.com/sparkwing-dev/sparkwing v0.68.0-qa.16/go.mod h1:LAH3SfDLe2V13todIRh0eEwGJeMhtE6LhaGhyl2pA+4=
+github.com/sparkwing-dev/sparkwing v0.68.2 h1:grVjZDgWfX+ARHPT+TFCLoZx2y79OCmvW+zo1fRQKZY=
+github.com/sparkwing-dev/sparkwing v0.68.2/go.mod h1:LAH3SfDLe2V13todIRh0eEwGJeMhtE6LhaGhyl2pA+4=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
