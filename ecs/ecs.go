@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,8 +82,13 @@ func (c DeployConfig) validate() error {
 	return nil
 }
 
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv(dryRunEnv))
+	return on
+}
+
 func (c DeployConfig) dryRun() bool {
-	return c.DryRun || os.Getenv(dryRunEnv) != ""
+	return c.DryRun || dryRun()
 }
 
 // Deploy rolls a service to a new image and waits for it to stabilize,
@@ -207,7 +213,7 @@ func Rollback(ctx context.Context, cfg RollbackConfig) error {
 	if err := cfg.validate(); err != nil {
 		return err
 	}
-	dry := os.Getenv(dryRunEnv) != ""
+	dry := dryRun()
 	return step.Run(ctx, "ecs rollback", func(ctx context.Context) error {
 		rp := regionProfileArgs(cfg.Region, cfg.AWSProfile)
 		update := updateServiceArgs(cfg.Cluster, cfg.Service, cfg.TaskDefinition, nil, rp)

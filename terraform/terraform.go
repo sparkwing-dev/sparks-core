@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 
@@ -181,7 +182,8 @@ func sortedKeys(m map[string]string) []string {
 }
 
 func dryRun() bool {
-	return os.Getenv("SPARKWING_DRY_RUN") != ""
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func echoDryRun(ctx context.Context, dir string, argv []string) {

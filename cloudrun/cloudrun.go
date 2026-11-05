@@ -319,7 +319,8 @@ func parseLatestCreatedRevision(data []byte) string {
 }
 
 func isDryRun(force bool) bool {
-	return force || os.Getenv("SPARKWING_DRY_RUN") != ""
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return force || on
 }
 
 func echoArgv(ctx context.Context, name string, args []string) {

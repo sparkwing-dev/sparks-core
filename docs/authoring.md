@@ -74,13 +74,14 @@ a service, shifts a Cloud Run traffic split, publishes a Lambda version
 -- must be safe to exercise on a laptop with no credentials. The
 convention that makes that work is a single environment variable:
 
-- **When `SPARKWING_DRY_RUN` is non-empty, a cloud-mutating operation
+- **When `strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))` returns true, a cloud-mutating operation
   echoes the exact command argv it would run and returns success without
   executing it.** Echo through the module's logging convention
   (`sparkwing.Info(ctx, "[dry-run] aws %s", ...)`), one line per command,
   so the log shows precisely what a live run would invoke. A block may
   also expose a `DryRun bool` config field as an in-code equivalent; the
-  env var and the field both activate the echo.
+  env var and the field both activate the echo. Empty, invalid, `false`, and
+  `0` values do not activate dry run. Share the parser within each module.
 - **State-reading operations may run for real.** A `describe`, a `get`,
   a version lookup has no side effect, so a block is free to execute it
   even under dry-run. When a read exists only to feed a mutation the

@@ -378,7 +378,10 @@ func execWithRetry(ctx context.Context, name string, args ...string) error {
 	return err
 }
 
-func dryRun() bool { return os.Getenv("SPARKWING_DRY_RUN") != "" }
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
+}
 
 func renderArgv(name string, args []string) string {
 	return strings.Join(append([]string{name}, args...), " ")
