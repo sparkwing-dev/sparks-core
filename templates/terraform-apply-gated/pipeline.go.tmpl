@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +64,7 @@ func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 func (p *{{pascal .pipeline_name}}) apply(ctx context.Context) error {
 	// safety: apply Needs the approval gate, which Needs plan, so planFile is set.
 	err := terraform.Apply(ctx, tfConfig(), terraform.ApplyOptions{PlanFile: p.planFile})
-	if slackSecret == "" || os.Getenv("SPARKWING_DRY_RUN") != "" {
+	if slackSecret == "" || dryRun() {
 		return err
 	}
 	hook, secretErr := sparkwing.Secret(ctx, slackSecret)
@@ -113,6 +114,11 @@ func parseKeyVals(raw string) map[string]string {
 		out[strings.TrimSpace(k)] = v
 	}
 	return out
+}
+
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func init() {

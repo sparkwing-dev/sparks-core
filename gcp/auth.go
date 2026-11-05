@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -12,7 +13,8 @@ import (
 )
 
 func dryRun() bool {
-	return os.Getenv("SPARKWING_DRY_RUN") != ""
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func echoArgv(ctx context.Context, name string, args []string) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -20,7 +21,7 @@ func withDryRun(ctx context.Context) context.Context {
 }
 
 func dryRunEnabled(ctx context.Context) bool {
-	if os.Getenv(dryRunEnv) != "" {
+	if on, _ := strconv.ParseBool(os.Getenv(dryRunEnv)); on {
 		return true
 	}
 	on, _ := ctx.Value(dryRunKey{}).(bool)

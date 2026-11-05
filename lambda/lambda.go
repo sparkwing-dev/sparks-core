@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -169,7 +170,8 @@ func Rollback(ctx context.Context, cfg RollbackConfig) error {
 }
 
 func dryRunEnabled(explicit bool) bool {
-	return explicit || os.Getenv("SPARKWING_DRY_RUN") != ""
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return explicit || on
 }
 
 // currentAliasVersion skips the read under dry-run so no credentials are

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -20,7 +21,8 @@ const dryRunEnv = "SPARKWING_DRY_RUN"
 const defaultGHCRUsername = "x-access-token"
 
 func dryRun() bool {
-	return os.Getenv(dryRunEnv) != ""
+	on, _ := strconv.ParseBool(os.Getenv(dryRunEnv))
+	return on
 }
 
 func echoArgv(ctx context.Context, name string, args []string) {

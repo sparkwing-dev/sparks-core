@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.33.6] - 2026-11-05
+
+### Fixed
+
+- **dry-run:** parse `SPARKWING_DRY_RUN` as a boolean so helpers execute on normal runs
+  when the engine exports `false`; empty and invalid values also disable dry run.
+
 ### Changed
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.

@@ -9,6 +9,13 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.33.6] - 2026-11-05
+
+### Fixed
+
+- **dry-run:** generated pipelines parse `SPARKWING_DRY_RUN` as a boolean, so `false`, `0`,
+  empty and invalid values no longer skip deploys, pushes or notifications.
+
 ## [v0.33.5] - 2026-10-03
 
 ### Changed

@@ -72,7 +72,9 @@ caller declared.
 
 **`SPARKWING_DRY_RUN` is the exception.** It comes from the environment
 because it can only make a run less destructive. Every helper that
-mutates a cloud honors it.
+mutates a cloud honors it. Parse it with `strconv.ParseBool`: only a true
+value (such as `1` or `true`) activates dry run. Empty, invalid, `false`,
+and `0` values leave execution enabled.
 
 **The harness has its own channel, and it is not caller intent.** The
 sparkwing runner sets `SPARKWING_JOB_ID`, `SPARKWING_PIPELINE`,

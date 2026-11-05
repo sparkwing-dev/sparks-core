@@ -1,0 +1,18 @@
+package lambda
+
+import "testing"
+
+func TestDryRunBooleanEnvironment(t *testing.T) {
+	for _, value := range []string{"", "false", "FALSE", "False", "f", "F", "0", "invalid", " true ", "1", "t", "T", "true", "TRUE", "True"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("SPARKWING_DRY_RUN", value)
+			want := value == "1" || value == "t" || value == "T" || value == "true" || value == "TRUE" || value == "True"
+			if got := dryRunEnabled(false); got != want {
+				t.Errorf("dry run with env %q = %v, want %v", value, got, want)
+			}
+			if !dryRunEnabled(true) {
+				t.Errorf("explicit dry run disabled by env %q", value)
+			}
+		})
+	}
+}

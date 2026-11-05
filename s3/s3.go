@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -167,7 +168,10 @@ func countFiles(dir string) int {
 
 // dryRun is the one setting read from the environment rather than passed
 // in, because it can only make a run less destructive.
-func dryRun() bool { return os.Getenv("SPARKWING_DRY_RUN") != "" }
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
+}
 
 // verifyAccount runs before the first write, because the sync deletes and a
 // wrong-account deploy is not recoverable by re-running.

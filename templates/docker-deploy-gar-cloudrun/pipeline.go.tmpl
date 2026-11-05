@@ -69,7 +69,7 @@ func (p *{{pascal .pipeline_name}}) push(ctx context.Context) error {
 	if _, err := sparkwing.Exec(ctx, "docker", "tag", local, remote).Run(); err != nil {
 		return err
 	}
-	if os.Getenv("SPARKWING_DRY_RUN") != "" {
+	if dryRun() {
 		sparkwing.Info(ctx, "DRY RUN: docker push %s", remote)
 		return nil
 	}
@@ -171,6 +171,11 @@ func truthy(s string) bool {
 	default:
 		return true
 	}
+}
+
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func init() {

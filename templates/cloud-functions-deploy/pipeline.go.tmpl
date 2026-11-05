@@ -5,6 +5,7 @@ package jobs
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 func (p *{{pascal .pipeline_name}}) deploy(ctx context.Context) error {
 	return step.Run(ctx, "deploy cloud function "+{{quote .function}}, func(ctx context.Context) error {
 		args := functionDeployArgs()
-		if os.Getenv("SPARKWING_DRY_RUN") != "" {
+		if dryRun() {
 			sparkwing.Info(ctx, "DRY RUN: gcloud %s", strings.Join(args, " "))
 			return nil
 		}
@@ -130,6 +131,11 @@ func resolveFunctionURL(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
+}
+
+func dryRun() bool {
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func init() {
