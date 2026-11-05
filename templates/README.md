@@ -36,7 +36,9 @@ render this registry's named templates or accept their parameters.
 37 templates. The verify column is the tier the registry harness
 holds each template to on every sparkwing release: runnable templates run
 green locally, dry-runnable templates run green with SPARKWING_DRY_RUN=1
-and touch no infrastructure, compile-only templates are rendered, compiled,
+and touch no infrastructure. `SPARKWING_DRY_RUN` uses Go boolean syntax:
+only true values enable it; `false`, `0`, empty and invalid values run normally.
+Compile-only templates are rendered, compiled,
 linted, and explained.
 
 | Name | Cloud | Category | Verify | Notes |

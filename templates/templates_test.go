@@ -374,3 +374,38 @@ func head(s string, n int) string {
 	}
 	return s[:n]
 }
+
+func TestRender_DryRunTemplatesWithOptionalCommandsEmpty(t *testing.T) {
+	for _, name := range []string{
+		"container-deploy-ecs-fargate", "terraform-apply-gated",
+		"cloud-functions-deploy", "docker-deploy-gar-cloudrun",
+		"github-release-go", "next-preview-deploy-cloudrun",
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpl, err := Get(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, emptyCommands := range []bool{false, true} {
+				params := make(map[string]string)
+				for key, value := range tmpl.Manifest.VerifyParams {
+					params[key] = value
+				}
+				if emptyCommands {
+					for _, param := range tmpl.Manifest.Parameters {
+						if !param.Required && strings.HasSuffix(param.Name, "-cmd") {
+							params[param.Name] = ""
+						}
+					}
+				}
+				out, err := Render(name, params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := parser.ParseFile(token.NewFileSet(), "rendered.go", out, parser.AllErrors); err != nil {
+					t.Fatalf("empty commands %v: %v", emptyCommands, err)
+				}
+			}
+		})
+	}
+}

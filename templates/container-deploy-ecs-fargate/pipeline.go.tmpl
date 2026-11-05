@@ -5,6 +5,7 @@ package jobs
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
@@ -115,7 +116,8 @@ func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) stri
 }
 
 func dryRun() bool {
-	return os.Getenv("SPARKWING_DRY_RUN") != ""
+	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
+	return on
 }
 
 func init() {
