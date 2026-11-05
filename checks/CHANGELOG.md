@@ -9,6 +9,8 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.33.6] - 2026-11-05
+
 ### Changed
 
 - **deps:** pin the Sparkwing SDK to published v0.66.1.

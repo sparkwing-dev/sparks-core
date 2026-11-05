@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+## [v0.33.6] - 2026-11-05
+
+### Changed
+
+- **release:** Coordinated version with the dry-run parsing fix; no runtime changes.
+
 ## [v0.33.5] - 2026-10-03
 
 ### Changed
