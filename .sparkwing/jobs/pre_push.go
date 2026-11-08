@@ -117,7 +117,7 @@ func lintAllModules(ctx context.Context) error {
 			"Install from https://golangci-lint.run/docs/welcome/install/, or add its directory (commonly ~/.go/bin): %w", err)
 	}
 	return forEachModuleDir(ctx, "golangci-lint", "golangci-lint run --allow-serial-runners ./...", map[string]string{
-		"GOLANGCI_LINT_CACHE": sparkwing.Path(".sparkwing", "cache", "golangci-lint"),
+		"GOLANGCI_LINT_CACHE": filepath.Join(sparkwing.WorkDir(), ".sparkwing", "cache", "golangci-lint"),
 	})
 }
 

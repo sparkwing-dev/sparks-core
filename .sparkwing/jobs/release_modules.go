@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -81,7 +83,7 @@ func (j *ReleaseModulesJob) tagNames() ([]string, error) {
 	if err := refusePostV0(j.In.Version); err != nil {
 		return nil, err
 	}
-	data, err := sw.ReadFile("spark.json")
+	data, err := os.ReadFile(filepath.Join(sw.WorkDir(), "spark.json"))
 	if err != nil {
 		return nil, fmt.Errorf("read spark.json: %w", err)
 	}
