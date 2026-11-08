@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestSyncArgoCDFailsOnUnreadableApplication(t *testing.T) {
@@ -215,16 +217,22 @@ func TestSyncDeploymentRejectsMissingSelectedImage(t *testing.T) {
 }
 
 func TestDeployRejectsMissingSelectedImage(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repo, _ := gitFixture(t)
 	if err := os.WriteFile(filepath.Join(repo, "kustomization.yaml"), []byte("images:\n  - name: registry/app\n    newTag: desired\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "kustomization.yaml"}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "images"}} {
-		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(host.Context(t.Context()), "git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git fixture: %v: %s", err, out)
 		}
 	}
-	_, err := Deploy(t.Context(), DeployConfig{GitopsRepo: repo, ECR: "registry", Images: []string{"app", "missing"}, Tag: "desired"})
+	_, err := Deploy(host.Context(t.Context()), DeployConfig{GitopsRepo: repo, ECR: "registry", Images: []string{"app", "missing"}, Tag: "desired"})
 	if err == nil || !strings.Contains(err.Error(), "image missing not found") {
 		t.Fatalf("missing image error = %v", err)
 	}

@@ -1,7 +1,6 @@
 package contentkey
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,8 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
@@ -65,8 +66,14 @@ func (repository *repo) commitAll(message string) {
 }
 
 func mustKey(t *testing.T, directory, salt string, globs []string) sparkwing.MemoValue {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	t.Helper()
-	key, err := contentKey(context.Background(), directory, salt, globs)
+	key, err := contentKey(host.Context(t.Context()), directory, salt, globs)
 	if !sameKey(err, nil) {
 		t.Fatalf("contentKey: %v", err)
 	}
@@ -270,6 +277,12 @@ func lockDir(t *testing.T, directory string) {
 }
 
 func TestContentKey_StatFailureErrorsInsteadOfChangingKey(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("locked/a.go", "package p\n")
 	repository.write("main.go", "package main\n")
@@ -279,7 +292,7 @@ func TestContentKey_StatFailureErrorsInsteadOfChangingKey(t *testing.T) {
 
 	locked := filepath.Join(repository.directory, "locked")
 	lockDir(t, locked)
-	_, err := contentKey(context.Background(), repository.directory, "", globs)
+	_, err := contentKey(host.Context(t.Context()), repository.directory, "", globs)
 	if sameKey(err, nil) {
 		t.Fatal("a stat failure that is not a deletion must error, not shrink the key")
 	}
@@ -301,11 +314,17 @@ func padName(i int) string {
 }
 
 func TestChangedVsBase_CleanTreeIsUnchanged(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 
-	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"*.go"})
+	changed, known, err := changedVsBase(host.Context(t.Context()), repository.directory, "HEAD", []string{"*.go"})
 	if !sameKey(err, nil) {
 		t.Fatal(err)
 	}
@@ -318,12 +337,18 @@ func TestChangedVsBase_CleanTreeIsUnchanged(t *testing.T) {
 }
 
 func TestChangedVsBase_WorkingTreeEditIsChanged(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 	repository.write("main.go", "package main // edit\n")
 
-	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"*.go"})
+	changed, known, err := changedVsBase(host.Context(t.Context()), repository.directory, "HEAD", []string{"*.go"})
 	if !sameKey(err, nil) {
 		t.Fatal(err)
 	}
@@ -333,13 +358,19 @@ func TestChangedVsBase_WorkingTreeEditIsChanged(t *testing.T) {
 }
 
 func TestChangedVsBase_ScopedToGlobs(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("app/main.go", "package main\n")
 	repository.write("docs/readme.md", "hi\n")
 	repository.commitAll("init")
 	repository.write("docs/readme.md", "changed\n")
 
-	changed, known, err := changedVsBase(context.Background(), repository.directory, "HEAD", []string{"app"})
+	changed, known, err := changedVsBase(host.Context(t.Context()), repository.directory, "HEAD", []string{"app"})
 	if !sameKey(err, nil) {
 		t.Fatal(err)
 	}
@@ -352,11 +383,17 @@ func TestChangedVsBase_ScopedToGlobs(t *testing.T) {
 }
 
 func TestChangedVsBase_MissingBaseIsUnknown(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 
-	changed, known, err := changedVsBase(context.Background(), repository.directory, "origin/does-not-exist", []string{"*.go"})
+	changed, known, err := changedVsBase(host.Context(t.Context()), repository.directory, "origin/does-not-exist", []string{"*.go"})
 	if !sameKey(err, nil) {
 		t.Fatalf("missing base should not error, got %v", err)
 	}
@@ -369,38 +406,56 @@ func TestChangedVsBase_MissingBaseIsUnknown(t *testing.T) {
 }
 
 func TestUnchanged_Predicate(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 	t.Chdir(repository.directory)
 
-	if !Unchanged("HEAD", "*.go")(context.Background()) {
+	if !Unchanged("HEAD", "*.go")(host.Context(t.Context())) {
 		t.Fatal("clean tree vs HEAD should skip (unchanged=true)")
 	}
 	repository.write("main.go", "package main // edit\n")
-	if Unchanged("HEAD", "*.go")(context.Background()) {
+	if Unchanged("HEAD", "*.go")(host.Context(t.Context())) {
 		t.Fatal("edited tree should not skip")
 	}
 }
 
 func TestUnchanged_MissingBaseDoesNotSkip(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 	t.Chdir(repository.directory)
 
-	if Unchanged("origin/nope", "*.go")(context.Background()) {
+	if Unchanged("origin/nope", "*.go")(host.Context(t.Context())) {
 		t.Fatal("missing base must return unchanged=false")
 	}
 }
 
 func TestChanged_IsInverseOfUnchanged(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("main.go", "package main\n")
 	repository.commitAll("init")
 	t.Chdir(repository.directory)
 
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 	if Changed("HEAD", "*.go")(ctx) {
 		t.Fatal("clean tree should report not-changed")
 	}
@@ -432,8 +487,14 @@ func hasPath(paths []string, want string) bool {
 }
 
 func TestGoDeps_IncludesTargetSourceTestsAndSameModuleDeps(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
-	files, err := GoDeps(context.Background(), repository.directory, "./app")
+	files, err := GoDeps(host.Context(t.Context()), repository.directory, "./app")
 	if !sameKey(err, nil) {
 		t.Fatalf("GoDeps: %v", err)
 	}
@@ -448,11 +509,17 @@ func TestGoDeps_IncludesTargetSourceTestsAndSameModuleDeps(t *testing.T) {
 }
 
 func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
 	repository.write("lib/lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) {\n\tif Hello() == \"\" {\n\t\tt.Fatal(\"empty\")\n\t}\n}\n")
 	repository.commitAll("lib test")
 
-	appDeps, err := GoDeps(context.Background(), repository.directory, "./app")
+	appDeps, err := GoDeps(host.Context(t.Context()), repository.directory, "./app")
 	if !sameKey(err, nil) {
 		t.Fatalf("GoDeps(./app): %v", err)
 	}
@@ -460,7 +527,7 @@ func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
 		t.Errorf("a dependency's test file must not enter the target's closure; got %v", appDeps)
 	}
 
-	libDeps, err := GoDeps(context.Background(), repository.directory, "./lib")
+	libDeps, err := GoDeps(host.Context(t.Context()), repository.directory, "./lib")
 	if !sameKey(err, nil) {
 		t.Fatalf("GoDeps(./lib): %v", err)
 	}
@@ -470,9 +537,15 @@ func TestGoDeps_ExcludesDependencyTestFiles(t *testing.T) {
 }
 
 func TestSaltedGoPackage_ChangesWhenDependencyChanges(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
 	t.Chdir(repository.directory)
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 
 	before, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
 	if !sameKey(err, nil) {
@@ -493,11 +566,17 @@ func TestSaltedGoPackage_ChangesWhenDependencyChanges(t *testing.T) {
 }
 
 func TestSaltedGoPackage_UnaffectedByUnrelatedPackage(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
 	repository.write("other/other.go", "package other\n\nfunc Noop() {}\n")
 	repository.commitAll("other")
 	t.Chdir(repository.directory)
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 
 	before, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
 	if !sameKey(err, nil) {
@@ -514,9 +593,15 @@ func TestSaltedGoPackage_UnaffectedByUnrelatedPackage(t *testing.T) {
 }
 
 func TestSaltedGoPackage_DistinctPerSpec(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
 	t.Chdir(repository.directory)
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 
 	app, err := SaltedGoPackage("v1", "./app", "go.mod")(ctx)
 	if !sameKey(err, nil) {
@@ -532,10 +617,16 @@ func TestSaltedGoPackage_DistinctPerSpec(t *testing.T) {
 }
 
 func TestOfGoPackage_ErrorsOutsideModule(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	t.Setenv("GOWORK", "off")
 	directory := t.TempDir()
 	t.Chdir(directory)
-	key, err := OfGoPackage("./app")(context.Background())
+	key, err := OfGoPackage("./app")(host.Context(t.Context()))
 	if key != nil || err == nil {
 		t.Fatalf("outside-module resolution = %q, %v; want empty key and error", key, err)
 	}

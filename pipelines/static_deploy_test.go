@@ -1,14 +1,21 @@
 package pipelines
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	work := t.TempDir()
 	t.Setenv("SPARKWING_WORK_DIR", work)
 
@@ -20,7 +27,7 @@ func TestStaticDeploy_HostBuild_PropagatesBuildExtraEnv(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 	if err := sd.BuildOnly(ctx); err != nil {
 		t.Fatalf("BuildOnly: %v", err)
 	}

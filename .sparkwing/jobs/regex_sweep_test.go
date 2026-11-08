@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 // The sweeps read this file too, so the fixtures spell their patterns with an
@@ -60,8 +62,14 @@ func sweepFixtureRepo(t *testing.T, history string) string {
 // A commit is judged on what it changes. The sweeps once read the whole
 // tracked tree, so history nobody touched could refuse an unrelated commit.
 func TestRegexSweepsIgnoreAFileTheCommitDoesNotTouch(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	root := sweepFixtureRepo(t, "a dash "+sweepEmDash+" and a "+sweepTrackerID+" id\n")
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 
 	sweepWrite(t, filepath.Join(root, "internal", "clean.go"),
 		"package internal\n\nfunc Clean() int { return 2 }\n")
@@ -78,6 +86,12 @@ func TestRegexSweepsIgnoreAFileTheCommitDoesNotTouch(t *testing.T) {
 // The narrowing must not disarm the sweeps: content the commit actually
 // introduces is still refused.
 func TestRegexSweepsRefuseWhatTheStagedChangeIntroduces(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	cases := []struct {
 		name  string
 		body  string
@@ -93,7 +107,7 @@ func TestRegexSweepsRefuseWhatTheStagedChangeIntroduces(t *testing.T) {
 			sweepWrite(t, filepath.Join(root, "internal", "bad.go"), tc.body)
 			sweepGit(t, root, "add", "-A")
 
-			if err := tc.check(context.Background()); err == nil {
+			if err := tc.check(host.Context(t.Context())); err == nil {
 				t.Fatal("the sweep passed a staged change that introduces the pattern")
 			}
 		})
@@ -103,8 +117,14 @@ func TestRegexSweepsRefuseWhatTheStagedChangeIntroduces(t *testing.T) {
 // The whole-tree audit is how pre-existing drift still gets found, off the
 // critical path of an unrelated commit.
 func TestRegexSweepAllReadsPastTheStagedChange(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	root := sweepFixtureRepo(t, "a dash "+sweepEmDash+" here\n")
-	ctx := context.Background()
+	ctx := host.Context(t.Context())
 
 	sweepWrite(t, filepath.Join(root, "internal", "clean.go"),
 		"package internal\n\nfunc Clean() int { return 2 }\n")

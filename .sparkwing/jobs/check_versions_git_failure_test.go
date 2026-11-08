@@ -7,13 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestLocalBehindRemoteDistinguishesGitFailures(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	for _, kind := range []string{"outside checkout", "git unavailable", "stale linked worktree", "malformed metadata", "nested malformed metadata", "unreadable directory", "cancelled context"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			ctx := context.Background()
+			ctx := host.Context(t.Context())
 			if kind != "outside checkout" {
 				versionFixtureGit(t, root, "init", "--quiet")
 			}
@@ -85,6 +93,12 @@ func versionFixtureGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestLocalBehindRemotePreservesNonApplicableOrigins(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	for _, kind := range []string{"no origin", "missing main", "only release/main", "only tag main", "unreachable origin", "unreachable cached origin", "authentication failure", "up to date", "behind from nested module"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
@@ -138,7 +152,7 @@ func TestLocalBehindRemotePreservesNonApplicableOrigins(t *testing.T) {
 				}
 				t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			}
-			behind, by, err := localBehindRemote(context.Background(), root)
+			behind, by, err := localBehindRemote(host.Context(t.Context()), root)
 			if kind == "unreachable origin" || kind == "unreachable cached origin" || kind == "authentication failure" {
 				if err == nil {
 					t.Fatal("unreachable origin produced a clean verdict")

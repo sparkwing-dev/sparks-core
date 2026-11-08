@@ -6,9 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestWithPostgres_ReadinessTargetsTCP(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	dir := t.TempDir()
 	probe := filepath.Join(dir, "probe")
 	docker := "#!/bin/sh\ncase \"$1\" in\nport) printf '127.0.0.1:54320\\n' ;;\nexec) printf '%s\\n' \"$*\" > \"$TEST_PROBE\" ;;\nesac\n"
@@ -18,7 +26,7 @@ func TestWithPostgres_ReadinessTargetsTCP(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TEST_PROBE", probe)
 	called := false
-	err := WithPostgres(context.Background(), Postgres{Name: "test-postgres", User: "app", DB: "appdb"}, func(_ context.Context, dsn string) error {
+	err := WithPostgres(host.Context(t.Context()), Postgres{Name: "test-postgres", User: "app", DB: "appdb"}, func(_ context.Context, dsn string) error {
 		called = true
 		if dsn != PostgresDSN("app", "postgres", 54320, "appdb") {
 			t.Errorf("DSN = %q", dsn)

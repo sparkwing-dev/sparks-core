@@ -1,13 +1,14 @@
 package s3
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 
 	"github.com/sparkwing-dev/sparks-core/aws"
 )
@@ -157,9 +158,15 @@ func hasFlagValue(argv []string, flag, value string) bool {
 }
 
 func TestDeployStaticSite_EmptyProfileSendsNoProfileFlag(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	logPath := fakeAWSCLI(t)
-	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t)}); err != nil {
+	if _, err := DeployStaticSite(host.Context(t.Context()), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t)}); err != nil {
 		t.Fatalf("DeployStaticSite with an empty AWSProfile: %v", err)
 	}
 	runs := recordedInvocations(t, logPath)
@@ -176,10 +183,16 @@ func TestDeployStaticSite_EmptyProfileSendsNoProfileFlag(t *testing.T) {
 }
 
 func TestDeployStaticSite_ConfiguredProfileReachesTheCLI(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	logPath := fakeAWSCLI(t)
 	cfg := StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), AWSProfile: "ci"}
-	if _, err := DeployStaticSite(context.Background(), cfg); err != nil {
+	if _, err := DeployStaticSite(host.Context(t.Context()), cfg); err != nil {
 		t.Fatalf("DeployStaticSite: %v", err)
 	}
 	runs := recordedInvocations(t, logPath)
@@ -194,11 +207,17 @@ func TestDeployStaticSite_ConfiguredProfileReachesTheCLI(t *testing.T) {
 }
 
 func TestDeployStaticSite_CallerProfileBeatsAWSProfileEnv(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	t.Setenv("AWS_PROFILE", "from-env")
 	logPath := fakeAWSCLI(t)
 	cfg := StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), AWSProfile: "caller"}
-	if _, err := DeployStaticSite(context.Background(), cfg); err != nil {
+	if _, err := DeployStaticSite(host.Context(t.Context()), cfg); err != nil {
 		t.Fatalf("DeployStaticSite: %v", err)
 	}
 	for _, argv := range recordedInvocations(t, logPath) {
@@ -212,10 +231,16 @@ func TestDeployStaticSite_CallerProfileBeatsAWSProfileEnv(t *testing.T) {
 }
 
 func TestDeployStaticSite_DryRunWritesNothing(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	t.Setenv("SPARKWING_DRY_RUN", "1")
 	logPath := fakeAWSCLI(t)
-	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), Delete: true}); err != nil {
+	if _, err := DeployStaticSite(host.Context(t.Context()), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), Delete: true}); err != nil {
 		t.Fatalf("DeployStaticSite: %v", err)
 	}
 	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
@@ -224,10 +249,16 @@ func TestDeployStaticSite_DryRunWritesNothing(t *testing.T) {
 }
 
 func TestDeployStaticSite_WrongAccountRefuses(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	fakeAWSCLI(t)
 	cfg := StaticSiteConfig{Bucket: "site", OutDir: siteDir(t), ExpectedAccountID: "111111111111"}
-	_, err := DeployStaticSite(context.Background(), cfg)
+	_, err := DeployStaticSite(host.Context(t.Context()), cfg)
 	if err == nil {
 		t.Fatal("DeployStaticSite deployed to an account the caller did not name")
 	}
@@ -237,9 +268,15 @@ func TestDeployStaticSite_WrongAccountRefuses(t *testing.T) {
 }
 
 func TestDeployStaticSite_MissingBucketRejected(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	fakeAWSCLI(t)
-	_, err := DeployStaticSite(context.Background(), StaticSiteConfig{OutDir: siteDir(t)})
+	_, err := DeployStaticSite(host.Context(t.Context()), StaticSiteConfig{OutDir: siteDir(t)})
 	if err == nil {
 		t.Fatal("DeployStaticSite with no Bucket returned nil error")
 	}

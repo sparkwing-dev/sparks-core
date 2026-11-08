@@ -7,7 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `probe/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
-## [Unreleased]
+## [v0.34.0] - 2026-11-08
+
+### Changed
+
+- **release:** coordinate with the thin SDK template release.
+
 
 ## [v0.33.6] - 2026-11-05
 

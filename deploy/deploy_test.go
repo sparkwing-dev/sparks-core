@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,16 +11,24 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
+
 	"github.com/sparkwing-dev/sparks-core/gitops"
 )
 
 func TestRunVerifiesUnchangedTags(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repo := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repo, "kustomization.yaml"), []byte("images:\n  - name: registry/app\n    newTag: desired\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"init", "-b", "main"}, {"add", "kustomization.yaml"}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "fixture"}} {
-		cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", repo}, args...)...)
+		cmd := exec.CommandContext(host.Context(t.Context()), "git", append([]string{"-C", repo}, args...)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, out)
 		}
@@ -37,7 +44,7 @@ func TestRunVerifiesUnchangedTags(t *testing.T) {
 		_, _ = fmt.Fprintf(w, `{"spec":{"source":{"repoURL":%q,"targetRevision":"HEAD"}},"status":{"sync":{"status":"Synced","revision":%q},"health":{"status":"Healthy"},"summary":{"images":["registry/app:desired"]}}}`, repo, sha)
 	}))
 	defer server.Close()
-	if err := Run(context.Background(), Config{GitopsRepo: repo, GitopsPath: ".", ECR: "registry", Images: []string{"app"}, Tag: "desired", AppName: "app", ArgoCD: gitops.ArgoCDConfig{Server: server.URL}}); err != nil {
+	if err := Run(host.Context(t.Context()), Config{GitopsRepo: repo, GitopsPath: ".", ECR: "registry", Images: []string{"app"}, Tag: "desired", AppName: "app", ArgoCD: gitops.ArgoCDConfig{Server: server.URL}}); err != nil {
 		t.Fatal(err)
 	}
 	if observed.Load() == 0 {

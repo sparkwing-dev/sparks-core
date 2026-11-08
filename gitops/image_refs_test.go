@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
+
 	"go.yaml.in/yaml/v3"
 )
 
@@ -138,6 +140,12 @@ func TestImageRefsNoOpPreservesOriginalBytes(t *testing.T) {
 }
 
 func TestDeployUnchangedImagesDoesNotAttemptPush(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repo, _ := gitFixture(t)
 	path := filepath.Join(repo, "kustomization.yaml")
 	source := "images:\n  - name: registry/app\n    newTag: desired\n"
@@ -145,11 +153,11 @@ func TestDeployUnchangedImagesDoesNotAttemptPush(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "kustomization.yaml"}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "unchangedfixture"}} {
-		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(host.Context(t.Context()), "git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git fixture: %v: %s", err, out)
 		}
 	}
-	changed, err := Deploy(t.Context(), DeployConfig{GitopsRepo: repo, ECR: "registry", Images: []string{"app"}, Tag: "desired"})
+	changed, err := Deploy(host.Context(t.Context()), DeployConfig{GitopsRepo: repo, ECR: "registry", Images: []string{"app"}, Tag: "desired"})
 	if err != nil || changed {
 		t.Fatalf("unchanged deploy: changed=%t error=%v", changed, err)
 	}

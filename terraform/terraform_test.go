@@ -116,7 +116,7 @@ func TestApply_RequiresPlanFile(t *testing.T) {
 	}
 }
 
-// withCapture binds a fake host so dry-run echoes are recorded instead of executed.
+// safety: dry-run commands need a host binding that records echoes without execution.
 func withCapture(t *testing.T) (context.Context, func() []string) {
 	t.Helper()
 	host := sparkwingtest.New(sparkwingtest.Options{})

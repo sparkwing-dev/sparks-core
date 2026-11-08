@@ -1,13 +1,20 @@
 package jobs
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestLintScopesCacheToWorktree(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	t.Setenv("SPARKWING_HOME", t.TempDir())
 	root := t.TempDir()
 	t.Setenv("TMPDIR", root)
@@ -33,7 +40,7 @@ func TestLintScopesCacheToWorktree(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Chdir(dir)
-		if err := lintAllModules(context.Background()); err != nil {
+		if err := lintAllModules(host.Context(t.Context())); err != nil {
 			t.Fatal(err)
 		}
 		got, err := os.ReadFile(seen)

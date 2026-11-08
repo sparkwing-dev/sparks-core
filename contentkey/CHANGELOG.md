@@ -3,7 +3,7 @@
 Versions use [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
-## [Unreleased]
+## [v0.34.0] - 2026-11-08
 
 ### Removed
 
@@ -13,10 +13,12 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 ### Changed
 
+- **deps:** pin the Sparkwing SDK to published v0.70.0.
+
 - **contentkey (Breaking):** `OfGoPackage` and `SaltedGoPackage` return
   `sparkwing.MemoKeyFn` for `JobNode.Memo`. They hash `sparkwing.WorkDir()`, the
   process working directory.
-- **deps:** require Sparkwing SDK v0.69.1 for the memo API.
+- **tests:** run command-backed library tests through `sparkwingtest.Host`.
 
 
 ## [v0.33.6] - 2026-11-05

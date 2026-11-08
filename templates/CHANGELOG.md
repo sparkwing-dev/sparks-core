@@ -7,12 +7,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `templates/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
-## [Unreleased]
+## [v0.34.0] - 2026-11-08
 
 ### Changed
 
+- **release:** coordinate with the thin SDK template release.
+
 - **sdk (Breaking):** generated pipelines compile against the thin Sparkwing SDK
-  (v0.68 and later). Approval gates use `plan.Approval` with `OnTimeout`,
+  (v0.70.0). Approval gates use `plan.Approval` with `OnTimeout`,
   annotations pass `sparkwing.Annotation`, retries use `sparkwing.Backoff`, and
   `scheduled-cleanup` resolves its directory with `filepath.Abs` instead of
   `sparkwing.Path`. `docker-build-smoketest` drops the removed `RetryAuto` and

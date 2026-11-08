@@ -1,8 +1,9 @@
 package s3
 
 import (
-	"context"
 	"testing"
+
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func TestDryRunBooleanEnvironment(t *testing.T) {
@@ -18,10 +19,16 @@ func TestDryRunBooleanEnvironment(t *testing.T) {
 }
 
 func TestDeployStaticSite_FalseDryRunExecutesCLI(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	awsEnvOff(t)
 	t.Setenv("SPARKWING_DRY_RUN", "false")
 	logPath := fakeAWSCLI(t)
-	if _, err := DeployStaticSite(context.Background(), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t)}); err != nil {
+	if _, err := DeployStaticSite(host.Context(t.Context()), StaticSiteConfig{Bucket: "site", OutDir: siteDir(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if runs := recordedInvocations(t, logPath); len(runs) != 2 {

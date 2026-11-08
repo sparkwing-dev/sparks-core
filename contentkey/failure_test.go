@@ -8,10 +8,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
+
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
 func TestCacheResolversPreserveFailures(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	t.Chdir(t.TempDir())
 	resolvers := map[string]sparkwing.MemoKeyFn{
 		"package":        OfGoPackage("./example"),
@@ -20,7 +28,7 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 	for name, resolver := range resolvers {
 		t.Run(name, func(t *testing.T) {
 			t.Run("cancelled", func(t *testing.T) {
-				ctx, cancel := context.WithCancel(t.Context())
+				ctx, cancel := context.WithCancel(host.Context(t.Context()))
 				cancel()
 				key, err := resolver(ctx)
 				if key != nil || !errors.Is(err, context.Canceled) {
@@ -29,7 +37,7 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 			})
 			t.Run("missing tool", func(t *testing.T) {
 				t.Setenv("PATH", t.TempDir())
-				key, err := resolver(t.Context())
+				key, err := resolver(host.Context(t.Context()))
 				var toolError *exec.Error
 				if key != nil || !errors.As(err, &toolError) {
 					t.Fatalf("resolution without tools = %q, %v; want empty key and executable cause", key, err)
@@ -40,13 +48,19 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 }
 
 func TestGoPackageRequiresMainModule(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := goModuleRepo(t)
 	t.Chdir(repository.directory)
-	files, err := GoDeps(t.Context(), repository.directory, "fmt")
+	files, err := GoDeps(host.Context(t.Context()), repository.directory, "fmt")
 	if files != nil || err == nil || !strings.Contains(err.Error(), "main module") {
 		t.Errorf("standard-library dependencies = %v, %v; want main module error", files, err)
 	}
-	key, err := SaltedGoPackage("example", "fmt")(t.Context())
+	key, err := SaltedGoPackage("example", "fmt")(host.Context(t.Context()))
 	if key != nil || err == nil || !strings.Contains(err.Error(), "main module") {
 		t.Errorf("standard-library key = %q, %v; want main module error", key, err)
 	}
@@ -93,6 +107,12 @@ func TestModuleRelativePathRejectsUnresolvedSources(t *testing.T) {
 }
 
 func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	repository := newRepo(t)
 	repository.write("go.work", "go 1.26.0\n\nuse ./nested\n")
 	repository.write("nested/go.mod", "module example.com/nested\n\ngo 1.26.0\n")
@@ -101,17 +121,17 @@ func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
 	repository.commitAll("workspace")
 	t.Setenv("GOWORK", filepath.Join(repository.directory, "go.work"))
 	t.Chdir(repository.directory)
-	files, err := GoDeps(t.Context(), repository.directory, "./nested/app")
+	files, err := GoDeps(host.Context(t.Context()), repository.directory, "./nested/app")
 	if err != nil || len(files) != 1 || files[0] != "app/app.go" {
 		t.Fatalf("module-relative dependencies = %v, %v; want app/app.go", files, err)
 	}
 	resolver := SaltedGoPackage("example", "./nested/app", "settings.txt")
-	first, err := resolver(t.Context())
+	first, err := resolver(host.Context(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	repository.write("nested/app/app.go", "package app\n\nconst Value = 2\n")
-	afterSource, err := resolver(t.Context())
+	afterSource, err := resolver(host.Context(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +139,7 @@ func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
 		t.Errorf("nested source edit retained key %q", first)
 	}
 	repository.write("settings.txt", "second\n")
-	afterExtra, err := resolver(t.Context())
+	afterExtra, err := resolver(host.Context(t.Context()))
 	if err != nil {
 		t.Fatal(err)
 	}
