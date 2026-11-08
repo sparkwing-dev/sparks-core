@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sparkwing-dev/sparkwing/sparkwing"
+	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
 )
 
 func eq(t *testing.T, name string, got, want []string) {
@@ -116,34 +116,41 @@ func TestApply_RequiresPlanFile(t *testing.T) {
 	}
 }
 
-type captureLogger struct{ msgs []string }
-
-func (c *captureLogger) Log(_, msg string)            { c.msgs = append(c.msgs, msg) }
-func (c *captureLogger) Emit(rec sparkwing.LogRecord) { c.msgs = append(c.msgs, rec.Msg) }
-
-func withCapture(t *testing.T) (context.Context, *captureLogger) {
+// withCapture binds a fake host so dry-run echoes are recorded instead of executed.
+func withCapture(t *testing.T) (context.Context, func() []string) {
 	t.Helper()
-	lg := &captureLogger{}
-	ctx := context.WithValue(context.Background(), sparkwing.RuntimePlumbing.Keys.Logger, sparkwing.Logger(lg))
-	return ctx, lg
+	host := sparkwingtest.New(sparkwingtest.Options{})
+	t.Cleanup(func() {
+		if err := host.Close(); err != nil {
+			t.Errorf("close fake host: %v", err)
+		}
+	})
+	messages := func() []string {
+		var out []string
+		for _, record := range host.Records() {
+			out = append(out, record.Msg)
+		}
+		return out
+	}
+	return host.Context(t.Context()), messages
 }
 
 // A real exec of a saved plan against no backend would error, so a nil
 // return proves nothing ran.
 func TestApply_DryRunEchoesArgvWithoutExecuting(t *testing.T) {
 	t.Setenv("SPARKWING_DRY_RUN", "1")
-	ctx, lg := withCapture(t)
+	ctx, messages := withCapture(t)
 	if err := Apply(ctx, Config{Dir: "infra"}, ApplyOptions{PlanFile: "tfplan"}); err != nil {
 		t.Fatalf("dry-run Apply = %v, want nil", err)
 	}
 	var echoed string
-	for _, m := range lg.msgs {
+	for _, m := range messages() {
 		if strings.Contains(m, "would run") {
 			echoed = m
 		}
 	}
 	if echoed == "" {
-		t.Fatalf("no dry-run echo in %v", lg.msgs)
+		t.Fatalf("no dry-run echo in %v", messages())
 	}
 	if !strings.Contains(echoed, "terraform apply -input=false -no-color -lock-timeout=5m tfplan") {
 		t.Fatalf("echo missing exact argv: %q", echoed)
@@ -155,17 +162,17 @@ func TestApply_DryRunEchoesArgvWithoutExecuting(t *testing.T) {
 
 func TestApply_DryRunEchoesWorkspaceSelect(t *testing.T) {
 	t.Setenv("SPARKWING_DRY_RUN", "1")
-	ctx, lg := withCapture(t)
+	ctx, messages := withCapture(t)
 	if err := Apply(ctx, Config{Dir: "infra", Workspace: "prod"}, ApplyOptions{PlanFile: "tfplan"}); err != nil {
 		t.Fatalf("dry-run Apply = %v, want nil", err)
 	}
 	var sawWorkspace bool
-	for _, m := range lg.msgs {
+	for _, m := range messages() {
 		if strings.Contains(m, "terraform workspace select prod") {
 			sawWorkspace = true
 		}
 	}
 	if !sawWorkspace {
-		t.Fatalf("dry-run did not echo workspace select: %v", lg.msgs)
+		t.Fatalf("dry-run did not echo workspace select: %v", messages())
 	}
 }

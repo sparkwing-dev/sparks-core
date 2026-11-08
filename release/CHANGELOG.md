@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+
+- **deps:** require Sparkwing SDK v0.69.1. Tests select a fixture directory with
+  `t.Chdir`.
+
+
 ## [v0.33.6] - 2026-11-05
 
 ### Fixed

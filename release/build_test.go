@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/sparkwing-dev/sparkwing/sparkwing"
 )
 
 func TestArtifactPath(t *testing.T) {
@@ -100,7 +98,7 @@ func TestSHA256File(t *testing.T) {
 
 func TestChecksums_WritesSha256Manifest(t *testing.T) {
 	dir := t.TempDir()
-	setWorkDir(t, dir)
+	t.Chdir(dir)
 	if err := os.Mkdir(filepath.Join(dir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -122,20 +120,13 @@ func TestChecksums_WritesSha256Manifest(t *testing.T) {
 
 func TestChecksums_NoFilesErrors(t *testing.T) {
 	dir := t.TempDir()
-	setWorkDir(t, dir)
+	t.Chdir(dir)
 	if err := os.Mkdir(filepath.Join(dir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := Checksums(context.Background(), ChecksumConfig{}); err == nil {
 		t.Fatal("expected error when the dir has no files to checksum")
 	}
-}
-
-func setWorkDir(t *testing.T, dir string) {
-	t.Helper()
-	orig := sparkwing.WorkDir()
-	sparkwing.SetWorkDir(dir)
-	t.Cleanup(func() { sparkwing.SetWorkDir(orig) })
 }
 
 func TestListDirFiles_ExcludesManifestAndSorts(t *testing.T) {

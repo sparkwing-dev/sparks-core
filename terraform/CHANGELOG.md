@@ -9,6 +9,12 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+
+- **deps:** require Sparkwing SDK v0.69.1. Dry-run tests capture logs through
+  `sparkwingtest`.
+
+
 ## [v0.33.6] - 2026-11-05
 
 ### Fixed
