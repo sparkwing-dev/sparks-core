@@ -90,7 +90,7 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 		return err
 	}
 	p.artifacts = artifacts
-	sparkwing.Annotate(ctx, fmt.Sprintf("built %d artifacts for %s", len(artifacts), version))
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("built %d artifacts for %s", len(artifacts), version)})
 	return nil
 }
 

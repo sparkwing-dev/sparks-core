@@ -25,9 +25,9 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 {{- if eq .direction "down"}}
 {{- if eq .require_approval "true"}}
-	approve := sparkwing.JobApproval(plan, "approve-rollback", sparkwing.ApprovalConfig{
-		Message:  "Roll back {{if eq .down_steps "0"}}ALL migrations{{else}}{{.down_steps}} migration(s){{end}} against the {{.dsn_secret}} database? This is destructive.",
-		OnExpiry: sparkwing.ApprovalDeny,
+	approve := plan.Approval("approve-rollback", sparkwing.ApprovalConfig{
+		Message:   "Roll back {{if eq .down_steps "0"}}ALL migrations{{else}}{{.down_steps}} migration(s){{end}} against the {{.dsn_secret}} database? This is destructive.",
+		OnTimeout: sparkwing.ApprovalDeny,
 	})
 	sparkwing.Job(plan, "migrate-down", p.migrateDown).Needs(approve)
 {{- else}}

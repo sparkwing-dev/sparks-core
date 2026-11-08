@@ -40,12 +40,12 @@ func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Pl
 	}
 	p.key = fmt.Sprintf("%s/%s.tar.gz", {{quote .artifact_prefix}}, sha)
 	build := sparkwing.Job(plan, "build", p.build).
-		Retry(2, sparkwing.RetryBackoff(3*time.Second)).
+		Retry(2, sparkwing.Backoff(3*time.Second)).
 		Timeout(20 * time.Minute)
 	pack := sparkwing.Job(plan, "tarball", p.tarball).Needs(build)
 	sparkwing.Job(plan, "upload", p.upload).
 		Needs(pack).
-		Retry(2, sparkwing.RetryBackoff(3*time.Second)).
+		Retry(2, sparkwing.Backoff(3*time.Second)).
 		Timeout(10 * time.Minute)
 	return nil
 }

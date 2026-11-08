@@ -47,7 +47,7 @@ func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 	}
 	p.summary = fmt.Sprintf("terraform plan (%s): %d to add, %d to change, %d to destroy",
 		tfDir, res.Adds, res.Changes, res.Destroys)
-	sparkwing.Annotate(ctx, p.summary)
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: p.summary})
 	return nil
 }
 

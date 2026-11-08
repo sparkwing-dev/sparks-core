@@ -40,10 +40,10 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 	tfPlan := sparkwing.Job(plan, "plan", p.plan)
-	approve := sparkwing.JobApproval(plan, "approve-apply", sparkwing.ApprovalConfig{
-		Message:  "Apply the Terraform plan to {{.environment}}? Review the plan step's change summary first.",
-		Timeout:  {{.timeout_hours}} * time.Hour,
-		OnExpiry: sparkwing.ApprovalDeny,
+	approve := plan.Approval("approve-apply", sparkwing.ApprovalConfig{
+		Message:   "Apply the Terraform plan to {{.environment}}? Review the plan step's change summary first.",
+		Timeout:   {{.timeout_hours}} * time.Hour,
+		OnTimeout: sparkwing.ApprovalDeny,
 	}).Needs(tfPlan)
 	sparkwing.Job(plan, "apply", p.apply).Needs(approve)
 	return nil
@@ -55,7 +55,7 @@ func (p *{{pascal .pipeline_name}}) plan(ctx context.Context) error {
 		return err
 	}
 	p.planFile, p.summary = res.PlanFile, res.Summary
-	sparkwing.Annotate(ctx, fmt.Sprintf("terraform plan: %s", res.Summary))
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("terraform plan: %s", res.Summary)})
 	return nil
 }
 

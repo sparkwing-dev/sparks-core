@@ -3,7 +3,7 @@ description: |
   Build -> test -> human approval gate -> deploy. The deploy node only
   runs after a person approves the gate (CLI or dashboard). Fully local
   to run; the deploy step is a placeholder you replace. Demonstrates
-  sparkwing.JobApproval.
+  plan.Approval.
 whenToUse: |
   Any deploy that must pause for a human "go" before the irreversible
   step -- prod releases, destructive migrations. For a human-gated

@@ -129,7 +129,7 @@ func (p *{{pascal .pipeline_name}}) report(ctx context.Context, cause error) err
 	if cause != nil {
 		status, text = "failed", fmt.Sprintf("backup restore drill failed: %v", cause)
 	}
-	sparkwing.Annotate(ctx, text)
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: text})
 	if name := {{pascal .pipeline_name}}WebhookSecret; name != "" {
 		if url, err := sparkwing.Secret(ctx, name); err == nil && url != "" {
 			_ = notify.Webhook(ctx, notify.WebhookConfig{

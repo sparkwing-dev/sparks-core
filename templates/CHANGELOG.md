@@ -9,6 +9,22 @@ multi-module repo conventions).
 
 ## [Unreleased]
 
+### Changed
+
+- **sdk (Breaking):** generated pipelines compile against the thin Sparkwing SDK
+  (v0.68 and later). Approval gates use `plan.Approval` with `OnTimeout`,
+  annotations pass `sparkwing.Annotation`, retries use `sparkwing.Backoff`, and
+  `scheduled-cleanup` resolves its directory with `filepath.Abs` instead of
+  `sparkwing.Path`. `docker-build-smoketest` drops the removed `RetryAuto` and
+  retries once on any failure.
+- **cached-test-suite (Breaking):** the memo key is a host-evaluated
+  `inputs.Compose(inputs.Parts(salt), inputs.Files(globs...))` recipe.
+  `source-globs` follow Sparkwing's tracked-file pattern rules: a pattern without
+  `/` matches that file name at any depth, a trailing `/` matches a directory,
+  and `**` spans directories. Existing stored passes miss once.
+- **go-affected-tests:** package jobs attach `Memo(contentkey.SaltedGoPackage(...))`.
+
+
 ## [v0.33.6] - 2026-11-05
 
 ### Fixed

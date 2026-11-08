@@ -19,14 +19,14 @@ sparkwing pipeline new --name test --template go-affected-tests \
 ## What it does
 
 - The Plan splits the `packages` parameter into `go list` package specs
-  and registers one `test-<name>` Job per spec, each with a `.Memoize(...)`
+  and registers one `test-<name>` Job per spec, each with a `.Memo(...)`
   whose key comes from `contentkey.SaltedGoPackage(salt, spec, globs...)`.
   A `gate` Job `Needs` the whole group, so the run is green only when
   every package passed.
 - `contentkey.SaltedGoPackage` resolves the package's same-module
   dependency closure with `go list -deps -test`, then hashes the tracked
-  content of that closure (plus `extra-key-globs`) into a
-  `sparkwing.CacheKey`. The salt combines the pipeline name,
+  content of that closure (plus `extra-key-globs`) into a memo key
+  that the Sparkwing host hashes. The salt combines the pipeline name,
   `cache-version`, and `test-cmd`, and the spec itself, so no two package
   jobs ever replay one another's pass.
 - First run on a package's content: the key misses, the job runs

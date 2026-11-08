@@ -1,6 +1,6 @@
 name: cached-test-suite
 description: |
-  Run a test suite as a single .Memoize()-keyed Job whose content key is
+  Run a test suite as a single .Memo()-keyed Job whose content key is
   the hash of the source globs. An unchanged tree replays the recorded
   pass instead of re-running; the first run computes and stores it,
   every later run on identical content hits. Fully local -- the replay
@@ -31,11 +31,12 @@ parameters:
   - name: source-globs
     type: string
     description: |
-      Comma list of tracked-file git pathspecs whose combined content
-      hash forms the cache key. A change to any matched file busts the
-      key and re-runs. Blank leaves it hashing every tracked file. A
-      git pathspec like `*.go` matches recursively (root and nested);
-      `**/*.go` would skip root-level files.
+      Comma list of tracked-file patterns, relative to the repository
+      root, whose combined content hash forms the cache key. A change to
+      any matched file busts the key and re-runs. Blank leaves it hashing
+      every tracked file. A pattern without `/`, like `*.go` or `go.mod`,
+      matches that file name at any depth; a pattern ending in `/`
+      matches a directory; `**` spans directories.
     default: "*.go,go.mod,go.sum"
   - name: cache-ttl
     type: string
@@ -51,7 +52,7 @@ parameters:
       at once, e.g. after a toolchain upgrade the content hash cannot
       see.
     default: v1
-prerequisite: A git repository whose test sources are tracked (the content key is computed with git ls-files + git hash-object over your globs); a Go module + tests at the repo root for the default test-cmd.
+prerequisite: A git repository whose test sources are tracked (the Sparkwing host hashes the tracked files matching your globs); a Go module + tests at the repo root for the default test-cmd.
 applicability:
   cloud: []
   category: caching-skip

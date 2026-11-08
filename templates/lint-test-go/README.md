@@ -56,6 +56,9 @@ single run.
 
 `--allow-serial-runners` waits for another lint process to release its lock.
 Set a timeout on the lint job to bound that wait.
-For separate worktrees, also set `GOLANGCI_LINT_CACHE` on the command to
-`sparkwing.ToolCacheDir("golangci-lint")` so cached diagnostics stay scoped
-to the checkout.
+For separate worktrees, keep cached diagnostics scoped to the checkout:
+declare the directory as a job cache with
+`.Cache(sparkwing.Dir(".sparkwing/cache/golangci-lint", sparkwing.KeyFromFile("go.sum")))`,
+set `GOLANGCI_LINT_CACHE` on the command to
+`filepath.Join(sparkwing.WorkDir(), ".sparkwing", "cache", "golangci-lint")`,
+and gitignore `.sparkwing/cache/`.

@@ -40,14 +40,17 @@ func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
 		return fmt.Errorf("max-age-days must be a positive integer, got %d", {{pascal .pipeline_name}}MaxDays)
 	}
 	dry := sparkwing.IsDryRun(ctx)
-	dir := sparkwing.Path({{pascal .pipeline_name}}Dir)
+	dir, err := filepath.Abs({{pascal .pipeline_name}}Dir)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		sparkwing.Info(ctx, "%s does not exist; nothing to prune", dir)
 		return nil
 	}
 	cutoff := time.Now().AddDate(0, 0, -{{pascal .pipeline_name}}MaxDays)
 	var removed int
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -79,7 +82,7 @@ func (p *{{pascal .pipeline_name}}) prune(ctx context.Context) error {
 		verb = "would prune"
 	}
 	sparkwing.Info(ctx, "%s %d file(s) older than %d days from %s", verb, removed, {{pascal .pipeline_name}}MaxDays, dir)
-	sparkwing.Annotate(ctx, fmt.Sprintf("%s %d file(s)", verb, removed))
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("%s %d file(s)", verb, removed)})
 	return nil
 }
 

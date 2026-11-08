@@ -26,7 +26,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 	}
 	sparkwing.Job(plan, "build", p.build).
 		Verify(p.smokeTest).
-		Retry(1, sparkwing.RetryAuto()).
+		Retry(1).
 		Timeout(timeout)
 	return nil
 }

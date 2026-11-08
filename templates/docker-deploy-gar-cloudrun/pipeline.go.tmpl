@@ -41,7 +41,7 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 {{else}}	build := sparkwing.Job(plan, "build", p.build)
 {{end}}	push := sparkwing.Job(plan, "push", p.push).
 		Needs(build).
-		Retry(3, sparkwing.RetryBackoff(3*time.Second)).
+		Retry(3, sparkwing.Backoff(3*time.Second)).
 		Timeout(10 * time.Minute)
 	sparkwing.Job(plan, "deploy", p.deploy).
 		Needs(push).

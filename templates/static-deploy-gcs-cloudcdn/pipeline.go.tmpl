@@ -26,9 +26,9 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(ctx context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, run sparkwing.RunContext) error {
-	build := sparkwing.Job(plan, "build", p.build).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(15 * time.Minute)
-	sync := sparkwing.Job(plan, "sync", p.sync).Needs(build).Retry(3, sparkwing.RetryBackoff(5*time.Second)).Timeout(15 * time.Minute)
-	sparkwing.Job(plan, "invalidate", p.invalidate).Needs(sync).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(10 * time.Minute)
+	build := sparkwing.Job(plan, "build", p.build).Retry(2, sparkwing.Backoff(5*time.Second)).Timeout(15 * time.Minute)
+	sync := sparkwing.Job(plan, "sync", p.sync).Needs(build).Retry(3, sparkwing.Backoff(5*time.Second)).Timeout(15 * time.Minute)
+	sparkwing.Job(plan, "invalidate", p.invalidate).Needs(sync).Retry(2, sparkwing.Backoff(5*time.Second)).Timeout(10 * time.Minute)
 	return nil
 }
 

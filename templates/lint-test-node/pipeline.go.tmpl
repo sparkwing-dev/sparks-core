@@ -33,9 +33,9 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 {{- if .install_cmd}}
 {{- if $hasCheck}}
-	install := sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(10 * time.Minute)
+	install := sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.Backoff(5*time.Second)).Timeout(10 * time.Minute)
 {{- else}}
-	sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.RetryBackoff(5*time.Second)).Timeout(10 * time.Minute)
+	sparkwing.Job(plan, "install", p.install).Retry(2, sparkwing.Backoff(5*time.Second)).Timeout(10 * time.Minute)
 {{- end}}
 {{- end}}
 {{- if .lint_cmd}}

@@ -62,7 +62,7 @@ func (p *{{pascal .pipeline_name}}) backup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sparkwing.Annotate(ctx, "backup uploaded to "+art.URI)
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: "backup uploaded to " + art.URI})
 	return nil
 }
 

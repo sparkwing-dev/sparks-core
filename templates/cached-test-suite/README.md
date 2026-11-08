@@ -16,12 +16,12 @@ sparkwing pipeline new --name test --template cached-test-suite \
 
 ## What it does
 
-- The Plan registers one `test` Job and attaches `.Memoize(...)`. The key
-  comes from `contentkey.Salted(salt, globs...)`, which runs `git
-  ls-files` then `git hash-object` over the matched paths and folds the
-  sorted `(path, blob-hash)` pairs into a `sparkwing.CacheKey`. The salt
-  combines the pipeline name, `cache-version`, and `test-cmd`, so the
-  key is scoped to this pipeline and this command.
+- The Plan registers one `test` Job and attaches `.Memo(...)` with an
+  `inputs.Compose(inputs.Parts(salt), inputs.Files(globs...))` recipe.
+  The Sparkwing host evaluates it before the job runs: it hashes the
+  working-tree content of the tracked files matching the globs, plus
+  the salt. The salt combines the pipeline name, `cache-version`, and
+  `test-cmd`, so the key is scoped to this pipeline and this command.
 - First run on a given tree: the key misses, the job runs `test-cmd`,
   and the pass is stored under that key with the `cache-ttl` retention.
 - Later run on identical content: the key hits, so the orchestrator
@@ -55,7 +55,7 @@ not tied to a commit or a base ref.
 |---|---|---|---|
 | `pipeline-name` | no | `test` | Verb users type after `sparkwing run` |
 | `test-cmd` | no | `go test ./...` | Command run when the key misses (any stack) |
-| `source-globs` | no | `*.go,go.mod,go.sum` | Comma list of git pathspecs hashed into the key (`*.go` matches recursively) |
+| `source-globs` | no | `*.go,go.mod,go.sum` | Comma list of tracked-file patterns hashed into the key (a pattern without `/` matches file names at any depth) |
 | `cache-ttl` | no | (empty) | Go duration a stored pass stays reusable (clamped to 840h; empty, the default, inherits the SDK default of 168h) |
 | `cache-version` | no | `v1` | Salt folded into the key; bump to invalidate every stored result |
 
@@ -75,8 +75,11 @@ not tied to a commit or a base ref.
 - Point `source-globs` at everything a test outcome depends on. If a
   fixture or config file can change results, add it to the globs, or a
   stale pass may replay.
-- The default globs are Go pathspecs. Swap them for your stack
+- The default globs suit Go. Swap them for your stack
   (`src/**,package.json,package-lock.json`, `*.py,pyproject.toml`,
-  ...) and set `test-cmd` to match. A plain `*.ext` git pathspec
-  matches that extension at any depth; a `**/` prefix skips root-level
-  files, so avoid it unless you mean to.
+  ...) and set `test-cmd` to match. Patterns are relative to the
+  repository root. A pattern without `/`, such as `*.py` or
+  `go.mod`, matches that file name at any depth. A pattern ending in
+  `/` matches everything under that directory. Any other pattern
+  matches the whole path, where `*` stays inside one directory and
+  `**` spans directories.

@@ -16,7 +16,7 @@ sparkwing pipeline new --name gated-deploy --template approval-gated-deploy \
 ## What it does
 
 `build` runs `build-cmd` and `test` runs `test-cmd`, then
-`sparkwing.JobApproval` pauses the run at `approve-deploy`. `deploy`
+`plan.Approval` pauses the run at `approve-deploy`. `deploy`
 `Needs` the gate, so it runs `deploy-cmd` only once the gate is approved.
 If the gate isn't answered within `timeout-hours` it expires as
 **denied** (deploy never runs). A `timeout-hours` of `0` disables the

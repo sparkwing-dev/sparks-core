@@ -10,8 +10,7 @@ import (
 {{- end }}
 
 	"github.com/sparkwing-dev/sparkwing/sparkwing"
-
-	"github.com/sparkwing-dev/sparks-core/contentkey"
+	"github.com/sparkwing-dev/sparkwing/sparkwing/inputs"
 )
 
 // cacheSalt namespaces the key to this pipeline and command, so a sibling
@@ -46,7 +45,7 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 }
 
 func ({{pascal .pipeline_name}}) Help() string {
-	return "Runs the test suite as one .Memoize()-keyed Job. The key is the content hash of the tracked files matching source-globs, salted with the pipeline name, cache-version, and test command, so an unchanged tree replays the recorded pass instead of re-running. Change any matched file, edit the test command, or bump cache-version to bust the key."
+	return "Runs the test suite as one .Memo()-keyed Job. The Sparkwing host hashes the tracked files matching source-globs, salted with the pipeline name, cache-version, and test command, so an unchanged tree replays the recorded pass instead of re-running. Change any matched file, edit the test command, or bump cache-version to bust the key."
 }
 
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
@@ -59,7 +58,7 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
 	globs := splitGlobs({{quote .source_globs}})
 	sparkwing.Job(plan, "test", p.test).
-		Memoize(contentkey.Salted(cacheSalt, globs...){{if .cache_ttl}}, sparkwing.TTL({{pascal .pipeline_name}}CacheTTL){{end}})
+		Memo(inputs.Compose(inputs.Parts(cacheSalt), sourceFiles(globs)){{if .cache_ttl}}, sparkwing.MemoTTL({{pascal .pipeline_name}}CacheTTL){{end}})
 	return nil
 }
 
@@ -69,7 +68,14 @@ func ({{pascal .pipeline_name}}) test(ctx context.Context) error {
 	return err
 }
 
-// splitGlobs returning nothing makes contentkey hash every tracked file.
+// sourceFiles hashes every tracked file when no glob is given.
+func sourceFiles(globs []string) sparkwing.MemoInput {
+	if len(globs) == 0 {
+		return inputs.RepoFiles()
+	}
+	return inputs.Files(globs...)
+}
+
 func splitGlobs(csv string) []string {
 	var out []string
 	for _, g := range strings.Split(csv, ",") {

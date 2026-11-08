@@ -2,7 +2,7 @@
 
 `terraform plan -> human approval gate -> terraform apply`. The plan
 runs and reports its add/change/destroy summary, the run blocks at a
-`sparkwing.JobApproval`, and only after a person approves does it apply
+`plan.Approval`, and only after a person approves does it apply
 that exact saved plan file. An optional Slack announce reports the result.
 
 ## When to use
@@ -32,7 +32,7 @@ sparkwing pipeline new --name tf-apply --template terraform-apply-gated \
 1. `plan` runs `terraform init` + `terraform plan -out=tfplan` and
    annotates the run with the `Plan: N to add, N to change, N to
    destroy` summary.
-2. `sparkwing.JobApproval` pauses the run at `approve-apply`. If the gate
+2. `plan.Approval` pauses the run at `approve-apply`. If the gate
    is not answered within `timeout-hours` it expires as **denied** and
    apply never runs.
 3. `apply` `Needs` the gate, so it runs only once approved. It applies

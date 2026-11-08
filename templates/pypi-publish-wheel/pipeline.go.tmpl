@@ -57,7 +57,7 @@ func (p *{{pascal .pipeline_name}}) guardVersion(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sparkwing.Annotate(ctx, fmt.Sprintf("publishing version %s", version))
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("publishing version %s", version)})
 	return nil
 }
 

@@ -63,7 +63,7 @@ func (p *{{pascal .pipeline_name}}) buildPublish(ctx context.Context) error {
 		return err
 	}
 	sparkwing.Info(ctx, "published %d artifact(s) for version %s", len(artifacts), version)
-	sparkwing.Annotate(ctx, fmt.Sprintf("published %s %s", binaryName, version))
+	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("published %s %s", binaryName, version)})
 	return nil
 }
 

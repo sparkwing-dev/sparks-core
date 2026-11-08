@@ -8,7 +8,7 @@ lands in the pipeline source. When the direction is `down`, a human
 approval gate guards the destructive rollback.
 
 This is a **raw-composition** template: the generated `Plan()` wires the
-`migrate` block (and, on the down path, `sparkwing.JobApproval`) directly,
+`migrate` block (and, on the down path, `plan.Approval`) directly,
 so you can see and edit the orchestration. The direction and the approval
 gate are fixed when the template renders, so the emitted `Plan` is static
 and branch-free.
