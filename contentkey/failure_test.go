@@ -12,26 +12,18 @@ import (
 )
 
 func TestCacheResolversPreserveFailures(t *testing.T) {
-	previous := sparkwing.WorkDir()
-	sparkwing.SetWorkDir(t.TempDir())
-	t.Cleanup(func() { sparkwing.SetWorkDir(previous) })
-	resolvers := map[string]any{
-		"paths":          OfPaths("*.go"),
-		"salted paths":   Salted("example", "*.go"),
+	t.Chdir(t.TempDir())
+	resolvers := map[string]sparkwing.MemoKeyFn{
 		"package":        OfGoPackage("./example"),
 		"salted package": SaltedGoPackage("example", "./example"),
 	}
-	for name, candidate := range resolvers {
+	for name, resolver := range resolvers {
 		t.Run(name, func(t *testing.T) {
-			resolver, ok := candidate.(sparkwing.CacheKeyFn)
-			if !ok {
-				t.Fatalf("resolver type = %T, want sparkwing.CacheKeyFn with an error result", candidate)
-			}
 			t.Run("cancelled", func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
 				key, err := resolver(ctx)
-				if key != "" || !errors.Is(err, context.Canceled) {
+				if key != nil || !errors.Is(err, context.Canceled) {
 					t.Fatalf("cancelled resolution = %q, %v; want empty key and cancellation cause", key, err)
 				}
 			})
@@ -39,7 +31,7 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 				t.Setenv("PATH", t.TempDir())
 				key, err := resolver(t.Context())
 				var toolError *exec.Error
-				if key != "" || !errors.As(err, &toolError) {
+				if key != nil || !errors.As(err, &toolError) {
 					t.Fatalf("resolution without tools = %q, %v; want empty key and executable cause", key, err)
 				}
 			})
@@ -47,35 +39,15 @@ func TestCacheResolversPreserveFailures(t *testing.T) {
 	}
 }
 
-func TestCacheResolversRequireWorkingDirectory(t *testing.T) {
-	repository := goModuleRepo(t)
-	t.Chdir(repository.directory)
-	setTestWorkDir(t, "")
-	resolvers := map[string]sparkwing.CacheKeyFn{
-		"paths":          OfPaths("*.go"),
-		"salted paths":   Salted("example", "*.go"),
-		"package":        OfGoPackage("./app"),
-		"salted package": SaltedGoPackage("example", "./app"),
-	}
-	for name, resolver := range resolvers {
-		t.Run(name, func(t *testing.T) {
-			key, err := resolver(t.Context())
-			if key != "" || err == nil || !strings.Contains(err.Error(), "working directory") {
-				t.Fatalf("resolution without SDK working directory = %q, %v; want explicit directory error", key, err)
-			}
-		})
-	}
-}
-
 func TestGoPackageRequiresMainModule(t *testing.T) {
 	repository := goModuleRepo(t)
-	setTestWorkDir(t, repository.directory)
+	t.Chdir(repository.directory)
 	files, err := GoDeps(t.Context(), repository.directory, "fmt")
 	if files != nil || err == nil || !strings.Contains(err.Error(), "main module") {
 		t.Errorf("standard-library dependencies = %v, %v; want main module error", files, err)
 	}
 	key, err := SaltedGoPackage("example", "fmt")(t.Context())
-	if key != "" || err == nil || !strings.Contains(err.Error(), "main module") {
+	if key != nil || err == nil || !strings.Contains(err.Error(), "main module") {
 		t.Errorf("standard-library key = %q, %v; want main module error", key, err)
 	}
 }
@@ -128,7 +100,7 @@ func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
 	repository.write("settings.txt", "first\n")
 	repository.commitAll("workspace")
 	t.Setenv("GOWORK", filepath.Join(repository.directory, "go.work"))
-	setTestWorkDir(t, repository.directory)
+	t.Chdir(repository.directory)
 	files, err := GoDeps(t.Context(), repository.directory, "./nested/app")
 	if err != nil || len(files) != 1 || files[0] != "app/app.go" {
 		t.Fatalf("module-relative dependencies = %v, %v; want app/app.go", files, err)
@@ -143,7 +115,7 @@ func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first == afterSource {
+	if sameKey(first, afterSource) {
 		t.Errorf("nested source edit retained key %q", first)
 	}
 	repository.write("settings.txt", "second\n")
@@ -151,7 +123,7 @@ func TestGoPackageHashesNestedWorkspaceSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterSource == afterExtra {
+	if sameKey(afterSource, afterExtra) {
 		t.Errorf("project-relative extra input edit retained key %q", afterSource)
 	}
 }

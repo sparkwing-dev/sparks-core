@@ -5,6 +5,20 @@ and module tags of the form `contentkey/vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+### Removed
+
+- **contentkey (Breaking):** `OfPaths` and `Salted` are removed. Pass
+  `inputs.Files(globs...)`, combined with `inputs.Compose` and `inputs.Parts` for a
+  salt, to `JobNode.Memo`; the Sparkwing host hashes the tracked files.
+
+### Changed
+
+- **contentkey (Breaking):** `OfGoPackage` and `SaltedGoPackage` return
+  `sparkwing.MemoKeyFn` for `JobNode.Memo`. They hash `sparkwing.WorkDir()`, the
+  process working directory.
+- **deps:** require Sparkwing SDK v0.69.1 for the memo API.
+
+
 ## [v0.33.6] - 2026-11-05
 
 ### Changed
