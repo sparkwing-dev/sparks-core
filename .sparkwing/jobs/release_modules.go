@@ -15,7 +15,7 @@ import (
 // ReleaseModulesInputs uses --preview rather than --dry-run, which
 // `sparkwing run` reserves and intercepts before it reaches the pipeline.
 type ReleaseModulesInputs struct {
-	Version string `flag:"version" desc:"Semver tag (e.g. v0.1.0) applied to root + each module" default:"v0.1.0"`
+	Version string `flag:"version" desc:"Semver tag (e.g. v0.1.0) applied to each module" default:"v0.1.0"`
 	Preview bool   `flag:"preview" desc:"Print the tags that would be created and pushed, without doing it"`
 }
 
@@ -33,8 +33,8 @@ to origin. The repo root is intentionally not tagged.`
 
 func (ReleaseModules) Examples() []sw.Example {
 	return []sw.Example{
-		{Comment: "Cut a v0.1.0 baseline release", Command: "sparkwing run release-modules --version v0.1.0"},
-		{Comment: "Preview without creating or pushing tags", Command: "sparkwing run release-modules --version v0.2.0 --preview"},
+		{Comment: "Cut a v0.1.0 baseline release", Command: "sparkwing run release-modules -- --version v0.1.0"},
+		{Comment: "Preview without creating or pushing tags", Command: "sparkwing run release-modules -- --version v0.2.0 --preview"},
 	}
 }
 

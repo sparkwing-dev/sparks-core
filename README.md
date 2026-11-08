@@ -147,13 +147,13 @@ sparks-core is locked to `v0.x` (the pipeline refuses `v1.0.0+`).
 Cut a release:
 
 ```
-sparkwing run release-modules --version v0.2.0
+sparkwing run release-modules -- --version v0.2.0
 ```
 
 Preview the tags without creating or pushing them:
 
 ```
-sparkwing run release-modules --version v0.2.0 --preview
+sparkwing run release-modules -- --version v0.2.0 --preview
 ```
 
 Each module keeps its own `CHANGELOG.md`; add the new `[<version>]`
