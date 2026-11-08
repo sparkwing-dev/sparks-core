@@ -32,25 +32,20 @@ const publishDryRun = {{if eq .dry_run "true"}}true{{else}}false{{end}}
 
 // {{pascal .pipeline_name}} cross-compiles {{.main_package}}, checksums the
 // artifacts, and cuts a GitHub Release with them and the notes attached.
-type {{pascal .pipeline_name}} struct {
-	sparkwing.Base
-	version   string
-	notes     string
-	artifacts []string
-}
+type {{pascal .pipeline_name}} struct{ sparkwing.Base }
 
 func ({{pascal .pipeline_name}}) ShortHelp() string {
 	return "Cross-build {{.binary_name}}, checksum, and cut a GitHub Release"
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
-	build := sparkwing.Job(plan, "cross-build", p.build)
-	checksum := sparkwing.Job(plan, "checksum", p.checksum).Needs(build)
-	sparkwing.Job(plan, "github-release", p.release).Needs(checksum)
+	build := sparkwing.Job(plan, "cross-build", {{pascal .pipeline_name}}Action(p.build))
+	checksum := sparkwing.Job(plan, "checksum", {{pascal .pipeline_name}}Action(p.checksum)).Needs(build)
+	sparkwing.Job(plan, "github-release", {{pascal .pipeline_name}}Action(p.release)).Needs(checksum)
 	return nil
 }
 
-func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+func (p *{{pascal .pipeline_name}}) versionNotes(ctx context.Context) (string, string, error) {
 {{- if eq .notes_source "git" }}
 	version, err := release.DeriveVersion(ctx, release.VersionConfig{
 		Version:        {{quote .version}},
@@ -60,11 +55,11 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 		AllowNonSemver: true,
 	})
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	notes, err := gitLogNotes(ctx)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 {{- else }}
 	notes, version, err := release.ChangelogEntry(ctx, release.NotesConfig{
@@ -72,10 +67,17 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 		Version: {{quote .version}},
 	})
 	if err != nil {
-		return err
+		return "", "", err
 	}
 {{- end }}
-	p.version, p.notes = version, notes
+	return version, notes, nil
+}
+
+func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
+	version, _, err := p.versionNotes(ctx)
+	if err != nil {
+		return err
+	}
 
 	artifacts, err := release.CrossBuildGo(ctx, release.CrossBuildConfig{
 		MainPkg:    mainPkg,
@@ -89,7 +91,6 @@ func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.artifacts = artifacts
 	sparkwing.Annotate(ctx, sparkwing.Annotation{Message: fmt.Sprintf("built %d artifacts for %s", len(artifacts), version)})
 	return nil
 }
@@ -101,11 +102,19 @@ func (p *{{pascal .pipeline_name}}) checksum(ctx context.Context) error {
 // release posts an optional Slack announce after a live publish; an unset
 // slack-webhook-secret skips it.
 func (p *{{pascal .pipeline_name}}) release(ctx context.Context) error {
-	// safety: checksum Needs cross-build, so p.version/p.artifacts are set.
-	assets := append(append([]string{}, p.artifacts...), filepath.Join(releaseDir, "checksums.txt"))
+	version, notes, err := p.versionNotes(ctx)
+	if err != nil {
+		return err
+	}
+	// Jobs run in separate processes, so derive the same paths from the inputs.
+	assets := []string{filepath.Join(releaseDir, "checksums.txt")}
+	for _, platform := range platforms() {
+		goos, goarch, _ := strings.Cut(platform, "/")
+		assets = append(assets, release.ArtifactPath(releaseDir, binaryName, version, goos, goarch))
+	}
 	if err := release.GitHubRelease(ctx, release.GitHubReleaseConfig{
-		Tag:         p.version,
-		Notes:       p.notes,
+		Tag:         version,
+		Notes:       notes,
 		Assets:      assets,
 		Draft:       {{if eq .draft "true"}}true{{else}}false{{end}},
 		Prerelease:  {{if eq .prerelease "true"}}true{{else}}false{{end}},
@@ -121,7 +130,7 @@ func (p *{{pascal .pipeline_name}}) release(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return notify.Slack(ctx, hook, fmt.Sprintf("released %s %s", binaryName, p.version))
+	return notify.Slack(ctx, hook, fmt.Sprintf("released %s %s", binaryName, version))
 }
 
 func platforms() []string {
@@ -153,6 +162,15 @@ fi`).String()
 func dryRun() bool {
 	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
 	return on
+}
+
+// Local builds and checks still run in previews; cloud and publish helpers
+// honor the host's sealed dry-run environment before any remote mutation.
+type {{pascal .pipeline_name}}Action func(context.Context) error
+
+func (a {{pascal .pipeline_name}}Action) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	return sparkwing.Step(w, "run", func(ctx context.Context) error { return a(ctx) }).
+		DryRun(func(ctx context.Context) error { return a(ctx) }), nil
 }
 
 func init() {

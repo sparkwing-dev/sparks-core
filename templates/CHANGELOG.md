@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `templates/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
+## [v0.34.1] - 2026-11-08
+
+### Fixed
+
+- **dry-run:** cloud deploy and package publish templates declare executable
+  previews. Local builds and checks run, while cloud and registry mutations echo.
+- **github-release-go:** resolve release metadata and artifact paths in the publish
+  job because job processes do not share pipeline fields.
+- **cloudrun:** derive image tags from the sealed run start so build, push, and
+  deploy jobs use the same tag.
+
 ## [v0.34.0] - 2026-11-08
 
 ### Changed

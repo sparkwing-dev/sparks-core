@@ -42,10 +42,10 @@ func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
-	guard := sparkwing.Job(plan, "guard-version", p.guardVersion)
-	build := sparkwing.Job(plan, "build", p.build).Needs(guard)
-	check := sparkwing.Job(plan, "twine-check", p.check).Needs(build)
-	sparkwing.Job(plan, "upload", p.upload).Needs(check)
+	guard := sparkwing.Job(plan, "guard-version", {{pascal .pipeline_name}}Action(p.guardVersion))
+	build := sparkwing.Job(plan, "build", {{pascal .pipeline_name}}Action(p.build)).Needs(guard)
+	check := sparkwing.Job(plan, "twine-check", {{pascal .pipeline_name}}Action(p.check)).Needs(build)
+	sparkwing.Job(plan, "upload", {{pascal .pipeline_name}}Action(p.upload)).Needs(check)
 	return nil
 }
 
@@ -78,6 +78,15 @@ func (p *{{pascal .pipeline_name}}) upload(ctx context.Context) error {
 		TokenSecret: tokenSecret,
 		DryRun:      {{if .dry_run}}true{{else}}false{{end}},
 	})
+}
+
+// Local builds and checks still run in previews; cloud and publish helpers
+// honor the host's sealed dry-run environment before any remote mutation.
+type {{pascal .pipeline_name}}Action func(context.Context) error
+
+func (a {{pascal .pipeline_name}}Action) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	return sparkwing.Step(w, "run", func(ctx context.Context) error { return a(ctx) }).
+		DryRun(func(ctx context.Context) error { return a(ctx) }), nil
 }
 
 func init() {

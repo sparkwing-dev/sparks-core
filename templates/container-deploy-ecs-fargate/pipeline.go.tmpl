@@ -27,14 +27,14 @@ type {{pascal .pipeline_name}} struct {
 }
 
 func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
-{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", {{pascal .pipeline_name}}Action(func(ctx context.Context) error {
 		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
 		return err
-	})
-	build := sparkwing.Job(plan, "build", p.build).Needs(test)
-{{else}}	build := sparkwing.Job(plan, "build", p.build)
+	}))
+	build := sparkwing.Job(plan, "build", {{pascal .pipeline_name}}Action(p.build)).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", {{pascal .pipeline_name}}Action(p.build))
 {{end}}
-	sparkwing.Job(plan, "deploy", p.deploy).
+	sparkwing.Job(plan, "deploy", {{pascal .pipeline_name}}Action(p.deploy)).
 		Needs(build).
 		Verify(p.verify).
 		OnFailure("rollback", p.rollback)
@@ -118,6 +118,15 @@ func (p *{{pascal .pipeline_name}}) imageRef(tags sparkwingDocker.ImageTag) stri
 func dryRun() bool {
 	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
 	return on
+}
+
+// Local builds and checks still run in previews; cloud and publish helpers
+// honor the host's sealed dry-run environment before any remote mutation.
+type {{pascal .pipeline_name}}Action func(context.Context) error
+
+func (a {{pascal .pipeline_name}}Action) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	return sparkwing.Step(w, "run", func(ctx context.Context) error { return a(ctx) }).
+		DryRun(func(ctx context.Context) error { return a(ctx) }), nil
 }
 
 func init() {

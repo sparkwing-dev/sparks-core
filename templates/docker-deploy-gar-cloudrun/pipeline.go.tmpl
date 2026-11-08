@@ -22,8 +22,7 @@ import (
 // back on a definitively-unhealthy probe.
 type {{pascal .pipeline_name}} struct {
 	sparkwing.Base
-	// tag is computed once in build and reused so all three nodes name the
-	// same image. No lock is needed: the Needs edges order them.
+	// The sealed run start gives each job process the same image tag.
 	tag string
 	// url is empty under SPARKWING_DRY_RUN, which skips the probe.
 	url string
@@ -32,18 +31,19 @@ type {{pascal .pipeline_name}} struct {
 	priorRevision string
 }
 
-func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, _ sparkwing.RunContext) error {
-{{if .test_cmd}}	test := sparkwing.Job(plan, "test", func(ctx context.Context) error {
+func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan, _ sparkwing.NoInputs, rc sparkwing.RunContext) error {
+	p.tag = rc.StartedAt.UTC().Format("20060102-150405")
+{{if .test_cmd}}	test := sparkwing.Job(plan, "test", {{pascal .pipeline_name}}Action(func(ctx context.Context) error {
 		_, err := sparkwing.Bash(ctx, {{quote .test_cmd}}).Run()
 		return err
-	})
-	build := sparkwing.Job(plan, "build", p.build).Needs(test)
-{{else}}	build := sparkwing.Job(plan, "build", p.build)
-{{end}}	push := sparkwing.Job(plan, "push", p.push).
+	}))
+	build := sparkwing.Job(plan, "build", {{pascal .pipeline_name}}Action(p.build)).Needs(test)
+{{else}}	build := sparkwing.Job(plan, "build", {{pascal .pipeline_name}}Action(p.build))
+{{end}}	push := sparkwing.Job(plan, "push", {{pascal .pipeline_name}}Action(p.push)).
 		Needs(build).
 		Retry(3, sparkwing.Backoff(3*time.Second)).
 		Timeout(10 * time.Minute)
-	sparkwing.Job(plan, "deploy", p.deploy).
+	sparkwing.Job(plan, "deploy", {{pascal .pipeline_name}}Action(p.deploy)).
 		Needs(push).
 		Verify(p.verify).
 		OnFailure("rollback", p.rollback)
@@ -53,7 +53,6 @@ func (p *{{pascal .pipeline_name}}) Plan(_ context.Context, plan *sparkwing.Plan
 // build runs for real even under SPARKWING_DRY_RUN so a broken Dockerfile
 // still fails the pipeline; only the registry and Cloud Run mutations echo.
 func (p *{{pascal .pipeline_name}}) build(ctx context.Context) error {
-	p.tag = time.Now().UTC().Format("20060102-150405")
 	_, err := sparkwing.Exec(ctx, "docker", "build",
 		"-t", {{quote .image}}+":"+p.tag,
 		"-f", {{quote .dockerfile}}, {{quote .build_context}}).Run()
@@ -176,6 +175,15 @@ func truthy(s string) bool {
 func dryRun() bool {
 	on, _ := strconv.ParseBool(os.Getenv("SPARKWING_DRY_RUN"))
 	return on
+}
+
+// Local builds and checks still run in previews; cloud and publish helpers
+// honor the host's sealed dry-run environment before any remote mutation.
+type {{pascal .pipeline_name}}Action func(context.Context) error
+
+func (a {{pascal .pipeline_name}}Action) Work(w *sparkwing.Work) (*sparkwing.WorkStep, error) {
+	return sparkwing.Step(w, "run", func(ctx context.Context) error { return a(ctx) }).
+		DryRun(func(ctx context.Context) error { return a(ctx) }), nil
 }
 
 func init() {
