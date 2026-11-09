@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
+	"github.com/sparkwing-dev/sparkwing/sparkwingtest"
 )
 
 func TestSyncArgoCDFailsOnUnreadableApplication(t *testing.T) {

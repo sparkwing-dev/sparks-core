@@ -3,7 +3,7 @@ package s3
 import (
 	"testing"
 
-	"github.com/sparkwing-dev/sparkwing/sparkwing/sparkwingtest"
+	"github.com/sparkwing-dev/sparkwing/sparkwingtest"
 )
 
 func TestDryRunBooleanEnvironment(t *testing.T) {

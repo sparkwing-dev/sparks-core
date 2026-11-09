@@ -84,7 +84,8 @@ var watchedModulePrefixes = []string{
 // v1.0.0+ tags pushed by mistake, and a proxy cache cannot be undone.
 // Modules absent from the map have no cap.
 var maxAllowedMajor = map[string]int{
-	"github.com/sparkwing-dev/sparkwing": 0,
+	"github.com/sparkwing-dev/sparkwing":           0,
+	"github.com/sparkwing-dev/sparkwing/sparkwing": 0,
 }
 
 func isWatchedModule(path string) bool {
