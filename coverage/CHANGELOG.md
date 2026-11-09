@@ -7,6 +7,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `coverage/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
+## [v0.35.0] - Unreleased
+
+### Changed
+
+- **deps (Breaking):** resolve pipeline APIs through the independently versioned
+  `github.com/sparkwing-dev/sparkwing/sparkwing` module. Upgrade sibling
+  sparks-core dependencies together to remove old host-module SDK requirements.
+
 ## [v0.34.1] - 2026-11-08
 
 ### Changed

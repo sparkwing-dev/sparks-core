@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `templates/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
+## [v0.35.0] - Unreleased
+
+### Changed
+
+- **release:** include this SDK-free module in the coordinated v0.35.0 release.
+
 ## [v0.34.1] - 2026-11-08
 
 ### Fixed

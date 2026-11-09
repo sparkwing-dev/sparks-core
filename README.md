@@ -112,6 +112,20 @@ libraries:
 Setting `version: latest` causes the resolver to re-query the proxy on
 every pipeline run (frequency-always semantics for free).
 
+## Sparkwing SDK dependencies
+
+Pipeline APIs come from the independently versioned
+`github.com/sparkwing-dev/sparkwing/sparkwing` module. SDK releases and
+Sparkwing engine releases have independent version numbers. Existing pipeline
+imports keep the same paths.
+
+Author tests import `github.com/sparkwing-dev/sparkwing/sparkwingtest` from the
+host module. Modules using this test harness retain the host dependency and its
+Go minimum, even when their production code imports only the SDK.
+
+When adopting v0.35.0, upgrade the sparks-core sibling dependency graph together. Older sibling versions can require a host-module archive that
+still contains the SDK directory, which conflicts with the new SDK module.
+
 ## Inter-module dependencies
 
 `pipelines` depends on `step`, `aws`, `s3`, `docker`, and `deploy`.

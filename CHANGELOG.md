@@ -42,6 +42,20 @@ sparks-core is a multi-module monorepo: each subdirectory has its own
 
 ## [Unreleased]
 
+## [v0.35.0] - Unreleased
+
+### Changed
+
+- **deps (Breaking):** prepare all 24 module tags for the independent Sparkwing
+  Go SDK module, `github.com/sparkwing-dev/sparkwing/sparkwing`. Upgrade the
+  sparks-core sibling dependency graph together because older pins can still
+  bring the SDK directory from the host module into the graph.
+- **tests:** `s3`, `gitops`, `deploy`, `services`, `pipelines`, `contentkey` and
+  `terraform` use the host module's `sparkwingtest` package and retain its Go
+  minimum. The repository pipeline uses the same test harness.
+- **release:** include SDK-free `aws`, `probe` and `templates` in the coordinated
+  release.
+
 ## [v0.24.0] - 2026-05-21
 
 ### Changed
