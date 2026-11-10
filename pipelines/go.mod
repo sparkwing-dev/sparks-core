@@ -3,13 +3,12 @@ module github.com/sparkwing-dev/sparks-core/pipelines
 go 1.26.0
 
 require (
-	github.com/sparkwing-dev/sparks-core/aws v0.25.0
-	github.com/sparkwing-dev/sparks-core/deploy v0.26.0
-	github.com/sparkwing-dev/sparks-core/docker v0.27.0
-	github.com/sparkwing-dev/sparks-core/gitops v0.27.0
-	github.com/sparkwing-dev/sparks-core/s3 v0.25.1
-	github.com/sparkwing-dev/sparks-core/step v0.24.0
-	github.com/sparkwing-dev/sparkwing v0.70.0
+	github.com/sparkwing-dev/sparks-core/aws v0.35.0
+	github.com/sparkwing-dev/sparks-core/deploy v0.35.0
+	github.com/sparkwing-dev/sparks-core/docker v0.35.0
+	github.com/sparkwing-dev/sparks-core/gitops v0.35.0
+	github.com/sparkwing-dev/sparks-core/s3 v0.35.0
+	github.com/sparkwing-dev/sparks-core/step v0.35.0
 )
 
 require (
@@ -34,7 +33,9 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/sparkwing-dev/sparks-core/kube v0.24.0 // indirect
+	github.com/sparkwing-dev/sparks-core/kube v0.35.0 // indirect
+	github.com/sparkwing-dev/sparkwing v0.72.0
+	github.com/sparkwing-dev/sparkwing/sparkwing v0.1.0
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect

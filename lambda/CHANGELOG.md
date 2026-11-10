@@ -7,7 +7,7 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Tagging convention: `lambda/vMAJOR.MINOR.PATCH` (per Go module
 multi-module repo conventions).
 
-## [v0.35.0] - Unreleased
+## [v0.35.0] - 2026-11-10
 
 ### Changed
 

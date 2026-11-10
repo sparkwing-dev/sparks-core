@@ -42,7 +42,7 @@ sparks-core is a multi-module monorepo: each subdirectory has its own
 
 ## [Unreleased]
 
-## [v0.35.0] - Unreleased
+## [v0.35.0] - 2026-11-10
 
 ### Changed
 

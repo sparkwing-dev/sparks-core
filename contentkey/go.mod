@@ -2,7 +2,10 @@ module github.com/sparkwing-dev/sparks-core/contentkey
 
 go 1.26.0
 
-require github.com/sparkwing-dev/sparkwing v0.70.0
+require (
+	github.com/sparkwing-dev/sparkwing v0.72.0
+	github.com/sparkwing-dev/sparkwing/sparkwing v0.1.0
+)
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7 // indirect

@@ -99,8 +99,10 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
-github.com/sparkwing-dev/sparkwing v0.70.0 h1:cpL3SdKACNrkN7bFRYG6fYyCoXaowaRCxzBoLETkEXM=
-github.com/sparkwing-dev/sparkwing v0.70.0/go.mod h1:fXz9xZMW1Dk5+YGTXx1DrJ0HTTMUBL+jWjK5tQDBnOk=
+github.com/sparkwing-dev/sparkwing v0.72.0 h1:cYrwze5/7ZgC7RjrKkrL0sjYQQeXp2nBlV3O+iOo7FI=
+github.com/sparkwing-dev/sparkwing v0.72.0/go.mod h1:VeDm1nTrbb7VU5bhRXxlW410S6D9LwgwOZz+vRxtQI0=
+github.com/sparkwing-dev/sparkwing/sparkwing v0.1.0 h1:eG1XkBf+mlf68vbcdQ687ukmce2w9TdBGSVnH6JgnKQ=
+github.com/sparkwing-dev/sparkwing/sparkwing v0.1.0/go.mod h1:wjxPsVLsVmFG8L98Xc6mrdSgNvGpUyeO88srMbw9zdE=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
