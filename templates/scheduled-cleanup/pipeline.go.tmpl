@@ -26,7 +26,7 @@ func ({{pascal .pipeline_name}}) ShortHelp() string {
 func ({{pascal .pipeline_name}}) Examples() []sparkwing.Example {
 	return []sparkwing.Example{
 		{Comment: "Prune now", Command: "sparkwing run {{.pipeline_name}}"},
-		{Comment: "Preview without deleting", Command: "sparkwing run {{.pipeline_name}} --sw-dry-run"},
+		{Comment: "Preview without deleting", Command: "sparkwing run {{.pipeline_name}} --dry-run"},
 	}
 }
 
